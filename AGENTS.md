@@ -24,6 +24,17 @@ Stack-chan is a JavaScript-driven M5Stack-embedded robot. The codebase is primar
 - Confirm test startup and progress. Keep measurements low-overhead and batch comparable parameter variants when possible. Fail promptly if a harness never starts; building or flashing is not test execution.
 - Documentation-only changes do not advance the firmware revision or require rebuilding firmware.
 
+### Embedded Performance
+
+- Start from a known working baseline and compare small variants under equivalent workloads with required features enabled. A faster result obtained by disabling a required feature is a functional tradeoff, not an equivalent optimization.
+- Identify the limiting resource before tuning: CPU time per task/core, memory capacity or bandwidth, peripheral I/O, or network delivery. Wall-clock duration includes preemption and waiting; it does not establish CPU utilization.
+- Check effective generated configuration, compiler flags, linked library versions and image metadata rather than relying on defaults or README claims. Use manufacturer documentation for the actual chip and SDK version; treat upstream benchmarks as evidence only for their stated conditions.
+- Prefer reducing measured hot-path work: busy polling, repeated allocation/copying, unnecessary format conversion and redraws. Use completion-driven synchronization with bounded callbacks. Priority, affinity and buffer changes redistribute service time or latency; verify dependencies and progress instead of treating them as added processing capacity.
+- Choose SRAM, PSRAM, IRAM and stack placement using measured access cost and available headroom. Check DMA capabilities, stack high-water use and contiguous allocation requirements. More free internal memory alone does not establish faster execution.
+- Evaluate vendor options such as performance-oriented compiler optimization, IRAM placement, cache and DMA configuration against measurements and hardware constraints. Compiler flags do not recompile prebuilt libraries. For streaming changes, account for buffering latency and preserve sample order, timestamps, reference alignment and cancellation.
+
+Espressif references: [speed optimization and profiling](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/performance/speed.html), [external RAM](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/external-ram.html), [I2S and DMA sizing](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/i2s.html). Select the documentation version matching the toolchain in use.
+
 ## Core Architecture
 
 ### Modular Component System
