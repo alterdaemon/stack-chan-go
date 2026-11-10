@@ -1,4 +1,5 @@
 import type { PREF_KEYS } from 'consts'
+import { isLiveVoicePreference } from 'openai-live-options'
 import Preference from 'preference'
 import { isAllowedPreferenceWrite, parsePreferenceProperty } from 'preference-write-guard'
 import Time from 'time'
@@ -203,6 +204,7 @@ export class PreferenceServer extends UARTServer {
       return
     }
     const prop = `${domain}.${key}`
+    if (!isLiveVoicePreference(prop, value)) return
     if (prop === 'openailive.bargeIn' && value !== '0' && value !== '1' && value !== 0 && value !== 1) return
     // WWW authentication applies only to HTTP. BLE can replace, but never read, its password.
     if (prop === 'www.password' && (typeof value !== 'string' || value.length === 0 || CONTROL_CHARACTERS.test(value)))

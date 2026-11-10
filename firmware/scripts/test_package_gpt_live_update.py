@@ -103,7 +103,7 @@ class UpdateTests(unittest.TestCase):
             fixture = {
                 'firmware/host/app/gpt-live-layout.json': json.dumps(self.layout).encode(),
                 'firmware/host/app/manifest_openai_live_settings.json': json.dumps({'config': settings}).encode(),
-                'firmware/package.json': b'{"version":"0.0.0"}',
+                'firmware/package.json': json.dumps({'version': f'0.0.0-r{package.REVISION}'}).encode(),
                 project + '/manifest_flat.json': json.dumps({'config': settings, 'modules': modules}).encode(),
                 build + '/sdkconfig': b'',
                 build + '/build/flasher_args.json': json.dumps({
@@ -135,6 +135,7 @@ class UpdateTests(unittest.TestCase):
                 self.assertEqual(len(files), 2)
                 self.assertTrue(all(p.suffix == '.bin' for p in files))
                 app_file = next(p for p in files if p.name.endswith('-app.bin'))
+                self.assertTrue(app_file.name.startswith(f'StackChan-Community-v0.0.0-r{package.REVISION}-'))
                 full_file = output / app_file.name.replace('-app.bin', '.bin')
                 self.assertEqual(app_file.read_bytes(), bytes(self.app))
                 full = full_file.read_bytes()
@@ -174,6 +175,17 @@ class UpdateTests(unittest.TestCase):
                     package.package_update(root, output)
                 self.assertEqual(full_file.read_bytes(), full)
                 self.assertEqual(app_file.read_bytes(), bytes(self.app))
+
+    def test_product_version_must_match_the_package_revision_before_publication(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'firmware').mkdir()
+            for version in ('2.0.1', '2.0.1-r0', '2.0.1-r01',
+                            f'2.0.1-r{package.REVISION + 1}', '2.0.1-beta1'):
+                (root / 'firmware/package.json').write_text(json.dumps({'version': version}))
+                with self.assertRaisesRegex(ValueError, 'Product version'):
+                    package.package_update(root, root / 'output')
+                self.assertFalse((root / 'output').exists())
 
 
 if __name__ == '__main__':

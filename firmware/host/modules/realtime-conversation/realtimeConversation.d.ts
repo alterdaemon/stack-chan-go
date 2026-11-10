@@ -60,6 +60,8 @@ declare module 'realtimeConversation' {
     }
     model?: string
     voice?: string
+    /** Local output pitch, integer semitones from -6 to 6. Zero bypasses DSP. */
+    pitch?: number
     instructions?: string
     /** Keep the microphone active with AEC during playback; defaults to false.
      * GPT-Live handles yielding. This does not guarantee immediate playback stop. */

@@ -2,6 +2,7 @@ import structuredClone from 'structuredClone'
 import { DOMAIN, PREF_KEYS } from 'consts'
 import config from 'mc/config'
 import Modules from 'modules'
+import { isLiveVoicePreference } from 'openai-live-options'
 import Preference from 'preference'
 
 // biome-ignore lint/suspicious/noExplicitAny: Match the type definition of mc/config
@@ -50,6 +51,9 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
     preference.backendModel = live.backendModel
     preference.reasoningEffort = live.reasoningEffort
     preference.bargeIn = 0 // Opt-in, including installations with no saved preference.
+    preference.voice = isLiveVoicePreference('openailive.voice', live.voice) ? live.voice : 'marin'
+    preference.pitch = isLiveVoicePreference('openailive.pitch', live.pitch) ? Number(live.pitch) : 0
+    preference.style = isLiveVoicePreference('openailive.style', live.style) ? live.style : 'default'
   }
   const lockedDriverType =
     category === DOMAIN.driver && mcPreference.typeLocked === true && typeof mcPreference.type === 'string'
@@ -64,6 +68,7 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
   for (const [domain, key, ctor] of keys) {
     const value = Preference.get(domain, key)
     if (value != null) {
+      if (!isLiveVoicePreference(`${domain}.${key}`, value)) continue
       if (domain === DOMAIN.driver && key === 'type' && lockedDriverType !== undefined) {
         if (String(value) !== lockedDriverType) {
           trace(`[preferences] ignored stored driver.type=${value}; platform locks it to ${lockedDriverType}\n`)

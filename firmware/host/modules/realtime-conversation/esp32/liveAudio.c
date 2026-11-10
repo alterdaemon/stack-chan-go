@@ -7,6 +7,8 @@
 #include "io-performance.h"
 #include "esp_webrtc.h"
 #include "liveAudio.h"
+#include "livePitch.h"
+#include "liveAecWorker.h"
 #include "driver/i2s_std.h"
 #include "esp_heap_caps.h"
 #include "esp_ae_rate_cvt.h"
@@ -82,6 +84,8 @@ struct LiveAudio {
 
 	esp_ae_rate_cvt_handle_t resampler;
 	aec_handle_t *aec;
+    LivePitch *pitch;
+    LiveAecWorker *aecWorker;
 	bool bargeIn;
 	atomic_bool stopping, done, reading, muted;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
@@ -171,6 +175,29 @@ static int renderInfo(audio_render_handle_t h, av_render_audio_frame_info_t *inf
 static int renderClose(audio_render_handle_t h) { return 0; }
 static void renderDeinit(audio_render_handle_t h) {}
 
+static size_t pitchRead(void *context, int16_t *samples, size_t count)
+{
+    LiveAudio *a = context;
+    return xStreamBufferReceive(a->output, samples, count * sizeof(int16_t), 0) / sizeof(int16_t);
+}
+
+static void captureFrame(void *context, const int16_t *mic, const int16_t *ref, int16_t *clean, size_t count)
+{
+    LiveAudio *a = context;
+    unsigned m = 0, r = 0, c = 0;
+    for (size_t j = 0; j < count; j++) { m += abs(mic[j]); r += abs(ref[j]); c += abs(clean[j]); }
+    atomic_store(&a->micLevel, m / count);
+    atomic_store(&a->referenceLevel, r / count);
+    atomic_store(&a->cleanLevel, c / count);
+    if (atomic_load(&a->muted)) memset(clean, 0, count * sizeof(int16_t));
+    if (atomic_load(&a->reading)) {
+        if (xStreamBufferSpacesAvailable(a->input) >= count * sizeof(int16_t))
+            xStreamBufferSend(a->input, clean, count * sizeof(int16_t), 0);
+        else atomic_fetch_add(&a->overruns, 1);
+    }
+    atomic_fetch_add(&a->captured, count);
+}
+
 static void audioTask(void *ctx)
 {
 	LiveAudio *a = ctx;
@@ -184,20 +211,31 @@ static void audioTask(void *ctx)
 	bool gapActive = false;
 	while (!atomic_load(&a->stopping)) {
 		/* Non-blocking dequeue: the clock must keep running between utterances. */
-		size_t got = xStreamBufferReceive(a->output, tx, BLOCK * 2, 0);
-		if (got < BLOCK * 2 && idle < 500) {
+        size_t got;
+        bool missing;
+        if (a->pitch) {
+            LivePitchResult result;
+            int err = livePitchRender(a->pitch, pitchRead, a, tx, BLOCK, &result);
+            if (err) { a->stage = "pitch_process"; atomic_store(&a->error, err); break; }
+            got = result.received * sizeof(int16_t);
+            missing = result.missing;
+        } else {
+            got = xStreamBufferReceive(a->output, tx, BLOCK * 2, 0);
+            missing = got < BLOCK * 2;
+            memset((uint8_t *)tx + got, 0, BLOCK * 2 - got);
+        }
+		if (missing && idle < 500) {
 			if (!gapActive) atomic_fetch_add(&a->underruns, 1);
 			gapActive = true; gap += 10;
 			atomic_fetch_add(&a->silenceMs, 10);
 			if (gap > atomic_load(&a->maxSilenceMs)) atomic_store(&a->maxSilenceMs, gap);
 		} else { gapActive = false; gap = 0; }
-		memset((uint8_t *)tx + got, 0, BLOCK * 2 - got);
 		bool audible = false;
-		for (size_t i = 0; i < got / 2; i++) if (abs(tx[i]) > 32) { audible = true; break; }
+		for (size_t i = 0; i < BLOCK; i++) if (abs(tx[i]) > 32) { audible = true; break; }
 		/* Missing packets are not evidence of silence. Only received PCM
 		 * can reopen the S3 microphone after playback. */
 		if (audible) { idle = 0; atomic_fetch_add(&a->audibleMs, 10); }
-		else if (got == BLOCK * 2 && idle < 10000) idle += 10;
+		else if (!missing && idle < 10000) idle += 10;
 		atomic_store(&a->outputIdleMs, idle);
 		unsigned volume = atomic_load(&a->volume);
 		for (int i = BLOCK - 1; i >= 0; i--) {
@@ -229,24 +267,13 @@ static void audioTask(void *ctx)
 			if (a->aec) {
 				// Residual echo can still look like speech. Keep playback independent
 				// of capture activity; GPT-Live decides when to yield.
-				aec_process(a->aec, mic, ref, clean);
+                if (!liveAecWorkerSubmit(a->aecWorker, mic, ref)) atomic_fetch_add(&a->overruns, 1);
 			} else {
 				memcpy(clean, mic, a->chunk * 2);
 				// Default mode preserves the existing half-duplex input gate.
 				if (idle < 500) memset(clean, 0, a->chunk * 2);
+                captureFrame(a, mic, ref, clean, a->chunk);
 			}
-			unsigned m = 0, r = 0, c = 0;
-			for (int j = 0; j < a->chunk; j++) { m += abs(mic[j]); r += abs(ref[j]); c += abs(clean[j]); }
-			atomic_store(&a->micLevel, m / a->chunk);
-			atomic_store(&a->referenceLevel, r / a->chunk);
-			atomic_store(&a->cleanLevel, c / a->chunk);
-			if (atomic_load(&a->muted)) memset(clean, 0, a->chunk * 2);
-			if (atomic_load(&a->reading)) {
-				if (xStreamBufferSpacesAvailable(a->input) >= a->chunk * 2)
-					xStreamBufferSend(a->input, clean, a->chunk * 2, 0);
-				else atomic_fetch_add(&a->overruns, 1);
-			}
-			atomic_fetch_add(&a->captured, a->chunk);
 			accumulated = 0;
 		}
 	}
@@ -254,7 +281,7 @@ static void audioTask(void *ctx)
 	vTaskDelete(NULL);
 }
 
-int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn)
+int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch)
 {
   atomic_store(&quiesceAudio, false);
   int err = stackchanMediaAdapter();
@@ -264,6 +291,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	LiveAudio *a = calloc(1, sizeof(*a));
 	if (!a) return ESP_ERR_NO_MEM;
 	*out = a;
+    a->stage = "pitch_open";
+    if ((err = livePitchOpen(&a->pitch, pitch))) return err;
 	atomic_store(&a->volume, 512);
 	a->source = (esp_capture_audio_src_if_t){.open = sourceOpen, .get_support_codecs = sourceCodecs,
 		.negotiate_caps = sourceNegotiate, .start = sourceStart, .read_frame = sourceRead,
@@ -318,6 +347,10 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->stage = "i2s_enable_tx";
 	if ((err = i2s_channel_enable(a->tx))) return err;
 	a->txEnabled = true;
+    if (a->aec) {
+        a->stage = "aec_worker";
+        if ((err = liveAecWorkerOpen(&a->aecWorker, a->aec, a->chunk, captureFrame, a))) return err;
+    }
 	a->stage = "audio_task";
 	if (xTaskCreatePinnedToCore(audioTask, "live_audio", 8192, a, 20, NULL, 0) != pdPASS) return ESP_ERR_NO_MEM;
 	a->taskStarted = true;
@@ -367,6 +400,8 @@ void liveAudioClose(LiveAudio *a)
 	if (a->player) av_render_close(a->player);
 	if (a->render) audio_render_free_handle(a->render);
 	while (a->taskStarted && !atomic_load(&a->done)) vTaskDelay(pdMS_TO_TICKS(10));
+    liveAecWorkerClose(a->aecWorker);
+    livePitchClose(a->pitch);
 	if (a->rxEnabled) i2s_channel_disable(a->rx);
 	if (a->txEnabled) i2s_channel_disable(a->tx);
 	if (a->rx) i2s_del_channel(a->rx);

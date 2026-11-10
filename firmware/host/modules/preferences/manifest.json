@@ -12,7 +12,8 @@
     "loadPreference": "./loadPreference",
     "timezone-model": "./timezone-model",
     "timezone-settings": "./timezone-settings",
-    "volume-model": "./volume-model"
+    "volume-model": "./volume-model",
+    "openai-live-options": "./openai-live-options"
   },
   "preload": ["consts"],
   "typescript": {

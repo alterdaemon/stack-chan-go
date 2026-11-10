@@ -34,7 +34,12 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
       }
     }
     start(options) {
-      binding('xs_live_transport_start').call(this, options?.captureOnly === true, options?.bargeIn === true)
+      binding('xs_live_transport_start').call(
+        this,
+        options?.captureOnly === true,
+        options?.bargeIn === true,
+        options?.pitch ?? 0,
+      )
     }
     acceptAnswer(sdp) {
       binding('xs_live_transport_answer').call(this, sdp)

@@ -92,6 +92,7 @@ export class LiveSession {
         apiKey: this.settings.apiKey,
         model: this.settings.model,
         voice: this.settings.voice,
+        pitch: this.settings.pitch ?? 0,
         bargeIn: this.settings.bargeIn === true,
         instructions: this.settings.bargeIn
           ? `${this.settings.instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`

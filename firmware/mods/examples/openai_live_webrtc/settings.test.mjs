@@ -2,7 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LiveSession } from './session.js'
-import { readLiveSettings } from './settings.js'
+
+const optionsURL = new URL('../../../host/modules/preferences/openai-live-options.ts', import.meta.url).href
+const settingsSource = readFileSync(new URL('./settings.js', import.meta.url), 'utf8').replace(
+  "'openai-live-options'",
+  JSON.stringify(optionsURL),
+)
+const { readLiveSettings } = await import(`data:text/javascript,${encodeURIComponent(settingsSource)}`)
 
 test('voice interruption is opt-in and invalid or missing saved values stay off', () => {
   let saved
@@ -58,7 +64,15 @@ test('saved credentials and context are read afresh; deleting the key disables s
   ])
   const defaults = { apiKey: '', instructions: 'default', volume: 0.1 }
   const read = () => readLiveSettings(defaults, (domain, key) => values.get(`${domain}.${key}`))
-  assert.deepEqual(read(), { apiKey: 'saved-key', instructions: 'Krótko po polsku.', volume: 0.35, bargeIn: false })
+  assert.deepEqual(read(), {
+    apiKey: 'saved-key',
+    instructions: 'Krótko po polsku.',
+    volume: 0.35,
+    bargeIn: false,
+    voice: 'marin',
+    pitch: 0,
+    style: 'default',
+  })
   values.set('ai.token', '')
   values.set('ai.context', '')
   assert.equal(read().apiKey, '')
@@ -125,4 +139,27 @@ test('backend settings and hosted search are forwarded without adding instructio
   assert.equal(options.instructions, '')
   assert.equal(volume, 1)
   await session.stop()
+})
+
+test('voice, pitch and style reload saved values and recover from invalid storage', () => {
+  const defaults = { voice: 'marin', pitch: 0, style: 'default', instructions: 'Mów po polsku.' }
+  const saved = new Map()
+  const read = () => readLiveSettings(defaults, (domain, key) => saved.get(`${domain}.${key}`))
+  saved.set('openailive.voice', 'cedar')
+  saved.set('openailive.pitch', '-4')
+  saved.set('openailive.style', 'calm')
+  assert.equal(read().voice, 'cedar')
+  assert.equal(read().pitch, -4)
+  assert.ok(read().instructions.startsWith(defaults.instructions))
+  assert.notEqual(read().instructions, defaults.instructions)
+  saved.set('openailive.style', 'default')
+  assert.equal(read().instructions, defaults.instructions)
+  for (const value of ['', 'invalid', null, false, 7, -7, 0.5]) {
+    for (const key of ['voice', 'pitch', 'style']) saved.set(`openailive.${key}`, value)
+    const result = read()
+    assert.equal(result.voice, defaults.voice)
+    assert.equal(result.pitch, defaults.pitch)
+    assert.equal(result.style, defaults.style)
+    assert.equal(result.instructions, defaults.instructions)
+  }
 })

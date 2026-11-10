@@ -1,6 +1,12 @@
 # Stack-chan
 
-Fork: [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`. Fork version: **2.0.1-r9**. [Fork release notes](./docs/release-notes/v2.0.1-r9.md).
+This repository is **stackchan-community-mod**, a fork of
+[stack-chan/stack-chan](https://github.com/stack-chan/stack-chan) starting at
+[v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit
+[`6a8f7553610e5d91770901e76fd93a0c50cfd970`](https://github.com/stack-chan/stack-chan/commit/6a8f7553610e5d91770901e76fd93a0c50cfd970).
+The current fork version is **2.0.1-r10**. Fork changes, version comparisons and
+GPT-Live installation commands are in [CHANGELOG-MOD.md](./CHANGELOG-MOD.md).
+The upstream project and its history retain their original attribution and licenses.
 
 [![Build Stack-chan Firmware](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml/badge.svg)](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml)
 [![Discord server invitation](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/eGhd9adnBm)
@@ -31,7 +37,9 @@ The joystick remote controller is optional.
 
 ### 2. Flash the firmware
 
-Connect M5StackChan to a computer with a data-capable USB cable, then open the [Web firmware installer](https://stack-chan.github.io/stack-chan/web/flash/) in Chrome or Edge.
+For this fork's GPT-Live images, use [the full or app-only installation commands](./CHANGELOG-MOD.md#install).
+The [upstream Web firmware installer](https://stack-chan.github.io/stack-chan/web/flash/) installs upstream firmware.
+Connect M5StackChan to a computer with a data-capable USB cable, then open that installer in Chrome or Edge.
 Select "M5StackChan CoreS3" as the device.
 You do not need to install the Moddable SDK or ESP-IDF.
 

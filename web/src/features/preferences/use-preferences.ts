@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_PREFERENCES,
   isPreferenceKey,
+  isLiveVoicePreference,
   OPENAI_REASONING_EFFORTS,
   type PreferenceKey,
   type PreferenceValues,
@@ -75,7 +76,15 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     const activeClient = client.current
     if (!activeClient) return
     // A new device must advertise these fields before they become editable.
-    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort', 'openailive.bargeIn', 'www.password'] as const) {
+    for (const key of [
+      'openailive.backendModel',
+      'openailive.reasoningEffort',
+      'openailive.bargeIn',
+      'openailive.voice',
+      'openailive.pitch',
+      'openailive.style',
+      'www.password',
+    ] as const) {
       delete currentValues.current[key]
       dirty.current.delete(key)
     }
@@ -84,6 +93,9 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       'openailive.backendModel': '',
       'openailive.reasoningEffort': '',
       'openailive.bargeIn': '0',
+      'openailive.voice': 'marin',
+      'openailive.pitch': '0',
+      'openailive.style': 'default',
       'www.password': '',
     }))
     setConnection('connecting')
@@ -117,7 +129,12 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
   }, [http])
 
   const update = useCallback((key: PreferenceKey, value: string) => {
-    if (readOnlyRef.current.has(key) || (key === 'openailive.bargeIn' && currentValues.current[key] === undefined)) return
+    if (
+      readOnlyRef.current.has(key) ||
+      (['openailive.bargeIn', 'openailive.voice', 'openailive.pitch', 'openailive.style'].includes(key) &&
+        currentValues.current[key] === undefined)
+    )
+      return
     if (currentValues.current[key] === value) dirty.current.delete(key)
     else dirty.current.add(key)
     setValues((current) => ({ ...current, [key]: value }))
@@ -141,12 +158,13 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       }
       if (
         (model !== undefined && !model.trim()) ||
+        entries.some(([key, value]) => !isLiveVoicePreference(key, value)) ||
         (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort)) ||
         (payload['openailive.bargeIn'] !== undefined && !['0', '1'].includes(payload['openailive.bargeIn']))
       ) {
         setOperation({
           status: 'error',
-          error: new AppError('invalid-openai-settings', 'OpenAIのモデルと推論の強度を確認してください。'),
+          error: new AppError('invalid-openai-settings', 'OpenAIの設定値を確認してください。'),
         })
         return
       }
@@ -204,6 +222,9 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
     bargeInAvailable: currentValues.current['openailive.bargeIn'] !== undefined,
+    voiceAvailable: currentValues.current['openailive.voice'] !== undefined,
+    pitchAvailable: currentValues.current['openailive.pitch'] !== undefined,
+    styleAvailable: currentValues.current['openailive.style'] !== undefined,
     wwwAvailable: currentValues.current['www.password'] !== undefined,
     http,
     operation,

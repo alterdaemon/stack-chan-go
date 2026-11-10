@@ -1,0 +1,23 @@
+{
+  "include": [
+    "$(MODDABLE)/examples/manifest_base.json",
+    "$(MODULES)/pins/i2s/manifest.json",
+    "../../../testing/manifest.json"
+  ],
+  "build": { "NAME": "stack-chan-host" },
+  "modules": {
+    "main": "./signal.test",
+    "*": ["./probe.c", "../../esp32/livePitch.c"]
+  },
+  "platforms": {
+    "esp32/m5stackchan_cores3": {
+      "dependency": [
+        {
+          "name": "esp_audio_effects",
+          "version": "~1.3",
+          "includes": ["include"]
+        }
+      ]
+    }
+  }
+}

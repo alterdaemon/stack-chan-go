@@ -32,6 +32,7 @@ typedef struct {
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
 	bool started, errorRead, captureOnly, bargeIn;
+    int pitch;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
 	const char *failureStage;
@@ -151,7 +152,7 @@ static void worker(void *ctx)
 	LiveAudio *audio = NULL;
 	esp_webrtc_media_provider_t provider = {0};
 	esp_capture_sink_handle_t probeSink = NULL;
-	int err = liveAudioOpen(&audio, &provider, t->bargeIn);
+	int err = liveAudioOpen(&audio, &provider, t->bargeIn, t->pitch);
 	if (err) { t->failureStage = liveAudioStage(audio); goto done; }
 	if (t->captureOnly) {
 		/* Match the RTP drain priority when comparing capture throughput. */
@@ -271,6 +272,11 @@ void xs_live_transport_start(xsMachine *the)
 	}
 	t->captureOnly = xsmcArgc && xsmcToBoolean(xsArg(0));
 	t->bargeIn = xsmcArgc > 1 && xsmcToBoolean(xsArg(1));
+    if (xsmcArgc > 2) {
+        double pitch = xsmcToNumber(xsArg(2));
+        if (!(pitch >= -6 && pitch <= 6) || pitch != (int)pitch) xsRangeError("Invalid pitch");
+        t->pitch = (int)pitch;
+    }
 	t->started = true;
 	if (xTaskCreatePinnedToCore(worker, "live_peer", 12288, t, 10, NULL, 1) != pdPASS) {
 		t->started = false;

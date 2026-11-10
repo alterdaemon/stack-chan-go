@@ -1,0 +1,2 @@
+#define ESP_ERR_INVALID_ARG -1
+#define ESP_ERR_NO_MEM -2

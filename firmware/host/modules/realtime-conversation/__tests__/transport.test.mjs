@@ -59,10 +59,12 @@ test('native start receives an explicit opt-in, independent from capture probes'
   new Transport(() => {}).start()
   new Transport(() => {}).start({ bargeIn: true })
   new Transport(() => {}).start({ captureOnly: true })
+  new Transport(() => {}).start({ pitch: -4 })
   assert.deepEqual(starts, [
-    [false, false],
-    [false, true],
-    [true, false],
+    [false, false, 0],
+    [false, true, 0],
+    [true, false, 0],
+    [false, false, -4],
   ])
 })
 test('CoreS3 offers initiate DTLS without changing other SDP attributes', async () => {

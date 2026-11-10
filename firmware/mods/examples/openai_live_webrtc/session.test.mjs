@@ -329,3 +329,15 @@ test('constructor failure reports an exact site, exception type and safe reason'
   for (const value of ['R4', 'readonly_json', 'core_delegation', 'TypeError']) assert.ok(display.includes(value))
   assert.equal(f.events.at(-1), 'audio released')
 })
+
+test('chosen voice, local pitch and composed style reach each new conversation', async () => {
+  const f = fixture({
+    settings: { apiKey: 'test-only', voice: 'cedar', pitch: 4, instructions: 'Polish. Speaking style: calm.' },
+  })
+  assert.equal(await f.session.start(), true)
+  const conversation = f.instances[0]
+  assert.equal(conversation.options.voice, 'cedar')
+  assert.equal(conversation.options.pitch, 4)
+  assert.equal(conversation.options.instructions, 'Polish. Speaking style: calm.')
+  await f.session.stop()
+})

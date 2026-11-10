@@ -154,7 +154,7 @@ await test('unclassified local speech cannot force-stop a full-duplex answer', a
   for (const bargeIn of [false, true]) {
     const h = harness({ bargeIn })
     await h.connect()
-    equal(h.starts, [{ bargeIn }])
+    equal(h.starts, [{ bargeIn, pitch: 0 }])
     // Residual speaker echo can produce repeated speech detections. These
     // detections do not establish caller intent and must not inject stop commands.
     for (let i = 0; i < 50; i++) {
@@ -777,5 +777,29 @@ await test('late injected session creation is finalized through its signaling ad
   await flush()
   equal(hangups, 1)
   equal(h.requests.length, 0)
+})
+
+await test('pitch stays local while voice reaches the Live session', async () => {
+  for (const pitch of [-6, 0, 6]) {
+    const h = harness({ pitch, voice: 'cedar' })
+    await h.connect()
+    equal(h.starts, [{ bargeIn: false, pitch }])
+    const session = JSON.parse(h.requests[0].init.body).session
+    equal(session.audio.output.voice, 'cedar')
+    equal(session.audio.output.pitch, undefined)
+    equal(session.pitch, undefined)
+    const closing = h.c.close()
+    h.message({ type: 'session.closed', reason: 'client_request' })
+    await closing
+  }
+  for (const pitch of [-7, 7, 0.5, NaN, Infinity, '1', false]) {
+    let rejected = false
+    try {
+      harness({ pitch })
+    } catch (error) {
+      rejected = error instanceof RangeError
+    }
+    check(rejected, 'invalid pitch must fail before native startup')
+  }
 })
 console.log(`${count} tests passed`)

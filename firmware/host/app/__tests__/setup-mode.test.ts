@@ -26,6 +26,7 @@ function installAliases(): void {
     ['time', 'testing/fakes/time.js'],
     ['ecma-wifi', 'connectivity/__tests__/fakes/ecma-wifi.js'],
   ]
+  writeAliasPackage(modulesRoot, 'openai-live-options', resolve(modulesRoot, 'preferences/openai-live-options.js'))
   for (const root of [appRoot, modulesRoot]) {
     for (const [name, path] of shared) writeAliasPackage(root, name, resolve(modulesRoot, path))
     for (const [name, path] of sharedDefault) {
@@ -37,6 +38,7 @@ function installAliases(): void {
   }
   for (const [name, path] of [
     ['loadPreference', 'preferences/loadPreference.js'],
+    ['openai-live-options', 'preferences/openai-live-options.js'],
     ['network-state', 'connectivity/network-state.js'],
     ['preference-server', 'connectivity/preference-server.js'],
     ['settings-network-list', 'ui/views/settings/settings-network-list.js'],

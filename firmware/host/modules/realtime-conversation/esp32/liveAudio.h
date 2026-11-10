@@ -16,7 +16,7 @@ typedef struct {
 	unsigned audibleMs;
 } LiveAudioStats;
 
-int liveAudioOpen(LiveAudio **audio, esp_webrtc_media_provider_t *provider, bool bargeIn);
+int liveAudioOpen(LiveAudio **audio, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch);
 void liveAudioStop(LiveAudio *audio);
 void liveAudioClose(LiveAudio *audio);
 void liveAudioMute(LiveAudio *audio, bool mute);

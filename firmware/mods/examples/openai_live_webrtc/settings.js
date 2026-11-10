@@ -1,3 +1,5 @@
+import { isLiveVoicePreference, liveStyleInstructions } from 'openai-live-options'
+
 // Read on each manual start so saved BLE preferences take effect without a rebuild.
 function copyConfig(value) {
   // mc/config is preloaded in flash. XS 10.0.2 JSON.stringify marks objects
@@ -21,13 +23,32 @@ export function readLiveSettings(defaults, getPreference) {
   const bargeIn = getPreference('openailive', 'bargeIn')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
+  const voiceSettings = {}
+  for (const [key, fallback] of [
+    ['voice', 'marin'],
+    ['pitch', 0],
+    ['style', 'default'],
+  ]) {
+    const prop = `openailive.${key}`
+    const saved = getPreference('openailive', key)
+    const value = isLiveVoicePreference(prop, saved)
+      ? saved
+      : isLiveVoicePreference(prop, defaults[key])
+        ? defaults[key]
+        : fallback
+    voiceSettings[key] = key === 'pitch' ? Number(value) : value
+  }
   return {
     ...copyConfig(defaults),
+    ...voiceSettings,
     bargeIn: bargeIn === 1 || bargeIn === '1',
     ...(typeof backendModel === 'string' && backendModel.trim() ? { backendModel: backendModel.trim() } : {}),
     ...(['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoningEffort) ? { reasoningEffort } : {}),
     apiKey: typeof token === 'string' ? token.trim() : (defaults.apiKey ?? ''),
-    instructions: typeof context === 'string' && context.trim() ? context.trim() : defaults.instructions,
+    instructions: liveStyleInstructions(
+      typeof context === 'string' && context.trim() ? context.trim() : (defaults.instructions ?? ''),
+      voiceSettings.style,
+    ),
     volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : (defaults.volume ?? 1),
   }
 }

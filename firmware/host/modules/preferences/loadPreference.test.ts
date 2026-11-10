@@ -24,6 +24,7 @@ type FakePreference = {
 function installBareSpecifierPackages(): void {
   const modulesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   writeAliasPackage(modulesRoot, 'consts', resolve(modulesRoot, 'preferences/consts.js'))
+  writeAliasPackage(modulesRoot, 'openai-live-options', resolve(modulesRoot, 'preferences/openai-live-options.js'))
   writeAliasPackage(modulesRoot, 'modules', resolve(modulesRoot, 'testing/fakes/modules.js'), {
     hasDefaultExport: true,
   })
@@ -152,7 +153,14 @@ test('loadPreferences reads the selected time zone from preferences', async () =
 
 test('OpenAI preferences expose host defaults and stored overrides without changing AI preferences', async () => {
   const { loadPreferences, config, preference } = await setup()
-  const defaults = { backendModel: 'host-backend', reasoningEffort: 'medium', bargeIn: 0 }
+  const defaults = {
+    backendModel: 'host-backend',
+    reasoningEffort: 'medium',
+    bargeIn: 0,
+    voice: 'marin',
+    pitch: 0,
+    style: 'default',
+  }
   config.resetConfig({ openaiLive: { ...defaults, model: 'voice-model', apiKey: 'host-only' } })
   assert.deepEqual(loadPreferences(DOMAIN.openailive), defaults)
   preference.resetPreference({
@@ -165,6 +173,9 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     backendModel: 'saved-backend',
     reasoningEffort: 'none',
     bargeIn: 0,
+    voice: 'marin',
+    pitch: 0,
+    style: 'default',
   })
   assert.deepEqual(loadPreferences(DOMAIN.ai), { token: 'shared-token', context: 'shared-context' })
 })
@@ -188,5 +199,27 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
     backendModel: 'mod-backend',
     reasoningEffort: undefined,
     bargeIn: 0,
+    voice: 'marin',
+    pitch: 0,
+    style: 'default',
   })
+})
+
+test('voice preferences survive reload and invalid saved values preserve firmware defaults', async () => {
+  const { loadPreferences, config, preference } = await setup()
+  config.resetConfig({ openaiLive: { voice: 'cedar', pitch: -2, style: 'calm' } })
+  preference.resetPreference({ 'openailive.voice': 'coral', 'openailive.pitch': '5', 'openailive.style': 'expressive' })
+  let result = loadPreferences(DOMAIN.openailive)
+  assert.equal(result.voice, 'coral')
+  assert.equal(result.pitch, 5)
+  assert.equal(result.style, 'expressive')
+  preference.resetPreference({
+    'openailive.voice': 'unknown',
+    'openailive.pitch': '6.5',
+    'openailive.style': 'unknown',
+  })
+  result = loadPreferences(DOMAIN.openailive)
+  assert.equal(result.voice, 'cedar')
+  assert.equal(result.pitch, -2)
+  assert.equal(result.style, 'calm')
 })

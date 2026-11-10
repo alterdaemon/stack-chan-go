@@ -17,6 +17,9 @@ export const PREFERENCE_KEYS = [
   'openailive.backendModel',
   'openailive.reasoningEffort',
   'openailive.bargeIn',
+  'openailive.voice',
+  'openailive.pitch',
+  'openailive.style',
   'mcp.token',
   'www.password',
 ] as const
@@ -44,6 +47,9 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',
   'openailive.bargeIn': '0',
+  'openailive.voice': 'marin',
+  'openailive.pitch': '0',
+  'openailive.style': 'default',
   'mcp.token': '',
   'www.password': '',
 }
@@ -52,3 +58,10 @@ export const OPENAI_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh
 
 export const isPreferenceKey = (value: string): value is PreferenceKey =>
   (PREFERENCE_KEYS as readonly string[]).includes(value)
+export {
+  OPENAI_LIVE_VOICES,
+  OPENAI_LIVE_STYLES,
+  OPENAI_LIVE_PITCH_MIN,
+  OPENAI_LIVE_PITCH_MAX,
+  isLiveVoicePreference,
+} from '../../../../firmware/host/modules/preferences/openai-live-options'

@@ -301,6 +301,9 @@
       ],
       "wifi-power-policy": [
         "./host/modules/connectivity/wifi-power-policy.ts"
+      ],
+      "openai-live-options": [
+        "./host/modules/preferences/openai-live-options.ts"
       ]
     },
     "types": [

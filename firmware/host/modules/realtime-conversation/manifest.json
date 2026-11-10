@@ -22,7 +22,12 @@
     "esp32/m5stackchan_cores3": {
       "modules": {
         "realtimeConversation/transport": "./esp32/transport.js",
-        "*": ["./esp32/transport.c", "./esp32/liveAudio.c"]
+        "*": [
+          "./esp32/transport.c",
+          "./esp32/liveAudio.c",
+          "./esp32/livePitch.c",
+          "./esp32/liveAecWorker.c"
+        ]
       },
       "build": {
         "C_FLAGS": "$(C_COMMON_FLAGS) -Wno-implicit-function-declaration -std=gnu17 $(C_FLAGS_SUBPLATFORM) -I$(ESP_WEBRTC_SOLUTION)/components/esp_webrtc/include -I$(ESP_WEBRTC_SOLUTION)/components/esp_webrtc/impl/whip_signal/include -I$(ESP_WEBRTC_SOLUTION)/components/esp_webrtc/impl/janus_signal/include -I$(ESP_WEBRTC_SOLUTION)/components/esp_peer/include -I$(ESP_WEBRTC_SOLUTION)/components/media_lib_utils/include -I$(ESP_WEBRTC_SOLUTION)/components/webrtc_utils -I$(ESP_WEBRTC_SOLUTION)/components/av_render/include"

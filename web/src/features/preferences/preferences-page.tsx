@@ -20,7 +20,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { OPENAI_REASONING_EFFORTS, type PreferenceKey } from '@/features/preferences/preference-model'
+import {
+  OPENAI_REASONING_EFFORTS,
+  OPENAI_LIVE_VOICES,
+  OPENAI_LIVE_PITCH_MIN,
+  OPENAI_LIVE_PITCH_MAX,
+  type PreferenceKey,
+} from '@/features/preferences/preference-model'
 import { usePreferences } from '@/features/preferences/use-preferences'
 
 type FieldProps = Omit<ComponentProps<'input'>, 'id' | 'name' | 'value' | 'disabled' | 'onChange'> & {
@@ -38,6 +44,9 @@ export function PreferencesPage() {
     preferences.readOnly.has(name) ||
     (name.startsWith('openailive.') && !preferences.openaiAvailable) ||
     (name === 'openailive.bargeIn' && !preferences.bargeInAvailable) ||
+    (name === 'openailive.voice' && !preferences.voiceAvailable) ||
+    (name === 'openailive.pitch' && !preferences.pitchAvailable) ||
+    (name === 'openailive.style' && !preferences.styleAvailable) ||
     (name === 'www.password' && !preferences.wwwAvailable)
 
   const inputField = ({ name, label, type = 'text', wide, ...props }: FieldProps) => (
@@ -267,9 +276,49 @@ export function PreferencesPage() {
                 OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
               )}
               {selectField(
+                'openailive.voice',
+                '声',
+                OPENAI_LIVE_VOICES.map((value) => ({ value, label: value, translate: false }))
+              )}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="openailive.pitch">{t('ピッチ')}</Label>
+                  <output htmlFor="openailive.pitch" className="text-sm tabular-nums">
+                    {Number(preferences.values['openailive.pitch']) > 0 ? '+' : ''}
+                    {preferences.values['openailive.pitch']} {t('半音')}
+                  </output>
+                </div>
+                <input
+                  id="openailive.pitch"
+                  name="openailive.pitch"
+                  type="range"
+                  min={OPENAI_LIVE_PITCH_MIN}
+                  max={OPENAI_LIVE_PITCH_MAX}
+                  step="1"
+                  className="w-full accent-primary disabled:opacity-50"
+                  value={preferences.values['openailive.pitch']}
+                  disabled={isDisabled('openailive.pitch')}
+                  onChange={(event) => preferences.update('openailive.pitch', event.target.value)}
+                />
+              </div>
+              {selectField(
+                'openailive.style',
+                '話し方',
+                [
+                  { value: 'default', label: '標準' },
+                  { value: 'calm', label: '穏やか' },
+                  { value: 'expressive', label: '表情豊か' },
+                ],
+                '声・ピッチ・話し方は次回のGPT-Live開始時に適用されます。',
+                true
+              )}
+              {selectField(
                 'openailive.bargeIn',
                 '音声で割り込み（実験的）',
-                [{ value: '0', label: '無効' }, { value: '1', label: '有効' }],
+                [
+                  { value: '0', label: '無効' },
+                  { value: '1', label: '有効' },
+                ],
                 '発話中も音声を聞き取り、GPT-Liveが割り込みに対応します。初期設定は無効です。次回のGPT-Live開始時に適用されます。',
                 true
               )}

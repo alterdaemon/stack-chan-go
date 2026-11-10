@@ -11,6 +11,8 @@
       "backendModel": "gpt-6.1-terra",
       "reasoningEffort": "medium",
       "voice": "marin",
+      "pitch": 0,
+      "style": "default",
       "instructions": "",
       "volume": 1,
       "tools": [

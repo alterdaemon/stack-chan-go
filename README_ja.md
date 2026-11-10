@@ -1,5 +1,13 @@
 # ｽﾀｯｸﾁｬﾝ(Stack-chan)
 
+このリポジトリは [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan) の
+[v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1)
+（コミット `6a8f7553610e5d91770901e76fd93a0c50cfd970`）から派生した
+**stackchan-community-mod** です。現在のバージョンは **2.0.1-r10** です。
+派生版の変更履歴、比較方法、GPT-Live のインストール手順は
+[CHANGELOG-MOD.md](./CHANGELOG-MOD.md) を参照してください。
+以下の upstream Web インストーラーは upstream のファームウェアを書き込みます。
+
 [![ファームウェアのビルド](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml/badge.svg)](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml)
 [![Discordサーバへの招待](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/eGhd9adnBm)
 

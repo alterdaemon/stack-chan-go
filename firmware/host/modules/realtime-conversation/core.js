@@ -93,11 +93,14 @@ export default class Conversation {
         throw new TypeError(`${name} must be a function`)
     if (options.bargeIn !== undefined && typeof options.bargeIn !== 'boolean')
       throw new TypeError('bargeIn must be boolean')
+    if (options.pitch !== undefined && (!Number.isInteger(options.pitch) || options.pitch < -6 || options.pitch > 6))
+      throw new RangeError('pitch must be an integer between -6 and 6 semitones')
     this.#key = options.apiKey
     this.#options = {
       model: options.model ?? 'gpt-live-1',
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
+      pitch: options.pitch ?? 0,
       bargeIn: options.bargeIn === true,
       delegation: options.delegation === undefined ? undefined : copyDelegation(options.delegation),
       onStateChanged: options.onStateChanged,
@@ -179,7 +182,7 @@ export default class Conversation {
       this.#connectTimer = this.#after(60000, () =>
         this.#fail(new ConversationError('Session startup timed out', 'connect_timeout', 'connect')),
       )
-      this.#transport.start({ bargeIn: this.#options.bargeIn })
+      this.#transport.start({ bargeIn: this.#options.bargeIn, pitch: this.#options.pitch })
     } catch (error) {
       this.#fail(error)
     }

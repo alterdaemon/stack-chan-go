@@ -24,6 +24,7 @@ type TestPreferenceServer = {
 function installBareSpecifierPackages(): void {
   const modulesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
   writeAliasPackage(modulesRoot, 'consts', resolve(modulesRoot, 'preferences/consts.js'))
+  writeAliasPackage(modulesRoot, 'openai-live-options', resolve(modulesRoot, 'preferences/openai-live-options.js'))
   writeAliasPackage(
     modulesRoot,
     'preference-write-guard',
@@ -543,3 +544,23 @@ for (const failure of ['throw', 'NaN', 'negative'] as const) {
     server.close()
   })
 }
+
+test('BLE validates the three voice preferences before storing or notifying changes', async () => {
+  const { PreferenceServer, preference } = await setup()
+  const changes: unknown[] = []
+  const server = new PreferenceServer({ keys: PREF_KEYS, onPreferenceChanged: (...args) => changes.push(args) })
+  server.enableWrites(BLE_PREFERENCE_WRITE_WINDOW_MS)
+  for (const [key, valid, invalid] of [
+    ['voice', 'cedar', 'unknown'],
+    ['pitch', '-4', '6.5'],
+    ['style', 'calm', 'unknown'],
+  ]) {
+    server.receiveAndSetPreference('openailive', key, valid)
+    assert.equal(preference.default.get('openailive', key), valid)
+    const count = changes.length
+    server.receiveAndSetPreference('openailive', key, invalid)
+    assert.equal(preference.default.get('openailive', key), valid)
+    assert.equal(changes.length, count)
+  }
+  server.close()
+})

@@ -35,6 +35,22 @@ The expected release path is:
 
 Changesets are configured with `develop` as the release base branch. Version bumps and release notes are prepared on the release branch. Record the candidate commit and hardware results in the release pull request using the [physical-device release checklist](./release-device-test_ja.md). A stable `vX.Y.Z` tag validates the versions, rebuilds the firmware bundle, and publishes the GitHub Release assets. Automated release pull requests and firmware product-version embedding remain future work.
 
+## Fork revisions
+
+`stackchan-community-mod` forks [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1).
+The `upstream` remote points to that project. The `upstream/v2.0.1` tag and original
+`v2.0.1` tag identify its unmodified release; local commits follow that commit.
+See [CHANGELOG-MOD.md](../../CHANGELOG-MOD.md) for the revision history and comparisons.
+
+Fork revision R<N> uses product version `2.0.1-r<N>` and tag `v2.0.1-r<N>`.
+Update both package versions and lockfile roots, all web flash manifest versions,
+the GPT-Live packager revision and filenames, and `docs/release-notes/v<version>.md`.
+Run `npm run check:release -- v<version>` from `firmware/` before tagging.
+The release workflow accepts stable tags and numbered revision tags; Fork revisions use
+`--prerelease=true --latest=false`, preserving the stable release as Latest.
+The ESP application descriptor retains the separate Moddable/host API compatibility
+version required by MOD loading; it is not the fork's product version.
+
 ## GitHub Pages
 
 GitHub Pages keeps stable and development artifacts in separate directories on the `gh-pages` branch.

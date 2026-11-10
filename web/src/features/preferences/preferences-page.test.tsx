@@ -19,6 +19,9 @@ describe('PreferencesPage', () => {
       busy: false,
       openaiAvailable: true,
       bargeInAvailable: true,
+      voiceAvailable: true,
+      pitchAvailable: true,
+      styleAvailable: true,
       wwwAvailable: true,
       http: false,
       values: DEFAULT_PREFERENCES,
@@ -108,6 +111,28 @@ describe('PreferencesPage', () => {
     renderPreferences({ bargeInAvailable: false })
     expect(screen.getByRole('combobox', { name: '音声で割り込み（実験的）' })).toBeDisabled()
     expect(screen.getByLabelText('モデル')).toBeEnabled()
+  })
+
+  it('edits Voice, Pitch and Style and disables them on older firmware', async () => {
+    const user = userEvent.setup()
+    const { state, unmount } = renderPreferences()
+    const voice = screen.getByRole('combobox', { name: '声' })
+    expect(voice).toHaveTextContent('marin')
+    await user.click(voice)
+    await user.click(screen.getByRole('option', { name: 'cedar' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.voice', 'cedar')
+    const pitch = screen.getByRole('slider', { name: 'ピッチ' })
+    expect(pitch).toHaveValue('0')
+    fireEvent.change(pitch, { target: { value: '-4' } })
+    expect(state.update).toHaveBeenLastCalledWith('openailive.pitch', '-4')
+    await user.click(screen.getByRole('combobox', { name: '話し方' }))
+    await user.click(screen.getByRole('option', { name: '穏やか' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.style', 'calm')
+    unmount()
+    renderPreferences({ voiceAvailable: false, pitchAvailable: false, styleAvailable: false })
+    expect(screen.getByRole('combobox', { name: '声' })).toBeDisabled()
+    expect(screen.getByRole('slider', { name: 'ピッチ' })).toBeDisabled()
+    expect(screen.getByRole('combobox', { name: '話し方' })).toBeDisabled()
   })
 
   it('requires a nonblank model and keeps the fields disabled while disconnected', () => {

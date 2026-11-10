@@ -3,6 +3,7 @@ import Base64 from 'base64'
 import { PREF_KEYS } from 'consts'
 import { HttpServerService, Response } from 'http-server-service'
 import { getNetworkConnection } from 'network-manager'
+import { isLiveVoicePreference } from 'openai-live-options'
 import Preference from 'preference'
 import Time from 'time'
 
@@ -146,6 +147,7 @@ export class WiFiSettingsServer {
         return context.text('Read-only preference', 403)
       }
       if (
+        !isLiveVoicePreference(prop, value) ||
         (entry[2] === Number && !Number.isFinite(Number(value))) ||
         (prop === 'tts.volume' && (Number(value) < 0 || Number(value) > 1)) ||
         (prop === 'openailive.backendModel' && !value.trim()) ||

@@ -191,6 +191,21 @@ try {
   equal(Preference.get('ai', 'token'), undefined, 'invalid interruption settings reject the entire batch')
   equal((await save({ 'ai.token': 'must-not-save', 'driver.type': 'none' }, authorization)).status, 403)
   equal(Preference.get('ai', 'token'), undefined, 'invalid batch must not be partially saved')
+
+  equal(
+    (await save({ 'openailive.voice': 'cedar', 'openailive.pitch': '-4', 'openailive.style': 'calm' }, authorization))
+      .status,
+    200,
+  )
+  equal(Preference.get('openailive', 'pitch'), '-4')
+  for (const [prop, invalid] of [
+    ['openailive.voice', 'unknown'],
+    ['openailive.pitch', '6.5'],
+    ['openailive.style', 'unknown'],
+  ]) {
+    equal((await save({ 'openailive.voice': 'coral', [prop]: invalid }, authorization)).status, 400)
+    equal(Preference.get('openailive', 'voice'), 'cedar', 'invalid batch changes nothing')
+  }
   equal((await save({ 'openailive.reasoningEffort': 'invalid' }, authorization)).status, 400)
   equal((await save({ 'other.token': 'invalid' }, authorization)).status, 400)
   equal((await save({ 'tts.volume': 'NaN' }, authorization)).status, 400)

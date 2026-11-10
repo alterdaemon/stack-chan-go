@@ -3,7 +3,8 @@
   "modules": {
     "*": ["./mod"],
     "openai-live-session": "./session",
-    "openai-live-settings": "./settings"
+    "openai-live-settings": "./settings",
+    "openai-live-options": "../../../host/modules/preferences/openai-live-options"
   },
   "config": {
     "openaiLive": {

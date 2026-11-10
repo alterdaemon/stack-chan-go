@@ -26,6 +26,57 @@ describe('usePreferences', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('requires advertised voice settings, validates saves and clears them on device change', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => result.current.update('openailive.pitch', '4'))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    act(() => {
+      notify({ prop: 'openailive.voice', value: 'marin' })
+      notify({ prop: 'openailive.pitch', value: 0 })
+      notify({ prop: 'openailive.style', value: 'default' })
+      result.current.update('openailive.voice', 'cedar')
+      result.current.update('openailive.pitch', '-4')
+      result.current.update('openailive.style', 'calm')
+    })
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({
+      _batch: {
+        'openailive.voice': 'cedar',
+        'openailive.pitch': '-4',
+        'openailive.style': 'calm',
+      },
+    })
+    send.mockClear()
+    for (const [key, value] of [
+      ['openailive.voice', 'unknown'],
+      ['openailive.pitch', '6.5'],
+      ['openailive.style', 'unknown'],
+    ] as const) {
+      act(() => result.current.update(key, value))
+      await act(() => result.current.save())
+      expect(result.current.operation.status).toBe('error')
+      expect(send).not.toHaveBeenCalled()
+      act(() =>
+        result.current.update(key, key === 'openailive.voice' ? 'cedar' : key === 'openailive.pitch' ? '-4' : 'calm')
+      )
+    }
+    await act(() => result.current.connect())
+    expect(result.current.voiceAvailable).toBe(false)
+    expect(result.current.pitchAvailable).toBe(false)
+    expect(result.current.styleAvailable).toBe(false)
+    expect(result.current.values['openailive.pitch']).toBe('0')
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('receives OpenAI defaults and saves only changed provider fields', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})
