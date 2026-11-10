@@ -6,7 +6,29 @@ AI / Token, AI / Context i zapisana glosnosc sa odczytywane przy kazdym starcie.
 R6: panel WWW ma sekcje OpenAI pomiedzy AI a MCP Server.
 Model i Thinking effort odczytuja wartosci zapisane lub domyslne z firmware.
 Zmiana modelu backendowego i effort obowiazuje od nastepnego startu GPT-Live.
-GUI urzadzenia pozostaje bez zmian. Panel WWW trzeba zaktualizowac osobno.
+R8: pelny wspoldzielony formularz Settings jest w firmware, pod http://IP-robota/settings/.
+Otwarcie samego IP przekierowuje do formularza. Nie wymaga zewnetrznego hostingu.
+Bluetooth nadal dziala bez hasla WWW i pozwala zmienic to haslo.
+Na koncu formularza, za MCP Server, jest sekcja WWW z haslem dostepu przez Wi-Fi.
+Basic Auth: dowolny login, wymagane zapisane haslo. Puste pole zachowuje stare haslo.
+Haslo WWW nie jest odsylane do formularza ani wypisywane w logach.
+Bez hasla dostep HTTP jest zamkniety. Aby nadac pierwsze haslo z telefonu:
+  1. Otworz istniejace Settings na robocie; polaczy sie z zapisana siecia Wi-Fi.
+  2. IP zobaczysz w istniejacym widoku Wi-Fi. Telefon musi byc w tej samej sieci.
+  3. Wejdz na http://IP-robota/settings/ i w ciagu 5 minut zapisz haslo w sekcji WWW.
+     Do tego czasu inne pola sa zablokowane i zapisane dane nie sa udostepniane.
+  4. Po zapisie strona przeladuje sie i poprosi o Basic Auth. Login jest dowolny.
+Pierwsze haslo i kazda jego pozniejsza zmiana sa tez mozliwe przez zaktualizowany
+panel Bluetooth, podczas dotychczasowego okna zapisu w Settings na robocie.
+Serwer WWW dziala tylko podczas Settings wybranego na ekranie startowym.
+Wyjscie z Settings / uruchomienie robota zamyka serwer; podczas rozmowy nie dziala.
+Adres panelu widac w menu Settings i widoku Wi-Fi. Haslo WWW dziala od razu;
+pozostale preferencje zachowuja dotychczasowy moment zastosowania.
+Basic Auth przez HTTP nie szyfruje hasla ani ustawien. HTTPS nie wchodzi w zakres R8.
+Build automatycznie kompiluje wspolny formularz z web/ i osadza jego zasoby w BIN.
+Poprawione R8 zawiera korekte parsera naglowkow HTTP w generowanej kopii modulu SDK.
+Dluzsze naglowki przegladarek nie blokuja polaczenia (ERR_CONNECTION_RESET).
+Publiczny panel Bluetooth musi zawierac te same aktualne zmiany, aby pokazac nowe pola.
 Od R7 kazda nowa rewizja zawiera pelny obraz flash oraz osobny obraz aplikacji.
 Poprawka R7: komunikaty STARTED/STOPPED pojawiaja sie wewnatrz przycisku LIVE
 na 1,2 s, potem wraca LIVE ON/OFF. ERROR/SET KEY sa widoczne przez 5 s.
@@ -17,6 +39,8 @@ Tlo przycisku LIVE ma 75% przezroczystosci we wszystkich stanach; tekst pozostaj
 Konfiguracja: firmware/host/app/manifest_openai_live_settings.json.
 
 BUDOWANIE
+Zaleznosci wspolnego formularza (jednorazowo, z katalogu firmware):
+  npm --prefix ../web ci
 W aktywnym srodowisku Moddable / ESP-IDF, z ESP_WEBRTC_SOLUTION,
 esptool dostepnym dla python3 i xtensa-esp-elf-nm na PATH:
   cd firmware
@@ -36,8 +60,8 @@ PAKOWANIE ISTNIEJACEJ KOMPILACJI (bez ponownego budowania)
 W tym samym aktywnym srodowisku, z katalogu projektu:
   python3 firmware/scripts/package-gpt-live-update.py
 Wynik w gpt-live-package/, zawsze dwa pliki z tej samej kompilacji:
-  StackChan-Community-v2.0.1-r7-GPT-Live.bin      - pelny obraz, 16 MiB
-  StackChan-Community-v2.0.1-r7-GPT-Live-app.bin  - sama aplikacja
+  StackChan-Community-v2.0.1-r8-GPT-Live.bin      - pelny obraz, 16 MiB
+  StackChan-Community-v2.0.1-r8-GPT-Live-app.bin  - sama aplikacja
 Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania obu BIN-ow.
 Pelny obraz zawiera bootloader, tabele partycji i aplikacje z biezacego builda.
 Pozostale bajty sa wypelnione 0xFF, w tym obszary NVS, xs i storage.
@@ -45,16 +69,16 @@ Skrypt nie zapisuje raportow ani plikow pomocniczych.
 
 Przed nowa edycja ustaw kolejny wolny numer REVISION w
 firmware/scripts/package-gpt-live-update.py oraz zaktualizuj nazwy i komendy
-w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r7; nastepna: r8.
+w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r8; nastepna: r9.
 Zachowuj poprzednie BIN-y. Skrypt odrzuca inna zawartosc pod istniejaca rewizja;
 ponowne pakowanie identycznych danych jest dozwolone.
 
 INSTALACJA (z katalogu projektu)
 Pelna instalacja / odtworzenie, zapis calego flash i wyczyszczenie danych:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r7-GPT-Live.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r8-GPT-Live.bin
 
 Aktualizacja samej aplikacji, zachowuje pozostale partycje przy zgodnej mapie:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r7-GPT-Live-app.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r8-GPT-Live-app.bin
 Po wgraniu krotko nacisnij RST.
 Adres okresla miejsce zapisu w urzadzeniu, nie wybiera fragmentu pliku.
 Pelnego obrazu nie wolno wgrywac na 0x10000.

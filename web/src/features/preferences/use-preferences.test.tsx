@@ -6,6 +6,26 @@ import { type PreferenceKey } from '@/features/preferences/preference-model'
 import { type PreferenceClient, type PreferenceValue } from '@/services/preferences/ble-preference-client'
 
 describe('usePreferences', () => {
+  it('changes WWW password over BLE without HTTP authentication and clears the field after saving', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => notify({ prop: 'www.password', value: '' }))
+    expect(result.current.wwwAvailable).toBe(true)
+    act(() => result.current.update('www.password', 'new-password'))
+    await act(() => result.current.save())
+    expect(send).toHaveBeenCalledWith({ _batch: { 'www.password': 'new-password' } })
+    expect(result.current.values['www.password']).toBe('')
+    send.mockClear()
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('receives OpenAI defaults and saves only changed provider fields', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})

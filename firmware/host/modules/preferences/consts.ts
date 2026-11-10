@@ -8,6 +8,7 @@ export const DOMAIN = {
   led: 'led',
   mcp: 'mcp',
   time: 'time',
+  www: 'www',
 } as const
 
 export const PREF_KEYS: readonly [keyof typeof DOMAIN, string, StringConstructor | NumberConstructor][] = Object.freeze(
@@ -33,6 +34,7 @@ export const PREF_KEYS: readonly [keyof typeof DOMAIN, string, StringConstructor
     [DOMAIN.openailive, 'reasoningEffort', String],
     [DOMAIN.mcp, 'token', String],
     [DOMAIN.time, 'timezone', String],
+    [DOMAIN.www, 'password', String],
   ],
   true,
 )

@@ -1,6 +1,7 @@
 import { loadPreferenceConfig } from 'loadPreference'
 import { DOMAIN, PREF_KEYS } from 'consts'
 import { getLocalizationLanguage, normalizeLocale, type SupportedLocale, setLocalizationLanguage } from 'localization'
+import Modules from 'modules'
 import { NetworkConnectionState, type NetworkConnectionState as NetworkState } from 'network-state'
 import Preference from 'preference'
 import { PreferenceServer } from 'preference-server'
@@ -79,6 +80,7 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
     let scanSession: WiFiScanSession | undefined
     let scanResults: RawWiFiScanResult[] = []
     let preferenceServer: PreferenceServer | undefined
+    let settingsServer: { close(): void; address?: string } | undefined
     let finished = false
 
     const viewContext: SettingsViewContext = {
@@ -104,6 +106,7 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
       currentView?.dispose?.()
       currentView = undefined
       preferenceServer?.close?.()
+      settingsServer?.close()
       if (result === 'back') stopStoredWiFiConnection()
       void volumePreviewQueue.close().then(
         () => resolve(result),
@@ -235,8 +238,24 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
           updateCurrentView()
         },
         onConnected: () => {
+          if (finished) return
           trace('connection complete\n')
           status.wifi = SettingsStatusValue.CONNECTED
+          if (!settingsServer && Modules.has('wifi-settings-server')) {
+            try {
+              const { WiFiSettingsServer } = Modules.importNow('wifi-settings-server') as {
+                WiFiSettingsServer: new (options: object) => NonNullable<typeof settingsServer>
+              }
+              settingsServer = new WiFiSettingsServer({
+                getPreferences: loadPreferenceConfig,
+                onPreferenceChanged: handlePreferenceChanged,
+                setupDurationMs: BLE_PREFERENCE_WRITE_WINDOW_MS,
+              })
+            } catch (error) {
+              trace(`[settings] WWW unavailable: ${String(error)}\n`)
+            }
+          }
+          status['wifi.address'] = settingsServer?.address
           updateCurrentView()
         },
         onError: () => {
@@ -248,25 +267,27 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
     }
     showView(SettingsViewId.MENU)
 
+    function handlePreferenceChanged(key: string, value: unknown) {
+      trace(`preference changed! ${key}\n`)
+      if (key === `${DOMAIN.ui}.language`) {
+        applyLanguage(value, false)
+        return
+      }
+      if (key === `${DOMAIN.time}.timezone`) {
+        applyTimezone(value, false)
+        showView(currentViewId)
+        return
+      }
+      if (key === `${DOMAIN.tts}.volume`) {
+        applyVolume(value, false, false)
+        return
+      }
+      status[key] = value
+      updateCurrentView()
+    }
+
     preferenceServer = new PreferenceServer({
-      onPreferenceChanged: (key, value) => {
-        trace(`preference changed! ${key}\n`)
-        if (key === `${DOMAIN.ui}.language`) {
-          applyLanguage(value, false)
-          return
-        }
-        if (key === `${DOMAIN.time}.timezone`) {
-          applyTimezone(value, false)
-          showView(currentViewId)
-          return
-        }
-        if (key === `${DOMAIN.tts}.volume`) {
-          applyVolume(value, false, false)
-          return
-        }
-        status[key] = value
-        updateCurrentView()
-      },
+      onPreferenceChanged: handlePreferenceChanged,
       onConnected: () => {
         status.ble = SettingsStatusValue.CONNECTED
         updateCurrentView()
@@ -285,5 +306,7 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
       // enableWrites fails closed; local Settings and its normal exit cleanup remain usable.
       trace(`[settings] BLE preference writes unavailable: ${String(error)}\n`)
     }
+    // Existing Settings also opens the local WWW password setup window; no new device controls.
+    if (Modules.has('wifi-settings-server')) testConnection()
   })
 }

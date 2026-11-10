@@ -1,11 +1,12 @@
 {
   "name": "stackchan-web",
-  "version": "2.0.1-r7",
+  "version": "2.0.1-r8",
   "type": "module",
   "description": "Stack-chan browser tools",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:device-settings": "tsc --noEmit && vite build --mode device-settings",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:legacy && npm run test:react",

@@ -18,6 +18,8 @@ describe('PreferencesPage', () => {
       connected: true,
       busy: false,
       openaiAvailable: true,
+      wwwAvailable: true,
+      http: false,
       values: DEFAULT_PREFERENCES,
       readOnly: new Set(),
       operation: { status: 'idle' },
@@ -43,6 +45,28 @@ describe('PreferencesPage', () => {
     const token = screen.getByLabelText('Bearerトークン')
     expect(token).toHaveAttribute('name', 'mcp.token')
     expect(token).toHaveAttribute('type', 'password')
+  })
+
+  it.each([false, true])('shares every form field with WWW last over HTTP=%s', (http) => {
+    const { container } = renderPreferences({ http })
+    const titles = [...container.querySelectorAll('form [data-slot="card-title"]')].map((node) => node.textContent)
+    expect(titles).toEqual(['Wi-Fi', '外観', 'サーボ', '音声合成', 'AI', 'OpenAI', 'MCP Server', 'WWW'])
+    const password = screen.getByLabelText('Wi-Fiアクセスパスワード')
+    expect(password).toHaveAttribute('type', 'password')
+    expect(password).toHaveAttribute('name', 'www.password')
+    expect(password).toBeEnabled()
+    expect(screen.getByLabelText('SSID')).toBeEnabled()
+  })
+
+  it('permits only WWW password entry during initial HTTP setup', () => {
+    renderPreferences({
+      http: true,
+      readOnly: new Set(
+        Object.keys(DEFAULT_PREFERENCES).filter((key) => key !== 'www.password') as (keyof typeof DEFAULT_PREFERENCES)[]
+      ),
+    })
+    expect(screen.getByLabelText('SSID')).toBeDisabled()
+    expect(screen.getByLabelText('Wi-Fiアクセスパスワード')).toBeEnabled()
   })
 
   it('places OpenAI between AI and MCP Server and edits device-provided values', async () => {

@@ -82,6 +82,13 @@ process.exit(Number(process.env.STACKCHAN_TEST_PACKAGE_STATUS ?? 0))
 `,
     )
     chmodSync(fakePython, 0o755)
+    writeFileSync(
+      path.join(fixture.firmware, 'scripts/build-wifi-settings.mjs'),
+      `
+import { appendFileSync } from 'node:fs'
+appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wifi-settings']) + '\\n')
+`,
+    )
     delete env.STACKCHAN_REALTIME_WEBRTC
     delete env.STACKCHAN_MANIFEST
     delete env.STACKCHAN_DEVICE
@@ -93,6 +100,7 @@ process.exit(Number(process.env.STACKCHAN_TEST_PACKAGE_STATUS ?? 0))
       })
       assert.equal(result.status, status, result.stderr)
       const invocations = readInvocations(fixture.commandLog)
+      assert.ok(invocations.some(([command]) => command === 'build-wifi-settings'))
       assert.equal(invocations.at(-2).at(-1), path.join(fixture.firmware, selected))
       assert.deepEqual(invocations.at(-1), [
         'python3',

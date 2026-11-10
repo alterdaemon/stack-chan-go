@@ -35,6 +35,7 @@ const PREFERENCE_DOMAINS: PreferenceDomain[] = [
   DOMAIN.led,
   DOMAIN.mcp,
   DOMAIN.time,
+  DOMAIN.www,
 ]
 
 export default function loadPreferences(category: PreferenceDomain): ConfigRecord {
@@ -42,6 +43,7 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
   const modPreference = structuredClone((loadModConfig()[category.toLowerCase()] ?? {}) as ConfigRecord)
 
   const preference = { ...mcPreference, ...modPreference }
+  if (category === DOMAIN.www) preference.password ??= ''
   if (category === DOMAIN.openailive) {
     // Match GPT-Live's whole-block MOD override and expose only its two editable fields.
     const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}

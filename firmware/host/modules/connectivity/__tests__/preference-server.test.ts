@@ -117,6 +117,24 @@ function wire(value: unknown): ArrayBuffer {
   return new TextEncoder().encode(typeof value === 'string' ? value : JSON.stringify(value)).buffer as ArrayBuffer
 }
 
+test('BLE can replace WWW password without Basic Auth, never returns it, and ignores blank replacements', async () => {
+  const { PreferenceServer, preference, traces } = await setup()
+  preference.resetPreference({ 'www.password': 'existing-secret' })
+  const server = new PreferenceServer({ keys: PREF_KEYS })
+  server.enableWrites(BLE_PREFERENCE_WRITE_WINDOW_MS)
+  server.onCharacteristicNotifyEnabled({ name: 'tx' })
+  assert.deepEqual(notificationPayload(server), { prop: 'www.password', value: '' })
+  server.onRX(wire({ _batch: { 'www.password': 'replacement-secret' } }))
+  assert.equal(preference.default.get('www', 'password'), 'replacement-secret')
+  assert.deepEqual(notificationPayload(server, 1), { prop: 'www.password', value: '' })
+  server.onRX(wire({ _batch: { 'www.password': '' } }))
+  assert.equal(preference.default.get('www', 'password'), 'replacement-secret')
+  assert.equal(
+    traces.some((line) => line.includes('replacement-secret') || line.includes('existing-secret')),
+    false,
+  )
+})
+
 test('new servers deny direct and wire writes without notifications or callbacks', async () => {
   const { PreferenceServer, preference } = await setup()
   const changes: unknown[] = []

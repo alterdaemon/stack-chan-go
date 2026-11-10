@@ -17,6 +17,7 @@ export const PREFERENCE_KEYS = [
   'openailive.backendModel',
   'openailive.reasoningEffort',
   'mcp.token',
+  'www.password',
 ] as const
 
 export type PreferenceKey = (typeof PREFERENCE_KEYS)[number]
@@ -42,6 +43,7 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',
   'mcp.token': '',
+  'www.password': '',
 }
 
 export const OPENAI_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const

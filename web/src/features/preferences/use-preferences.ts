@@ -14,13 +14,15 @@ import {
   type PreferenceClient,
   type PreferenceValue,
 } from '@/services/preferences/ble-preference-client'
+import { HttpPreferenceClient, isDeviceSettings } from '@/services/preferences/http-preference-client'
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'disconnecting'
 type ClientFactory = (onValue: (value: PreferenceValue) => void) => PreferenceClient
+const defaultClientFactory: ClientFactory = (onValue) =>
+  isDeviceSettings() ? new HttpPreferenceClient(onValue) : new BlePreferenceClient({ deviceName: 'STK', onValue })
 
-export function usePreferences(
-  clientFactory: ClientFactory = (onValue) => new BlePreferenceClient({ deviceName: 'STK', onValue })
-) {
+export function usePreferences(clientFactory: ClientFactory = defaultClientFactory) {
+  const http = isDeviceSettings()
   const [connection, setConnection] = useState<ConnectionState>('disconnected')
   const [values, setValues] = useState<PreferenceValues>(DEFAULT_PREFERENCES)
   const [readOnly, setReadOnly] = useState<Set<PreferenceKey>>(() => new Set())
@@ -73,13 +75,18 @@ export function usePreferences(
     const activeClient = client.current
     if (!activeClient) return
     // A new device must advertise these fields before they become editable.
-    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort'] as const) {
+    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort', 'www.password'] as const) {
       delete currentValues.current[key]
       dirty.current.delete(key)
     }
-    setValues((current) => ({ ...current, 'openailive.backendModel': '', 'openailive.reasoningEffort': '' }))
+    setValues((current) => ({
+      ...current,
+      'openailive.backendModel': '',
+      'openailive.reasoningEffort': '',
+      'www.password': '',
+    }))
     setConnection('connecting')
-    setOperation({ status: 'pending', message: 'BLEデバイスを検索しています' })
+    setOperation({ status: 'pending', message: http ? 'Wi-Fiで接続しています' : 'BLEデバイスを検索しています' })
     try {
       await activeClient.connect()
       setConnection('connected')
@@ -88,7 +95,11 @@ export function usePreferences(
       setConnection('disconnected')
       setOperation({ status: 'error', error: toAppError(error, 'ble-connect') })
     }
-  }, [])
+  }, [http])
+
+  useEffect(() => {
+    if (http) void connect()
+  }, [http, connect])
 
   const disconnect = useCallback(async () => {
     const activeClient = client.current
@@ -97,12 +108,12 @@ export function usePreferences(
     try {
       await activeClient.disconnect()
       setConnection('disconnected')
-      setOperation({ status: 'cancelled', message: 'BLE接続を切断しました' })
+      setOperation({ status: 'cancelled', message: http ? 'Wi-Fi接続を切断しました' : 'BLE接続を切断しました' })
     } catch (error) {
       setConnection(activeClient.isConnected() ? 'connected' : 'disconnected')
       setOperation({ status: 'error', error: toAppError(error, 'ble-disconnect') })
     }
-  }, [])
+  }, [http])
 
   const update = useCallback((key: PreferenceKey, value: string) => {
     if (readOnlyRef.current.has(key)) return
@@ -111,40 +122,57 @@ export function usePreferences(
     setValues((current) => ({ ...current, [key]: value }))
   }, [])
 
-  const savePayload = useCallback(async (payload: Partial<PreferenceValues>, successMessage: string) => {
-    const activeClient = client.current
-    if (!activeClient?.isConnected()) return
-    const entries = Object.entries(payload).filter(([key]) => !readOnlyRef.current.has(key as PreferenceKey))
-    const model = payload['openailive.backendModel']
-    const effort = payload['openailive.reasoningEffort']
-    if (
-      (model !== undefined && !model.trim()) ||
-      (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort))
-    ) {
-      setOperation({
-        status: 'error',
-        error: new AppError('invalid-openai-settings', 'OpenAIのモデルと推論の強度を確認してください。'),
-      })
-      return
-    }
-    if (entries.length === 0) {
-      setOperation({ status: 'cancelled', message: '変更する項目がありません。' })
-      return
-    }
-    const batch = Object.fromEntries(entries)
-    setOperation({ status: 'pending', message: '設定を保存しています' })
-    try {
-      await activeClient.send({ _batch: batch })
-      for (const [key, value] of entries) {
-        const preferenceKey = key as PreferenceKey
-        currentValues.current[preferenceKey] = value
-        dirty.current.delete(preferenceKey)
+  const savePayload = useCallback(
+    async (payload: Partial<PreferenceValues>, successMessage: string) => {
+      const activeClient = client.current
+      if (!activeClient?.isConnected()) return
+      const entries = Object.entries(payload).filter(
+        ([key, value]) => !readOnlyRef.current.has(key as PreferenceKey) && (key !== 'www.password' || value !== '')
+      )
+      const model = payload['openailive.backendModel']
+      const effort = payload['openailive.reasoningEffort']
+      if (payload['www.password'] && /[\u0000-\u001f\u007f]/.test(payload['www.password'])) {
+        setOperation({
+          status: 'error',
+          error: new AppError('invalid-www-password', 'WWWのパスワードに制御文字は使用できません。'),
+        })
+        return
       }
-      setOperation({ status: 'success', result: undefined, message: successMessage })
-    } catch (error) {
-      setOperation({ status: 'error', error: toAppError(error, 'preference-save') })
-    }
-  }, [])
+      if (
+        (model !== undefined && !model.trim()) ||
+        (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort))
+      ) {
+        setOperation({
+          status: 'error',
+          error: new AppError('invalid-openai-settings', 'OpenAIのモデルと推論の強度を確認してください。'),
+        })
+        return
+      }
+      if (entries.length === 0) {
+        setOperation({ status: 'cancelled', message: '変更する項目がありません。' })
+        return
+      }
+      const batch = Object.fromEntries(entries)
+      setOperation({ status: 'pending', message: '設定を保存しています' })
+      try {
+        await activeClient.send({ _batch: batch })
+        for (const [key, value] of entries) {
+          const preferenceKey = key as PreferenceKey
+          currentValues.current[preferenceKey] = key === 'www.password' ? '' : value
+          dirty.current.delete(preferenceKey)
+        }
+        if (batch['www.password']) {
+          setValues((current) => ({ ...current, 'www.password': '' }))
+          // A top-level navigation lets the browser ask for the new Basic Auth password.
+          if (http) window.location.reload()
+        }
+        setOperation({ status: 'success', result: undefined, message: successMessage })
+      } catch (error) {
+        setOperation({ status: 'error', error: toAppError(error, 'preference-save') })
+      }
+    },
+    [http]
+  )
 
   const save = useCallback(() => {
     const payload: Partial<PreferenceValues> = {}
@@ -173,6 +201,8 @@ export function usePreferences(
     values,
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
+    wwwAvailable: currentValues.current['www.password'] !== undefined,
+    http,
     operation,
     connect,
     disconnect,

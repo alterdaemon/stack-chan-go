@@ -68,6 +68,10 @@ export class NetworkService {
     return this.#stateMachine.state
   }
 
+  get address(): string | undefined {
+    return this.#wifi.address
+  }
+
   matchesCredentials(options: { ssid?: string; password?: string }): boolean {
     return this.#ssid === options.ssid && this.#password === options.password
   }

@@ -7,6 +7,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { buildOutputDirectory, ensureBuildOutputDirectory, moddableOutputArguments } from './lib/build-output.mjs'
 import { parseModuleTestShard, selectModuleTestShard } from './lib/module-test-sharding.mjs'
+import { prepareWiFiHTTPServer } from './lib/wifi-http-server.mjs'
 import { moduleTestResult, startXsdbSession, stopProcessGroup } from './lib/xsdb-session.mjs'
 
 const DEFAULT_ROOTS = ['host/app', 'host/modules', 'mods/examples']
@@ -405,6 +406,9 @@ if (allManifestPaths.length === 0) {
 assertUniqueNames(allManifestPaths)
 const shard = parseModuleTestShard()
 const manifestPaths = selectModuleTestShard(allManifestPaths, shard)
+if (manifestPaths.some((path) => relativePath(path).includes('connectivity/wifi-settings/'))) {
+  prepareWiFiHTTPServer()
+}
 const shardLabel = `${shard.index + 1}/${shard.total}`
 const suiteStartedAt = performance.now()
 

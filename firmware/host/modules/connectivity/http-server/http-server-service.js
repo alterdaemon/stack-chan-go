@@ -40,7 +40,11 @@ class Response {
   #status = 200
   /** Encode the response body and supply Content-Length unless explicitly provided. */
   constructor(body, options = {}) {
-    this.#body = body instanceof ArrayBuffer ? body : ArrayBuffer.fromString(body.toString())
+    // Moddable Resource buffers live in ROM and expose byteLength without being ArrayBuffers.
+    this.#body =
+      body instanceof ArrayBuffer || typeof body?.byteLength === 'number'
+        ? body
+        : ArrayBuffer.fromString(body.toString())
     const headers = new Headers()
     if (options.headers) {
       for (const [key, value] of options.headers.entries

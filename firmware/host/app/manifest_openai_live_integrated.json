@@ -1,7 +1,8 @@
 {
   "include": [
     "./manifest_openai_live.json",
-    "./manifest_openai_live_settings.json"
+    "./manifest_openai_live_settings.json",
+    "../modules/connectivity/wifi-settings/manifest.json"
   ],
   "modules": {
     "openai-live-integrated": "../../mods/examples/openai_live_webrtc/mod",

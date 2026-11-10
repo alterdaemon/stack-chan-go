@@ -5,6 +5,9 @@ import Time from 'time'
 import Timer from 'timer'
 import { SERVICE_UUID, UARTServer } from 'uartserver'
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Reject control characters in Basic Auth passwords.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+
 type PreferenceValue = string | boolean | number | ArrayBuffer
 
 type PreferenceServerProps = {
@@ -144,7 +147,6 @@ export class PreferenceServer extends UARTServer {
   onRX(data) {
     if (!this.#isWriteWindowOpen()) return
     this.#rxBuffer += String.fromArrayBuffer(data)
-    trace(`${this.#rxBuffer}\n`)
     let _batch: object
     let prop: string
     let value: PreferenceValue
@@ -188,7 +190,7 @@ export class PreferenceServer extends UARTServer {
       ArrayBuffer.fromString(
         JSON.stringify({
           prop,
-          value,
+          value: prop === 'www.password' ? '' : value,
           ...(readOnly ? { readOnly: true } : {}),
         }),
       ),
@@ -201,6 +203,9 @@ export class PreferenceServer extends UARTServer {
       return
     }
     const prop = `${domain}.${key}`
+    // WWW authentication applies only to HTTP. BLE can replace, but never read, its password.
+    if (prop === 'www.password' && (typeof value !== 'string' || value.length === 0 || CONTROL_CHARACTERS.test(value)))
+      return
     if (this.#readOnlyKeys.includes(prop)) {
       trace(`ignoring read-only preference ... ${prop}: ${value}\n`)
       const currentValue = this.#effectiveValues[prop]
@@ -209,7 +214,7 @@ export class PreferenceServer extends UARTServer {
     }
     const currentValue = Preference.get(domain, key) ?? this.#effectiveValues[prop]
     if (currentValue !== value) {
-      trace(`changing preference ... ${domain}.${key}: ${value}\n`)
+      trace(`changing preference ... ${domain}.${key}\n`)
       // Parsing, storage reads or earlier batch callbacks may have crossed expiry.
       if (!this.#isWriteWindowOpen()) return
       Preference.set(domain, key, value)

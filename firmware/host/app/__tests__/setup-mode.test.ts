@@ -58,6 +58,12 @@ function installAliases(): void {
 
 async function setup() {
   installAliases()
+  ;(String as typeof String & { fromArrayBuffer(value: ArrayBuffer): string }).fromArrayBuffer = (value) =>
+    new TextDecoder().decode(value)
+  ;(ArrayBuffer as typeof ArrayBuffer & { fromString(value: string): ArrayBuffer }).fromString = (value) =>
+    new TextEncoder().encode(value).buffer as ArrayBuffer
+  const modules = await import('../../modules/testing/fakes/modules.js')
+  modules.resetModules()
   const traces: string[] = []
   ;(globalThis as typeof globalThis & { trace: (...messages: unknown[]) => void }).trace = (...messages) => {
     traces.push(messages.map(String).join(''))
@@ -105,8 +111,46 @@ async function setup() {
     application,
     contents,
     traces,
+    modules,
   }
 }
+
+test('Settings opens Wi-Fi setup using saved credentials, advertises WWW over BLE, and closes its HTTP service', async () => {
+  const context = await setup()
+  const options: { getPreferences?: () => Record<string, Record<string, unknown>>; setupDurationMs?: number } = {}
+  let closed = 0
+  context.modules.resetModules({
+    'wifi-settings-server': {
+      WiFiSettingsServer: class {
+        address = '192.0.2.10'
+        constructor(value: typeof options) {
+          Object.assign(options, value)
+        }
+        close() {
+          closed++
+        }
+      },
+    },
+  })
+  context.preference.set('wifi', 'ssid', 'saved-network')
+  context.preference.set('wifi', 'password', 'saved-password')
+  const result = context.startSetupMode(context.application)
+  assert.equal(context.network.getStartedConnections().at(-1)?.ssid, 'saved-network')
+  context.network.completeLastConnection()
+  assert.ok(options.setupDurationMs && options.setupDurationMs > 0)
+  assert.equal(options.getPreferences?.().www.password, '')
+  assert.equal(context.view.lastContext?.state.status['wifi.address'], '192.0.2.10')
+  const server = context.uart.lastUARTServer as InstanceType<
+    typeof import('../../modules/connectivity/preference-server.js')['PreferenceServer']
+  >
+  server.onCharacteristicNotifyEnabled({ name: 'tx' })
+  const notifications = server.notifications.map((item) => JSON.parse(new TextDecoder().decode(item.value)))
+  assert.ok(notifications.some((item) => item.prop === 'www.password' && item.value === ''))
+  context.view.lastContext?.actions.exit()
+  assert.equal(await result, 'back')
+  assert.equal(closed, 1)
+  context.modules.resetModules()
+})
 
 for (const action of ['exit', 'boot'] as const) {
   test(`Settings survives BLE timer allocation failure and completes ${action} cleanup`, async () => {
@@ -171,10 +215,6 @@ for (const action of ['exit', 'boot'] as const) {
 
 // Exercise the real Settings controller with fake platform resources only.
 function wire(value: unknown): ArrayBuffer {
-  ;(String as typeof String & { fromArrayBuffer(value: ArrayBuffer): string }).fromArrayBuffer = (value) =>
-    new TextDecoder().decode(value)
-  ;(ArrayBuffer as typeof ArrayBuffer & { fromString(value: string): ArrayBuffer }).fromString = (value) =>
-    new TextEncoder().encode(value).buffer as ArrayBuffer
   return new TextEncoder().encode(typeof value === 'string' ? value : JSON.stringify(value)).buffer as ArrayBuffer
 }
 

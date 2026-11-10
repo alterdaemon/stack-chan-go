@@ -38,32 +38,56 @@ const copyRuntimeAssets = () => ({
   },
 })
 
-export default defineConfig({
-  base: './',
-  define: {
-    'import.meta.env.VITE_WASM_BUILD_ID': JSON.stringify(wasmBuildId()),
-  },
-  plugins: [react(), tailwindcss(), copyRuntimeAssets()],
-  resolve: {
-    alias: {
-      '@/editor': fileURLToPath(new URL('./editor', import.meta.url)),
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+export default defineConfig(({ mode }) => {
+  const deviceSettings = mode === 'device-settings'
+  return {
+    base: deviceSettings ? '/' : './',
+    publicDir: deviceSettings ? false : 'public',
+    define: {
+      'import.meta.env.VITE_WASM_BUILD_ID': JSON.stringify(wasmBuildId()),
     },
-  },
-  build: {
-    outDir: 'dist',
-    rollupOptions: {
-      input: {
-        home: page('./index.html'),
-        flash: page('./flash/index.html'),
-        preference: page('./preference/index.html'),
-        gallery: page('./mod-gallery/index.html'),
-        mediapipe: page('./mediapipe/index.html'),
-        simulator: page('./simulator/index.html'),
-        editor: page('./editor/index.html'),
-        tutorial: page('./editor/tutorial.html'),
-        faceEditor: page('./face-editor/index.html'),
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(deviceSettings
+        ? [
+            {
+              name: 'device-settings-transport',
+              transformIndexHtml: () => [
+                {
+                  tag: 'meta',
+                  attrs: { name: 'stackchan-settings-transport', content: 'http' },
+                  injectTo: 'head' as const,
+                },
+              ],
+            },
+          ]
+        : [copyRuntimeAssets()]),
+    ],
+    resolve: {
+      alias: {
+        '@/editor': fileURLToPath(new URL('./editor', import.meta.url)),
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-  },
+    build: {
+      outDir: deviceSettings ? '../firmware/dist/wifi-settings/build' : 'dist',
+      emptyOutDir: true,
+      rollupOptions: {
+        input: deviceSettings
+          ? ({ preference: page('./preference/index.html') } as Record<string, string>)
+          : {
+              home: page('./index.html'),
+              flash: page('./flash/index.html'),
+              preference: page('./preference/index.html'),
+              gallery: page('./mod-gallery/index.html'),
+              mediapipe: page('./mediapipe/index.html'),
+              simulator: page('./simulator/index.html'),
+              editor: page('./editor/index.html'),
+              tutorial: page('./editor/tutorial.html'),
+              faceEditor: page('./face-editor/index.html'),
+            },
+      },
+    },
+  }
 })

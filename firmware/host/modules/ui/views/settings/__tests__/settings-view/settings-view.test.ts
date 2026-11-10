@@ -138,6 +138,17 @@ equal(navigatedView, SettingsViewId.TIMEZONE, 'time zone menu item should naviga
 const languageMenuItem = timezoneMenuItem.next as Touchable
 press(languageMenuItem)
 equal(navigatedView, SettingsViewId.LANGUAGE, 'language menu item should navigate through the shared action')
+const address = menuItems.last as PiuContent & { string?: string }
+equal(address.visible, false, 'no URL before Wi-Fi is ready')
+status.wifi = SettingsStatusValue.CONNECTED
+status['wifi.address'] = '192.0.2.10'
+menuView.update?.()
+equal(address.string, 'http://192.0.2.10', 'Settings menu must show the reachable panel address')
+equal(address.visible, true)
+status.wifi = SettingsStatusValue.NOT_CONNECTED
+menuView.update?.()
+equal(address.visible, false, 'hide a stale URL after disconnection')
+delete status['wifi.address']
 
 const menuHeader = menuView.content.first as PiuContainer
 press(menuHeader.first as Touchable)

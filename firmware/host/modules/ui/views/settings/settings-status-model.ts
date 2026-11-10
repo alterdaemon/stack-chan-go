@@ -37,6 +37,7 @@ export type SettingsStatus = {
   wifi: SettingsStatusValue
   'wifi.ssid'?: string
   'wifi.password'?: string
+  'wifi.address'?: string
   'ui.language'?: string
   'time.timezone'?: string
   'tts.volume'?: number

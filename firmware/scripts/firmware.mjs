@@ -159,6 +159,14 @@ if (!dryRun && device.sdkconfigTarget && ['build', 'flash', 'deploy', 'debug'].i
   }
 }
 
+if (
+  !dryRun &&
+  ['build', 'flash', 'deploy', 'debug'].includes(command) &&
+  path.resolve(manifest) === path.resolve('host/app/manifest_openai_live_integrated.json')
+) {
+  run(process.execPath, ['scripts/build-wifi-settings.mjs'])
+}
+
 const buildVariantChanged =
   !dryRun && ['build', 'flash', 'deploy', 'debug'].includes(command) ? prepareBuildVariant() : false
 

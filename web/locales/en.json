@@ -611,5 +611,14 @@
   "書き込んだMODを起動したくない場合は「実機のMODを削除」を使います。": "Use “Remove MOD from device” if you no longer want the installed MOD to start.",
   "生成コードタブの": "The ",
   "は、通常のMODと同じ": " in the generated-code tab exposes the same ",
-  "を公開します。": " as a regular MOD."
+  "を公開します。": " as a regular MOD.",
+  "WWW": "WWW",
+  "Wi-Fiアクセスパスワード": "Wi-Fi access password",
+  "ログイン名は任意です。空欄の場合、現在のパスワードを変更しません。": "Any username is accepted. Leave the password blank to keep the current password.",
+  "Wi-Fiでｽﾀｯｸﾁｬﾝに接続します。": "Connect to Stack-chan over Wi-Fi.",
+  "初回は本体の設定画面を開き、末尾のWWWでパスワードを設定してください。設定変更は再起動後に反映されます。": "For first setup, open Settings on the robot and set the password in WWW at the end of this form. Settings take effect after restarting.",
+  "Wi-Fiで接続しています": "Connecting over Wi-Fi",
+  "Wi-Fiで接続": "Connect over Wi-Fi",
+  "Wi-Fi接続を切断しました": "Disconnected from Wi-Fi settings",
+  "WWWのパスワードに制御文字は使用できません。": "The WWW password cannot contain control characters."
 }

@@ -1,0 +1,25 @@
+{
+  "include": [
+    "../../../http-server/manifest.json",
+    "../../../../preferences/manifest.json",
+    "$(MODULES)/data/base64/manifest.json",
+    "$(MODULES)/files/resource/manifest.json",
+    "../../../../testing/manifest.json"
+  ],
+  "modules": {
+    "~": ["$(MODULES)/io/http/server/httpserver"],
+    "embedded:network/http/server": "../../../../../../dist/wifi-settings/httpserver",
+    "main": "./server.test",
+    "wifi-settings-server": "../../wifi-settings-server",
+    "preference": "../../../../testing/fakes/preference",
+    "network-manager": "./network-manager"
+  },
+  "resources": {
+    "*": ["./fixtures/*"]
+  },
+  "defines": {
+    "main": {
+      "async": 1
+    }
+  }
+}

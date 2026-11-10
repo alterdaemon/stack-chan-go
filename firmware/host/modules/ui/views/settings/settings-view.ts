@@ -294,6 +294,13 @@ class VolumeSliderBehavior extends Behavior {
 const SettingsMenuView = {
   create(context: SettingsViewContext): SettingsViewInstance {
     const styles = uiStyles()
+    const address = new Label(null, {
+      name: 'www-address',
+      left: 12,
+      right: 12,
+      height: 24,
+      style: styles.bodyMuted,
+    })
     const content = new Container(null, {
       left: 0,
       right: 0,
@@ -353,13 +360,24 @@ const SettingsMenuView = {
                   },
                   { left: 0, right: 0 },
                 ),
+                address,
               ],
             }),
           ],
         }),
       ],
     })
-    return { content }
+    return {
+      content,
+      update() {
+        const status = context.state.status
+        address.string =
+          status.wifi === SettingsStatusValue.CONNECTED && status['wifi.address']
+            ? `http://${status['wifi.address']}`
+            : ''
+        address.visible = address.string.length > 0
+      },
+    }
   },
 } satisfies SettingsViewDefinition
 
@@ -496,7 +514,10 @@ const SettingsWifiView = {
 } satisfies SettingsViewDefinition
 
 function updateSettingsStatus(handles: SettingsWifiViewHandles, status: SettingsStatus): void {
-  handles.wifi.string = localize('settings.wifiStatus', { status: settingsStatusToLabel(status.wifi) })
+  handles.wifi.string =
+    status.wifi === SettingsStatusValue.CONNECTED && status['wifi.address']
+      ? `IP: ${status['wifi.address']}`
+      : localize('settings.wifiStatus', { status: settingsStatusToLabel(status.wifi) })
   const scanning = status.wifi === SettingsStatusValue.SCANNING
   setActionButtonLabel(handles.scan, localize(scanning ? 'settings.scanning' : 'settings.scan'))
   setActionButtonEnabled(handles.scan, !scanning)

@@ -1,4 +1,4 @@
-import { Bluetooth, Info, Save, Trash2, Unplug } from 'lucide-react'
+import { Bluetooth, Info, Save, Trash2, Unplug, Wifi } from 'lucide-react'
 import { useState, type ComponentProps, type ReactNode } from 'react'
 
 import { useI18n } from '@/app/i18n-provider'
@@ -36,7 +36,8 @@ export function PreferencesPage() {
   const isDisabled = (name: PreferenceKey) =>
     !preferences.connected ||
     preferences.readOnly.has(name) ||
-    (name.startsWith('openailive.') && !preferences.openaiAvailable)
+    (name.startsWith('openailive.') && !preferences.openaiAvailable) ||
+    (name === 'www.password' && !preferences.wwwAvailable)
 
   const inputField = ({ name, label, type = 'text', wide, ...props }: FieldProps) => (
     <div className={wide ? 'grid gap-2 sm:col-span-2' : 'grid gap-2'}>
@@ -100,13 +101,19 @@ export function PreferencesPage() {
           <Card>
             <CardHeader>
               <CardTitle>{t('本体設定')}</CardTitle>
-              <CardDescription>{t('BLEでｽﾀｯｸﾁｬﾝに接続します。')}</CardDescription>
+              <CardDescription>
+                {t(preferences.http ? 'Wi-Fiでｽﾀｯｸﾁｬﾝに接続します。' : 'BLEでｽﾀｯｸﾁｬﾝに接続します。')}
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               <Alert role="note">
                 <Info aria-hidden="true" />
                 <AlertDescription>
-                  {t('接続する前に、ｽﾀｯｸﾁｬﾝの起動画面で「設定」を押し、本体の設定画面を開いてください。')}
+                  {t(
+                    preferences.http
+                      ? '初回は本体の設定画面を開き、末尾のWWWでパスワードを設定してください。設定変更は再起動後に反映されます。'
+                      : '接続する前に、ｽﾀｯｸﾁｬﾝの起動画面で「設定」を押し、本体の設定画面を開いてください。'
+                  )}
                 </AlertDescription>
               </Alert>
               {preferences.connected ? (
@@ -116,8 +123,10 @@ export function PreferencesPage() {
                 </Button>
               ) : (
                 <Button onClick={() => void preferences.connect()} disabled={preferences.busy}>
-                  <Bluetooth data-icon="inline-start" />
-                  {t(preferences.connection === 'connecting' ? '接続中…' : 'BLEで接続')}
+                  {preferences.http ? <Wifi data-icon="inline-start" /> : <Bluetooth data-icon="inline-start" />}
+                  {t(
+                    preferences.connection === 'connecting' ? '接続中…' : preferences.http ? 'Wi-Fiで接続' : 'BLEで接続'
+                  )}
                 </Button>
               )}
               <p className="text-sm text-muted-foreground" role="status">
@@ -158,7 +167,7 @@ export function PreferencesPage() {
                 <Button
                   type="button"
                   variant="destructive"
-                  disabled={!preferences.connected || preferences.busy}
+                  disabled={isDisabled('wifi.ssid') || isDisabled('wifi.password') || preferences.busy}
                   onClick={() => setClearDialogOpen(true)}
                 >
                   <Trash2 data-icon="inline-start" />
@@ -257,6 +266,21 @@ export function PreferencesPage() {
           {section(
             'MCP Server',
             <>{inputField({ name: 'mcp.token', label: 'Bearerトークン', type: 'password', wide: true })}</>
+          )}
+          {section(
+            'WWW',
+            <>
+              {inputField({
+                name: 'www.password',
+                label: 'Wi-Fiアクセスパスワード',
+                type: 'password',
+                autoComplete: 'new-password',
+                wide: true,
+              })}
+              <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                {t('ログイン名は任意です。空欄の場合、現在のパスワードを変更しません。')}
+              </p>
+            </>
           )}
           <footer className="sticky bottom-0 z-10 flex justify-end border-t bg-background/95 py-3 backdrop-blur">
             <Button type="submit" disabled={!preferences.connected || preferences.busy}>
