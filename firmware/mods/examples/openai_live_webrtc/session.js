@@ -36,7 +36,10 @@ export class LiveSession {
         instructions: this.settings.instructions,
         delegation: {
           type: 'responses',
-          responses: { model: this.settings.backendModel ?? 'gpt-6-luna' },
+          responses: {
+            model: this.settings.backendModel ?? 'gpt-6-luna',
+            ...(this.settings.reasoningEffort ? { reasoning: { effort: this.settings.reasoningEffort } } : {}),
+          },
         },
         onError: () => {
           if (this.active !== entry) return

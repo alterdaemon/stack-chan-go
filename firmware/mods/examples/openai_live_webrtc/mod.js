@@ -1,27 +1,34 @@
 import Modules from 'modules'
 import { LiveSession } from 'openai-live-session'
+import { readLiveSettings } from 'openai-live-settings'
+import Preference from 'preference'
 import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
 const MUTE = 'openai-live:mute'
 const messages = {
-  idle: 'OpenAI 会話を終了しました',
-  connecting: 'OpenAI に接続中',
-  connected: 'OpenAI 会話中',
-  closing: '会話を終了中',
-  configuration: 'API キーを設定してください',
-  error: '会話エラー。もう一度開始してください',
+  idle: 'GPT-Live stopped',
+  connecting: 'Connecting GPT-Live',
+  connected: 'GPT-Live connected',
+  closing: 'Stopping GPT-Live',
+  configuration: 'Set AI token in Preferences',
+  error: 'GPT-Live error. Start again.',
 }
 
 export function onContextCreated(robot) {
   if (!Modules.has('realtimeConversation') || !robot.audio.acquireExclusive || !globalThis.amp) {
-    robot.ui.showBalloon('OpenAI WebRTC 対応ホストが必要です')
+    robot.ui.showBalloon('GPT-Live host required')
     return
   }
   const Conversation = Modules.importNow('realtimeConversation')
   const power = Modules.importNow('network-power')
   const levels = Modules.has('io-performance') ? Modules.importNow('io-performance') : undefined
   const drawer = robot.ui.drawer
+  const defaults =
+    (Modules.has('mod/config') ? Modules.importNow('mod/config').openaiLive : undefined) ??
+    Modules.importNow('mc/config').openaiLive ??
+    {}
+  const readSettings = () => readLiveSettings(defaults, (domain, key) => Preference.get(domain, key))
   let changingMute = false
   let mouthTimer,
     lastMouth = 0
@@ -40,7 +47,7 @@ export function onContextCreated(robot) {
     networkReady: robot.connectivity.network?.ready,
     acquireLowLatency: () => power.acquireLowLatency(),
     amp: globalThis.amp,
-    settings: (Modules.has('mod/config') ? Modules.importNow('mod/config').openaiLive : undefined) ?? {},
+    settings: readSettings(),
     onState(state) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
       if (state === 'connected' && mouthTimer === undefined && levels && robot.setMouthOpen) {
@@ -71,17 +78,20 @@ export function onContextCreated(robot) {
   })
   drawer.addDrawerButton({
     key: SESSION,
-    label: 'OpenAI 会話',
+    label: 'GPT-Live',
     kind: 'toggle',
     initialState: false,
     callback: () => {
       if (session.active) void session.stop()
-      else void session.start()
+      else {
+        session.settings = readSettings()
+        void session.start()
+      }
     },
   })
   drawer.addDrawerButton({
     key: MUTE,
-    label: 'マイクミュート',
+    label: 'Mute mic',
     kind: 'toggle',
     initialState: false,
     callback: () => {

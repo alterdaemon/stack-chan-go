@@ -1,0 +1,19 @@
+{
+  "include": ["./manifest_openai_live.json"],
+  "modules": {
+    "openai-live-integrated": "../../mods/examples/openai_live_webrtc/mod",
+    "openai-live-session": "../../mods/examples/openai_live_webrtc/session",
+    "openai-live-settings": "../../mods/examples/openai_live_webrtc/settings"
+  },
+  "config": {
+    "ui": { "language": "en" },
+    "openaiLive": {
+      "model": "gpt-live-1",
+      "backendModel": "gpt-6-luna",
+      "reasoningEffort": "low",
+      "voice": "marin",
+      "instructions": "Rozmawiaj po polsku. Odpowiadaj krótko i naturalnie, zwykle jednym lub dwoma zdaniami. Nie odczytuj znaczników emocji. Gdy nie znasz odpowiedzi lub nie masz aktualnych danych, powiedz to wprost.",
+      "volume": 0.1
+    }
+  }
+}

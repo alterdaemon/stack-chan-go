@@ -8,14 +8,14 @@ const VERSIONED_PACKAGES = [
   'web/package-lock.json',
 ]
 
-export function versionFromStableTag(tag) {
-  const match = /^v(\d+\.\d+\.\d+)$/.exec(tag)
-  if (!match) throw new Error(`stable release tag must match vX.Y.Z: ${tag}`)
+export function versionFromReleaseTag(tag) {
+  const match = /^v(\d+\.\d+\.\d+(?:-r[1-9]\d*)?)$/.exec(tag)
+  if (!match) throw new Error(`release tag must match vX.Y.Z or vX.Y.Z-rN (N >= 1): ${tag}`)
   return match[1]
 }
 
 export function validateRelease(rootDirectory, tag) {
-  const version = versionFromStableTag(tag)
+  const version = versionFromReleaseTag(tag)
 
   for (const relativePath of VERSIONED_PACKAGES) {
     const document = JSON.parse(readFileSync(path.join(rootDirectory, relativePath), 'utf8'))
@@ -57,5 +57,5 @@ export function validateRelease(rootDirectory, tag) {
     throw new Error(`pending Changesets must be consumed before release: ${pendingChangesets.join(', ')}`)
   }
 
-  return { releaseNotePath, version }
+  return { releaseNotePath, version, prerelease: version.includes('-r') }
 }

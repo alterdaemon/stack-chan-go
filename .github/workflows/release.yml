@@ -116,9 +116,13 @@ jobs:
           notes="docs/release-notes/v$VERSION.md"
           firmware="release-assets/stack-chan-firmware-$tag.zip"
           checksum="$firmware.sha256"
+          case "$VERSION" in
+            *-r*) prerelease=true; latest=false ;;
+            *) prerelease=false; latest=true ;;
+          esac
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --verify-tag --title "$title" --notes-file "$notes" --draft=false --prerelease=false --latest
+            gh release edit "$tag" --verify-tag --title "$title" --notes-file "$notes" --draft=false --prerelease="$prerelease" --latest="$latest"
             gh release upload "$tag" "$firmware" "$checksum" --clobber
           else
-            gh release create "$tag" "$firmware" "$checksum" --verify-tag --title "$title" --notes-file "$notes" --latest
+            gh release create "$tag" "$firmware" "$checksum" --verify-tag --title "$title" --notes-file "$notes" --prerelease="$prerelease" --latest="$latest"
           fi

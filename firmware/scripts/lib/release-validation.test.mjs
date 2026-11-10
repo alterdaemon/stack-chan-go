@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, test } from 'node:test'
 
-import { validateRelease, versionFromStableTag } from './release-validation.mjs'
+import { validateRelease, versionFromReleaseTag } from './release-validation.mjs'
 
 const temporaryDirectories = []
 
@@ -33,16 +33,28 @@ function createReleaseFixture(version = '1.0.0') {
   return rootDirectory
 }
 
-test('versionFromStableTag accepts stable semantic versions only', () => {
-  assert.equal(versionFromStableTag('v1.0.0'), '1.0.0')
-  for (const tag of ['1.0.0', 'v1.0.0rc', 'v1.0', 'latest']) {
-    assert.throws(() => versionFromStableTag(tag), /must match vX\.Y\.Z/)
+test('versionFromReleaseTag accepts stable versions and numbered fork revisions', () => {
+  assert.equal(versionFromReleaseTag('v1.0.0'), '1.0.0')
+  for (let revision = 1; revision <= 11; revision++) {
+    assert.equal(versionFromReleaseTag(`v2.0.1-r${revision}`), `2.0.1-r${revision}`)
+  }
+  for (const tag of ['1.0.0', 'v1.0.0rc', 'v1.0', 'latest', 'v2.0.1-r0', 'v2.0.1-r01', 'v2.0.1-beta1', 'v2.0.1-rc1']) {
+    assert.throws(() => versionFromReleaseTag(tag), /must match vX\.Y\.Z/)
   }
 })
 
 test('validateRelease accepts aligned package metadata and release notes', () => {
   const rootDirectory = createReleaseFixture()
   assert.equal(validateRelease(rootDirectory, 'v1.0.0').version, '1.0.0')
+  assert.equal(validateRelease(rootDirectory, 'v1.0.0').prerelease, false)
+})
+
+test('validateRelease validates fork revision metadata and identifies a prerelease', () => {
+  const rootDirectory = createReleaseFixture('2.0.1-r10')
+  const result = validateRelease(rootDirectory, 'v2.0.1-r10')
+  assert.equal(result.version, '2.0.1-r10')
+  assert.equal(result.prerelease, true)
+  assert.throws(() => validateRelease(rootDirectory, 'v2.0.1-r9'), /expected 2\.0\.1-r9/)
 })
 
 test('validateRelease rejects mismatched versions', () => {
