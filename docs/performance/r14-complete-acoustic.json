@@ -1,0 +1,83 @@
+{
+  "method": "20 ms RMS envelope, normalized correlation over 4 s windows; PCM16 host mic, uncalibrated distance and level",
+  "window_start_seconds_before_replay_result": 4.4,
+  "ambient": [
+    {
+      "median_block_rms": 187.711,
+      "max_block_rms": 680.812,
+      "best_envelope_correlation": 0.34001,
+      "best_match_ms_from_window_start": 0,
+      "clipped_samples": 0
+    },
+    {
+      "median_block_rms": 449.281,
+      "max_block_rms": 2611.278,
+      "best_envelope_correlation": 0.42431,
+      "best_match_ms_from_window_start": 1460,
+      "clipped_samples": 0
+    },
+    {
+      "median_block_rms": 271.119,
+      "max_block_rms": 1130.131,
+      "best_envelope_correlation": 0.29051,
+      "best_match_ms_from_window_start": 80,
+      "clipped_samples": 0
+    }
+  ],
+  "opus_replays": [
+    {
+      "rate": 48000,
+      "pair": 0,
+      "median_block_rms": 188.051,
+      "max_block_rms": 782.755,
+      "best_envelope_correlation": 0.55921,
+      "best_match_ms_from_window_start": 1260,
+      "clipped_samples": 0
+    },
+    {
+      "rate": 48000,
+      "pair": 1,
+      "median_block_rms": 169.725,
+      "max_block_rms": 749.501,
+      "best_envelope_correlation": 0.4464,
+      "best_match_ms_from_window_start": 1240,
+      "clipped_samples": 0
+    },
+    {
+      "rate": 48000,
+      "pair": 2,
+      "median_block_rms": 148.966,
+      "max_block_rms": 733.354,
+      "best_envelope_correlation": 0.53541,
+      "best_match_ms_from_window_start": 1100,
+      "clipped_samples": 0
+    },
+    {
+      "rate": 24000,
+      "pair": 0,
+      "median_block_rms": 162.272,
+      "max_block_rms": 758.664,
+      "best_envelope_correlation": 0.4195,
+      "best_match_ms_from_window_start": 1260,
+      "clipped_samples": 0
+    },
+    {
+      "rate": 24000,
+      "pair": 1,
+      "median_block_rms": 190.595,
+      "max_block_rms": 727.864,
+      "best_envelope_correlation": 0.39718,
+      "best_match_ms_from_window_start": 1260,
+      "clipped_samples": 0
+    },
+    {
+      "rate": 24000,
+      "pair": 2,
+      "median_block_rms": 192.125,
+      "max_block_rms": 711.318,
+      "best_envelope_correlation": 0.58735,
+      "best_match_ms_from_window_start": 1280,
+      "clipped_samples": 0
+    }
+  ]
+}

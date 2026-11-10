@@ -1,0 +1,198 @@
+{
+  "image": {
+    "effective_js_mappings": 4,
+    "effective_native_mappings": 5,
+    "image_bytes": 8611440,
+    "image_sha256": "66e66df40029518c3141d7e7f6bb3840ab22bf31eced1877da5ba2f686ef6def",
+    "write_address": 65536
+  },
+  "samples": [
+    {
+      "phase": "P04",
+      "pair": 0,
+      "every": 1,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 181743,
+      "cpuUs": 181759
+    },
+    {
+      "phase": "P04",
+      "pair": 0,
+      "every": 2,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 91478,
+      "cpuUs": 91504
+    },
+    {
+      "phase": "P04",
+      "pair": 0,
+      "every": 4,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 46259,
+      "cpuUs": 46283
+    },
+    {
+      "phase": "P04",
+      "pair": 0,
+      "every": 10,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 19059,
+      "cpuUs": 19084
+    },
+    {
+      "phase": "P04",
+      "pair": 1,
+      "every": 10,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 19057,
+      "cpuUs": 19081
+    },
+    {
+      "phase": "P04",
+      "pair": 1,
+      "every": 4,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 46257,
+      "cpuUs": 46279
+    },
+    {
+      "phase": "P04",
+      "pair": 1,
+      "every": 2,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 91478,
+      "cpuUs": 91504
+    },
+    {
+      "phase": "P04",
+      "pair": 1,
+      "every": 1,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 181743,
+      "cpuUs": 181766
+    },
+    {
+      "phase": "P04",
+      "pair": 2,
+      "every": 1,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 181702,
+      "cpuUs": 181727
+    },
+    {
+      "phase": "P04",
+      "pair": 2,
+      "every": 2,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 91479,
+      "cpuUs": 91505
+    },
+    {
+      "phase": "P04",
+      "pair": 2,
+      "every": 4,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 46243,
+      "cpuUs": 46268
+    },
+    {
+      "phase": "P04",
+      "pair": 2,
+      "every": 10,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 19134,
+      "cpuUs": 19158
+    },
+    {
+      "phase": "P04",
+      "pair": 3,
+      "every": 10,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 19058,
+      "cpuUs": 19083
+    },
+    {
+      "phase": "P04",
+      "pair": 3,
+      "every": 4,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 46243,
+      "cpuUs": 46267
+    },
+    {
+      "phase": "P04",
+      "pair": 3,
+      "every": 2,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 91522,
+      "cpuUs": 91546
+    },
+    {
+      "phase": "P04",
+      "pair": 3,
+      "every": 1,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 181702,
+      "cpuUs": 181727
+    },
+    {
+      "phase": "P04",
+      "pair": 4,
+      "every": 1,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 181701,
+      "cpuUs": 181724
+    },
+    {
+      "phase": "P04",
+      "pair": 4,
+      "every": 2,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 91705,
+      "cpuUs": 91618
+    },
+    {
+      "phase": "P04",
+      "pair": 4,
+      "every": 4,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 46256,
+      "cpuUs": 46278
+    },
+    {
+      "phase": "P04",
+      "pair": 4,
+      "every": 10,
+      "frames": 4000,
+      "chunk": 512,
+      "elapsedUs": 19058,
+      "cpuUs": 19081
+    }
+  ],
+  "median_cpu_us_per_4000_frames": {
+    "1": 181727,
+    "2": 91505,
+    "4": 46278,
+    "10": 19083
+  },
+  "scope": "Real CoreS3 task CPU counter; isolated meter benchmark, no audio/API speedup inferred."
+}

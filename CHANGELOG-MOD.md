@@ -28,6 +28,10 @@ Current version: **2.0.1-r14**. R<N> corresponds to `2.0.1-r<N>` and Git tag
 | **2.0.1-r13** | Add GPT-Realtime 2.1 Mini alongside GPT-Live 1, with one mode selector, independent voice selections, server VAD and no Live standby timer in Mini mode. Share LIVE, credentials, instructions, volume and native audio. Bridge Realtime search calls directly to Responses with bounded cancellable HTTPS. Amend: frame the saved Mini persona as its dialogue task without changing preferences; verify the echoed system prompt before enabling Mini microphone input; reapply mismatched startup instructions and reject an incorrect acknowledgment. See the [R13 validation record](./docs/release-notes/v2.0.1-r13.md) for completed checks and remaining verification. |
 | **2.0.1-r14** | Replace both realtime CoreS3 SPI busy waits with completion/capacity events. Evaluate and reject AEC-plane SRAM placement after measuring its small gain and reduced internal-memory margin. Preserve WebRTC, 48 kHz hardware audio, codec policies, UI budgets and saved settings. Add paired device measurements and native concurrency/payload regressions. See the [R14 report](./R14-PERFORMANCE-REPORT.md) for measured scope and dispositions of all twelve proposals. |
 
+R14 diagnostic follow-up: measure all twelve proposals and record device,
+provider, stability and data preservation results in the
+[R14 report](./R14-PERFORMANCE-REPORT.md). The release images and tag are unchanged.
+
 R12 follow-up, **4/8 ms UI windows and faster local STOP** (amended follow-up,
 no revision bump by explicit user request): shorten elevated UI priority from
 8/12 ms to 4/8 ms per 20 ms. Keep connected-session microphone/AEC processing,

@@ -1,0 +1,1116 @@
+{
+  "phase_counts": {
+    "boot": 1,
+    "guard": 1,
+    "tasks": 1,
+    "P08": 48,
+    "P08-failure": 1,
+    "P02-opus": 6,
+    "P10": 6,
+    "P12-delay": 2,
+    "done": 1
+  },
+  "guard": [
+    {
+      "phase": "guard",
+      "passed": true,
+      "blockedWrites": 1,
+      "hostMonotonic": 106864.176693876
+    }
+  ],
+  "end_marker": true,
+  "failures": [
+    {
+      "phase": "P08-failure",
+      "code": "priming_stop_precondition",
+      "hostMonotonic": 106935.551002395
+    }
+  ],
+  "P02": [],
+  "P02_pitch_values": {
+    "48000": [],
+    "24000": []
+  },
+  "P02_opus": [
+    {
+      "rate": 48000,
+      "n": 3,
+      "tracked_cpu_one_core_equivalent_percent": 143.4025,
+      "i2s_cpu_one_core_equivalent_percent": 11.201,
+      "decoder_cpu_one_core_equivalent_percent": 9.5064,
+      "capture_cpu_one_core_equivalent_percent": 62.5139,
+      "internal_free_bytes": 43511,
+      "encoded_frames": 148,
+      "pcm_bytes": 215040,
+      "output_samples": 107520
+    },
+    {
+      "rate": 24000,
+      "n": 3,
+      "tracked_cpu_one_core_equivalent_percent": 142.4885,
+      "i2s_cpu_one_core_equivalent_percent": 8.8343,
+      "decoder_cpu_one_core_equivalent_percent": 8.5568,
+      "capture_cpu_one_core_equivalent_percent": 62.0994,
+      "internal_free_bytes": 49859,
+      "encoded_frames": 148,
+      "pcm_bytes": 107520,
+      "output_samples": 53760
+    }
+  ],
+  "P03": [],
+  "P05": [],
+  "P06": [],
+  "P07": [],
+  "P08": [
+    {
+      "pattern": "smooth",
+      "priming": 0,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 6.324,
+      "missing_pcm_ms": 230,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 14400,
+      "maximum_arrival_timer_lateness_ms": 140.515
+    },
+    {
+      "pattern": "smooth",
+      "priming": 20,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 15.143,
+      "missing_pcm_ms": 230,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 13440,
+      "maximum_arrival_timer_lateness_ms": 157.774
+    },
+    {
+      "pattern": "smooth",
+      "priming": 40,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 34.844,
+      "missing_pcm_ms": 210,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 14400,
+      "maximum_arrival_timer_lateness_ms": 141.134
+    },
+    {
+      "pattern": "smooth",
+      "priming": 60,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 56.092,
+      "missing_pcm_ms": 190,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 13440,
+      "maximum_arrival_timer_lateness_ms": 145.302
+    },
+    {
+      "pattern": "burst",
+      "priming": 0,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 6.007,
+      "missing_pcm_ms": 220,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 6720,
+      "maximum_arrival_timer_lateness_ms": 6.963
+    },
+    {
+      "pattern": "burst",
+      "priming": 20,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 5.5,
+      "missing_pcm_ms": 110,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 17280,
+      "maximum_arrival_timer_lateness_ms": 122.07
+    },
+    {
+      "pattern": "burst",
+      "priming": 40,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 5.849,
+      "missing_pcm_ms": 230,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 17280,
+      "maximum_arrival_timer_lateness_ms": 125.439
+    },
+    {
+      "pattern": "burst",
+      "priming": 60,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 13.849,
+      "missing_pcm_ms": 230,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 14400,
+      "maximum_arrival_timer_lateness_ms": 85.949
+    },
+    {
+      "pattern": "gaps",
+      "priming": 0,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 4.671,
+      "missing_pcm_ms": 200,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 15360,
+      "maximum_arrival_timer_lateness_ms": 151.746
+    },
+    {
+      "pattern": "gaps",
+      "priming": 20,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 15.968,
+      "missing_pcm_ms": 200,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 4800,
+      "maximum_arrival_timer_lateness_ms": 10.508
+    },
+    {
+      "pattern": "gaps",
+      "priming": 40,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 35.725,
+      "missing_pcm_ms": 200,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 8640,
+      "maximum_arrival_timer_lateness_ms": 145.427
+    },
+    {
+      "pattern": "gaps",
+      "priming": 60,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 52.9,
+      "missing_pcm_ms": 200,
+      "pcm_bytes": 76800,
+      "maximum_queue_bytes": 15360,
+      "maximum_arrival_timer_lateness_ms": 143.944
+    },
+    {
+      "pattern": "tail",
+      "priming": 0,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 3.059,
+      "missing_pcm_ms": 0,
+      "pcm_bytes": 2880,
+      "maximum_queue_bytes": 960,
+      "maximum_arrival_timer_lateness_ms": 6.283
+    },
+    {
+      "pattern": "tail",
+      "priming": 20,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 14.229,
+      "missing_pcm_ms": 0,
+      "pcm_bytes": 2880,
+      "maximum_queue_bytes": 1920,
+      "maximum_arrival_timer_lateness_ms": 3.638
+    },
+    {
+      "pattern": "tail",
+      "priming": 40,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 23.562,
+      "missing_pcm_ms": 0,
+      "pcm_bytes": 2880,
+      "maximum_queue_bytes": 2880,
+      "maximum_arrival_timer_lateness_ms": 3.525
+    },
+    {
+      "pattern": "tail",
+      "priming": 60,
+      "n": 3,
+      "first_pcm_dequeue_after_sample_start_ms": 24.266,
+      "missing_pcm_ms": 0,
+      "pcm_bytes": 2880,
+      "maximum_queue_bytes": 2880,
+      "maximum_arrival_timer_lateness_ms": 3.785
+    }
+  ],
+  "P08_cancellation": [],
+  "P08_priming_gate_validated": false,
+  "P09": [],
+  "P10": [
+    {
+      "phase": "P10",
+      "rate": 48000,
+      "pair": 0,
+      "startupAllocations": 578,
+      "steadyAllocations": 1156,
+      "steadyAllocatedBytes": 114260,
+      "steadyFrees": 1157,
+      "pcmDequeuedBytes": 215040,
+      "afterTeardown": {
+        "atUs": 84281665,
+        "rxEvents": 305,
+        "rxQueueOverflows": 0,
+        "txEvents": 305,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 13397,
+        "receivedBytes": 215040,
+        "outputHash": 1612513420,
+        "emptyReads": 81,
+        "maxQueueBytes": 18240,
+        "firstDequeuedUs": 80920080,
+        "allocations": 1768,
+        "allocatedBytes": 535653,
+        "frees": 1767,
+        "spiBytes": 167040,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106939.247552321
+    },
+    {
+      "phase": "P10",
+      "rate": 48000,
+      "pair": 1,
+      "startupAllocations": 578,
+      "steadyAllocations": 1169,
+      "steadyAllocatedBytes": 114909,
+      "steadyFrees": 1169,
+      "pcmDequeuedBytes": 215040,
+      "afterTeardown": {
+        "atUs": 87873186,
+        "rxEvents": 305,
+        "rxQueueOverflows": 0,
+        "txEvents": 305,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 12147,
+        "receivedBytes": 215040,
+        "outputHash": 1612513420,
+        "emptyReads": 81,
+        "maxQueueBytes": 19200,
+        "firstDequeuedUs": 84520472,
+        "allocations": 1778,
+        "allocatedBytes": 533254,
+        "frees": 1778,
+        "spiBytes": 167040,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106942.845809182
+    },
+    {
+      "phase": "P10",
+      "rate": 48000,
+      "pair": 2,
+      "startupAllocations": 585,
+      "steadyAllocations": 1143,
+      "steadyAllocatedBytes": 110516,
+      "steadyFrees": 1144,
+      "pcmDequeuedBytes": 215040,
+      "afterTeardown": {
+        "atUs": 91587409,
+        "rxEvents": 322,
+        "rxQueueOverflows": 0,
+        "txEvents": 322,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 12566,
+        "receivedBytes": 215040,
+        "outputHash": 1612513420,
+        "emptyReads": 97,
+        "maxQueueBytes": 18240,
+        "firstDequeuedUs": 88117931,
+        "allocations": 1771,
+        "allocatedBytes": 532877,
+        "frees": 1771,
+        "spiBytes": 156600,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106946.560116619
+    },
+    {
+      "phase": "P10",
+      "rate": 24000,
+      "pair": 0,
+      "startupAllocations": 579,
+      "steadyAllocations": 1158,
+      "steadyAllocatedBytes": 115756,
+      "steadyFrees": 1158,
+      "pcmDequeuedBytes": 107520,
+      "afterTeardown": {
+        "atUs": 95161353,
+        "rxEvents": 308,
+        "rxQueueOverflows": 2,
+        "txEvents": 308,
+        "txQueueOverflows": 2,
+        "callbackError": 0,
+        "maxTickGapUs": 11744,
+        "receivedBytes": 107520,
+        "outputHash": 2247356098,
+        "emptyReads": 80,
+        "maxQueueBytes": 9120,
+        "firstDequeuedUs": 91831605,
+        "allocations": 1768,
+        "allocatedBytes": 513120,
+        "frees": 1768,
+        "spiBytes": 146160,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106950.133851383
+    },
+    {
+      "phase": "P10",
+      "rate": 24000,
+      "pair": 1,
+      "startupAllocations": 587,
+      "steadyAllocations": 1147,
+      "steadyAllocatedBytes": 109029,
+      "steadyFrees": 1148,
+      "pcmDequeuedBytes": 107520,
+      "afterTeardown": {
+        "atUs": 98716417,
+        "rxEvents": 305,
+        "rxQueueOverflows": 0,
+        "txEvents": 305,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 11894,
+        "receivedBytes": 107520,
+        "outputHash": 2247356098,
+        "emptyReads": 81,
+        "maxQueueBytes": 9120,
+        "firstDequeuedUs": 95404480,
+        "allocations": 1772,
+        "allocatedBytes": 510025,
+        "frees": 1772,
+        "spiBytes": 156600,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106953.688771851
+    },
+    {
+      "phase": "P10",
+      "rate": 24000,
+      "pair": 2,
+      "startupAllocations": 582,
+      "steadyAllocations": 1139,
+      "steadyAllocatedBytes": 108649,
+      "steadyFrees": 1140,
+      "pcmDequeuedBytes": 107520,
+      "afterTeardown": {
+        "atUs": 102244704,
+        "rxEvents": 303,
+        "rxQueueOverflows": 0,
+        "txEvents": 303,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 11701,
+        "receivedBytes": 107520,
+        "outputHash": 2247356098,
+        "emptyReads": 78,
+        "maxQueueBytes": 8160,
+        "firstDequeuedUs": 98970123,
+        "allocations": 1754,
+        "allocatedBytes": 507675,
+        "frees": 1754,
+        "spiBytes": 146160,
+        "localHeapMinimum": 1
+      },
+      "hostMonotonic": 106957.217112553
+    }
+  ],
+  "P11": [],
+  "P12": [],
+  "P12_delay": [
+    {
+      "phase": "P12-delay",
+      "fixture": "worker-replay",
+      "cancel": false,
+      "cpu": {
+        "durationUs": 3550131,
+        "main": 1538232,
+        "spiLoop": 47196,
+        "live_audio": 383161,
+        "AUD_SRC": 2127716,
+        "aenc_0": 654352,
+        "ARender": 95621,
+        "IDLE0": 1237594,
+        "IDLE1": 885563
+      },
+      "snapshotBefore": {
+        "atUs": 102901695,
+        "main": 36921165,
+        "spiLoop": 200305,
+        "live_audio": 50968,
+        "AUD_SRC": 264026,
+        "aenc_0": 84316,
+        "ARender": 11357,
+        "IDLE0": 61656522,
+        "IDLE1": 41148533,
+        "internalFree": 60787,
+        "internalLargest": 49152,
+        "internalMinimum": 60655,
+        "psramFree": 6515068,
+        "mainStack": 6108
+      },
+      "before": {
+        "atUs": 102904917,
+        "rxEvents": 54,
+        "rxQueueOverflows": 0,
+        "txEvents": 54,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 11214,
+        "receivedBytes": 38400,
+        "outputHash": 3275459653,
+        "emptyReads": 15,
+        "maxQueueBytes": 1920,
+        "firstDequeuedUs": 102505100,
+        "allocations": 399,
+        "allocatedBytes": 339814,
+        "frees": 128,
+        "spiBytes": 20880,
+        "localHeapMinimum": 1
+      },
+      "after": {
+        "atUs": 106461905,
+        "rxEvents": 409,
+        "rxQueueOverflows": 0,
+        "txEvents": 409,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 12503,
+        "receivedBytes": 361920,
+        "outputHash": 3146288517,
+        "emptyReads": 33,
+        "maxQueueBytes": 19200,
+        "firstDequeuedUs": 102505100,
+        "allocations": 1287,
+        "allocatedBytes": 425109,
+        "frees": 1016,
+        "spiBytes": 375840,
+        "localHeapMinimum": 1
+      },
+      "media": {
+        "capturedSamples": 64512,
+        "sourceSamples": 64320,
+        "requestedRate": 16000,
+        "requestedChannels": 1,
+        "sourceFrameBytes": 640,
+        "encodedFrames": 201,
+        "encodedPts": 4000,
+        "peerEvents": 0,
+        "lastPeerEvent": 0,
+        "dataMessages": 0,
+        "renderedSamples": 180000,
+        "audibleMs": 3360,
+        "underruns": 5,
+        "overruns": 0,
+        "micLevel": 7489,
+        "cleanLevel": 284,
+        "referenceLevel": 1187,
+        "outputIdleMs": 0,
+        "silenceMs": 190,
+        "maxSilenceMs": 70,
+        "freeHeap": 6575855,
+        "freeInternalHeap": 60787
+      },
+      "memory": {
+        "atUs": 106466759,
+        "main": 38466121,
+        "spiLoop": 247501,
+        "live_audio": 435924,
+        "AUD_SRC": 2395515,
+        "aenc_0": 745530,
+        "ARender": 106978,
+        "IDLE0": 62905500,
+        "IDLE1": 42034096,
+        "internalFree": 60787,
+        "internalLargest": 49152,
+        "internalMinimum": 58215,
+        "psramFree": 6515068,
+        "mainStack": 6108
+      },
+      "mouthCallbacks": 35,
+      "mouthChanges": 33,
+      "sent": 0,
+      "lateMax": 0,
+      "workResult": {
+        "sources": 1,
+        "elapsedMs": 2154.217000000004,
+        "tasksBefore": [
+          {
+            "name": "main",
+            "cpuUs": 36932241,
+            "stackFree": 6108,
+            "priority": 20
+          },
+          {
+            "name": "aenc_0",
+            "cpuUs": 86675,
+            "stackFree": 9844,
+            "priority": 19
+          },
+          {
+            "name": "IDLE0",
+            "cpuUs": 61658648,
+            "stackFree": 268,
+            "priority": 0
+          },
+          {
+            "name": "IDLE1",
+            "cpuUs": 41148533,
+            "stackFree": 260,
+            "priority": 0
+          },
+          {
+            "name": "live_peer",
+            "cpuUs": 59117,
+            "stackFree": 10504,
+            "priority": 15
+          },
+          {
+            "name": "AUD_SRC",
+            "cpuUs": 277882,
+            "stackFree": 7248,
+            "priority": 15
+          },
+          {
+            "name": "live_audio",
+            "cpuUs": 51826,
+            "stackFree": 7384,
+            "priority": 20
+          },
+          {
+            "name": "tcpip",
+            "cpuUs": 50091,
+            "stackFree": 1032,
+            "priority": 18
+          },
+          {
+            "name": "realtimeConvers",
+            "cpuUs": 13634,
+            "stackFree": 4320,
+            "priority": 6
+          },
+          {
+            "name": "ipc0",
+            "cpuUs": 7401,
+            "stackFree": 348,
+            "priority": 24
+          },
+          {
+            "name": "Tmr Svc",
+            "cpuUs": 42,
+            "stackFree": 1484,
+            "priority": 1
+          },
+          {
+            "name": "ipc1",
+            "cpuUs": 11194,
+            "stackFree": 340,
+            "priority": 24
+          },
+          {
+            "name": "wifi",
+            "cpuUs": 547848,
+            "stackFree": 3860,
+            "priority": 23
+          },
+          {
+            "name": "spiLoop",
+            "cpuUs": 200305,
+            "stackFree": 1908,
+            "priority": 21
+          },
+          {
+            "name": "i2c",
+            "cpuUs": 499266,
+            "stackFree": 1764,
+            "priority": 10
+          },
+          {
+            "name": "esp_timer",
+            "cpuUs": 724513,
+            "stackFree": 2628,
+            "priority": 22
+          },
+          {
+            "name": "ARender",
+            "cpuUs": 11357,
+            "stackFree": 3204,
+            "priority": 20
+          },
+          {
+            "name": "sys_evt",
+            "cpuUs": 1002,
+            "stackFree": 892,
+            "priority": 20
+          }
+        ],
+        "tasksAfter": [
+          {
+            "name": "AUD_SRC",
+            "cpuUs": 1511528,
+            "stackFree": 7232,
+            "priority": 7
+          },
+          {
+            "name": "main",
+            "cpuUs": 37815689,
+            "stackFree": 6108,
+            "priority": 6
+          },
+          {
+            "name": "IDLE0",
+            "cpuUs": 62451662,
+            "stackFree": 268,
+            "priority": 0
+          },
+          {
+            "name": "IDLE1",
+            "cpuUs": 41739020,
+            "stackFree": 260,
+            "priority": 0
+          },
+          {
+            "name": "live_audio",
+            "cpuUs": 280224,
+            "stackFree": 7368,
+            "priority": 20
+          },
+          {
+            "name": "tcpip",
+            "cpuUs": 50772,
+            "stackFree": 1032,
+            "priority": 18
+          },
+          {
+            "name": "realtimeConvers",
+            "cpuUs": 31567,
+            "stackFree": 1616,
+            "priority": 6
+          },
+          {
+            "name": "live_peer",
+            "cpuUs": 84690,
+            "stackFree": 10504,
+            "priority": 15
+          },
+          {
+            "name": "Tmr Svc",
+            "cpuUs": 42,
+            "stackFree": 1484,
+            "priority": 1
+          },
+          {
+            "name": "ipc1",
+            "cpuUs": 11194,
+            "stackFree": 340,
+            "priority": 24
+          },
+          {
+            "name": "wifi",
+            "cpuUs": 557810,
+            "stackFree": 3860,
+            "priority": 23
+          },
+          {
+            "name": "i2c",
+            "cpuUs": 515793,
+            "stackFree": 1764,
+            "priority": 10
+          },
+          {
+            "name": "spiLoop",
+            "cpuUs": 230838,
+            "stackFree": 1908,
+            "priority": 21
+          },
+          {
+            "name": "esp_timer",
+            "cpuUs": 746644,
+            "stackFree": 2628,
+            "priority": 22
+          },
+          {
+            "name": "aenc_0",
+            "cpuUs": 472728,
+            "stackFree": 9844,
+            "priority": 19
+          },
+          {
+            "name": "ARender",
+            "cpuUs": 70894,
+            "stackFree": 3204,
+            "priority": 20
+          },
+          {
+            "name": "sys_evt",
+            "cpuUs": 1002,
+            "stackFree": 892,
+            "priority": 20
+          },
+          {
+            "name": "ipc0",
+            "cpuUs": 7401,
+            "stackFree": 348,
+            "priority": 24
+          }
+        ],
+        "requests": 1
+      },
+      "hostMonotonic": 106962.053625878
+    },
+    {
+      "phase": "P12-delay",
+      "fixture": "worker-replay",
+      "cancel": true,
+      "cpu": {
+        "durationUs": 3535791,
+        "main": 1547262,
+        "spiLoop": 48474,
+        "live_audio": 388385,
+        "AUD_SRC": 2138515,
+        "aenc_0": 658816,
+        "ARender": 101162,
+        "IDLE0": 1200675,
+        "IDLE1": 849470
+      },
+      "snapshotBefore": {
+        "atUs": 108026808,
+        "main": 39087807,
+        "spiLoop": 251588,
+        "live_audio": 52871,
+        "AUD_SRC": 268193,
+        "aenc_0": 85706,
+        "ARender": 11403,
+        "IDLE0": 64145195,
+        "IDLE1": 42755006,
+        "internalFree": 60791,
+        "internalLargest": 49152,
+        "internalMinimum": 60659,
+        "psramFree": 6515068,
+        "mainStack": 6108
+      },
+      "before": {
+        "atUs": 108029070,
+        "rxEvents": 53,
+        "rxQueueOverflows": 0,
+        "txEvents": 53,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 11095,
+        "receivedBytes": 38400,
+        "outputHash": 3275459653,
+        "emptyReads": 15,
+        "maxQueueBytes": 1920,
+        "firstDequeuedUs": 107630937,
+        "allocations": 393,
+        "allocatedBytes": 339451,
+        "frees": 122,
+        "spiBytes": 20880,
+        "localHeapMinimum": 1
+      },
+      "after": {
+        "atUs": 111566539,
+        "rxEvents": 407,
+        "rxQueueOverflows": 0,
+        "txEvents": 407,
+        "txQueueOverflows": 0,
+        "callbackError": 0,
+        "maxTickGapUs": 12474,
+        "receivedBytes": 358080,
+        "outputHash": 486185573,
+        "emptyReads": 35,
+        "maxQueueBytes": 19200,
+        "firstDequeuedUs": 107630937,
+        "allocations": 1356,
+        "allocatedBytes": 433299,
+        "frees": 1085,
+        "spiBytes": 386280,
+        "localHeapMinimum": 1
+      },
+      "media": {
+        "capturedSamples": 64512,
+        "sourceSamples": 64320,
+        "requestedRate": 16000,
+        "requestedChannels": 1,
+        "sourceFrameBytes": 640,
+        "encodedFrames": 201,
+        "encodedPts": 4000,
+        "peerEvents": 0,
+        "lastPeerEvent": 0,
+        "dataMessages": 0,
+        "renderedSamples": 178080,
+        "audibleMs": 3320,
+        "underruns": 4,
+        "overruns": 0,
+        "micLevel": 7391,
+        "cleanLevel": 338,
+        "referenceLevel": 1187,
+        "outputIdleMs": 0,
+        "silenceMs": 200,
+        "maxSilenceMs": 110,
+        "freeHeap": 6575859,
+        "freeInternalHeap": 60791
+      },
+      "memory": {
+        "atUs": 111574315,
+        "main": 40645125,
+        "spiLoop": 300062,
+        "live_audio": 442704,
+        "AUD_SRC": 2417800,
+        "aenc_0": 744522,
+        "ARender": 113079,
+        "IDLE0": 65345870,
+        "IDLE1": 43604476,
+        "internalFree": 60791,
+        "internalLargest": 49152,
+        "internalMinimum": 58179,
+        "psramFree": 6515068,
+        "mainStack": 6108
+      },
+      "mouthCallbacks": 35,
+      "mouthChanges": 34,
+      "sent": 0,
+      "lateMax": 0,
+      "workResult": {
+        "cancelled": true,
+        "code": "cancelled",
+        "elapsedMs": 360.627999999997,
+        "followingRequestMs": 95.8289999999979,
+        "tasksBefore": [
+          {
+            "name": "AUD_SRC",
+            "cpuUs": 268193,
+            "stackFree": 7232,
+            "priority": 7
+          },
+          {
+            "name": "main",
+            "cpuUs": 39095534,
+            "stackFree": 6108,
+            "priority": 6
+          },
+          {
+            "name": "IDLE1",
+            "cpuUs": 42755006,
+            "stackFree": 260,
+            "priority": 0
+          },
+          {
+            "name": "IDLE0",
+            "cpuUs": 64145195,
+            "stackFree": 268,
+            "priority": 0
+          },
+          {
+            "name": "live_peer",
+            "cpuUs": 58254,
+            "stackFree": 10568,
+            "priority": 15
+          },
+          {
+            "name": "live_audio",
+            "cpuUs": 53771,
+            "stackFree": 7384,
+            "priority": 20
+          },
+          {
+            "name": "tcpip",
+            "cpuUs": 51616,
+            "stackFree": 1032,
+            "priority": 18
+          },
+          {
+            "name": "realtimeConvers",
+            "cpuUs": 31567,
+            "stackFree": 1616,
+            "priority": 6
+          },
+          {
+            "name": "aenc_0",
+            "cpuUs": 85706,
+            "stackFree": 9844,
+            "priority": 19
+          },
+          {
+            "name": "ipc0",
+            "cpuUs": 7401,
+            "stackFree": 348,
+            "priority": 24
+          },
+          {
+            "name": "Tmr Svc",
+            "cpuUs": 42,
+            "stackFree": 1484,
+            "priority": 1
+          },
+          {
+            "name": "ipc1",
+            "cpuUs": 11194,
+            "stackFree": 340,
+            "priority": 24
+          },
+          {
+            "name": "sys_evt",
+            "cpuUs": 1002,
+            "stackFree": 892,
+            "priority": 20
+          },
+          {
+            "name": "wifi",
+            "cpuUs": 569337,
+            "stackFree": 3860,
+            "priority": 23
+          },
+          {
+            "name": "spiLoop",
+            "cpuUs": 251588,
+            "stackFree": 1908,
+            "priority": 21
+          },
+          {
+            "name": "i2c",
+            "cpuUs": 530122,
+            "stackFree": 1764,
+            "priority": 10
+          },
+          {
+            "name": "ARender",
+            "cpuUs": 11403,
+            "stackFree": 3220,
+            "priority": 20
+          },
+          {
+            "name": "esp_timer",
+            "cpuUs": 767789,
+            "stackFree": 2628,
+            "priority": 22
+          }
+        ],
+        "tasksAfter": [
+          {
+            "name": "main",
+            "cpuUs": 39303809,
+            "stackFree": 6108,
+            "priority": 6
+          },
+          {
+            "name": "IDLE0",
+            "cpuUs": 64280053,
+            "stackFree": 268,
+            "priority": 0
+          },
+          {
+            "name": "IDLE1",
+            "cpuUs": 42843824,
+            "stackFree": 260,
+            "priority": 0
+          },
+          {
+            "name": "AUD_SRC",
+            "cpuUs": 554011,
+            "stackFree": 7232,
+            "priority": 15
+          },
+          {
+            "name": "live_audio",
+            "cpuUs": 103621,
+            "stackFree": 7384,
+            "priority": 20
+          },
+          {
+            "name": "tcpip",
+            "cpuUs": 52113,
+            "stackFree": 1032,
+            "priority": 18
+          },
+          {
+            "name": "realtimeConvers",
+            "cpuUs": 56121,
+            "stackFree": 1616,
+            "priority": 6
+          },
+          {
+            "name": "live_peer",
+            "cpuUs": 64606,
+            "stackFree": 10568,
+            "priority": 15
+          },
+          {
+            "name": "Tmr Svc",
+            "cpuUs": 42,
+            "stackFree": 1484,
+            "priority": 1
+          },
+          {
+            "name": "ipc1",
+            "cpuUs": 11194,
+            "stackFree": 340,
+            "priority": 24
+          },
+          {
+            "name": "sys_evt",
+            "cpuUs": 1002,
+            "stackFree": 892,
+            "priority": 20
+          },
+          {
+            "name": "wifi",
+            "cpuUs": 571448,
+            "stackFree": 3860,
+            "priority": 23
+          },
+          {
+            "name": "i2c",
+            "cpuUs": 533826,
+            "stackFree": 1764,
+            "priority": 10
+          },
+          {
+            "name": "spiLoop",
+            "cpuUs": 258475,
+            "stackFree": 1908,
+            "priority": 21
+          },
+          {
+            "name": "esp_timer",
+            "cpuUs": 773368,
+            "stackFree": 2628,
+            "priority": 22
+          },
+          {
+            "name": "ARender",
+            "cpuUs": 23198,
+            "stackFree": 3204,
+            "priority": 20
+          },
+          {
+            "name": "aenc_0",
+            "cpuUs": 182631,
+            "stackFree": 9844,
+            "priority": 19
+          },
+          {
+            "name": "ipc0",
+            "cpuUs": 7401,
+            "stackFree": 348,
+            "priority": 24
+          }
+        ],
+        "requests": 1
+      },
+      "hostMonotonic": 106967.141402839
+    }
+  ],
+  "provider": [],
+  "cycles": {
+    "completed": 0,
+    "failed": 0,
+    "all_successful_cycles_inactive_after_stop": false,
+    "successful_before_internal_free_bytes": [],
+    "successful_after_internal_free_bytes": []
+  },
+  "provider_diagnostics": {},
+  "sdk_diagnostics": {},
+  "soak_samples": [],
+  "soak_end": [],
+  "image": {
+    "effective_js_mappings": 7,
+    "effective_native_mappings": 6,
+    "image_bytes": 8639360,
+    "image_sha256": "9e588811fff0ac10c178a43fe6909447c13bdbde01c7f40b921df0a136eeced9",
+    "write_address": 65536
+  }
+}
