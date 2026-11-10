@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 
-REVISION = 15
+REVISION = 1
 
 
 def require(condition, message):
@@ -66,9 +66,9 @@ def build_full_image(bootloader, table, app, layout):
 
 def package_update(root, output):
     version = json.loads((root / 'firmware/package.json').read_text())['version']
-    revision_version = re.fullmatch(r'\d+\.\d+\.\d+-r([1-9]\d*)', version)
+    revision_version = re.fullmatch(r'\d+\.\d+\.\d+-R([1-9]\d*)', version)
     require(revision_version and int(revision_version[1]) == REVISION,
-            f'Product version must end in -r{REVISION} to match the package revision')
+            f'Product version must end in -R{REVISION} to match the package revision')
     project = root / 'firmware/dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host'
     build = project / 'xsProj-esp32s3/build'
     layout = json.loads((root / 'firmware/host/app/gpt-live-layout.json').read_text())

@@ -23,6 +23,7 @@ export default createHttpProxy({
       priority: 6,
       core: 0,
     }),
+  releaseWorker: (worker) => worker.terminate(),
   normalize: (url, options) =>
     normalizeRequest(
       url,

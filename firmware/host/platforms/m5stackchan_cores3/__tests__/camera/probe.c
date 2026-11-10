@@ -27,6 +27,19 @@ void xs_camera_probe_sample(xsMachine *the)
 	SET("internalFree", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 	SET("internalLargest", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 	SET("psramFree", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+	SET("internalMinimum", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+	SET("psramLargest", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+	SET("taskCount", uxTaskGetNumberOfTasks());
+	const char *names[] = {"main", "spiLoop", "live_audio", "AUD_SRC", "aenc_0", "pc_send", "IDLE0", "IDLE1"};
+	for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+		TaskHandle_t task = xTaskGetHandle(names[i]);
+		if (task) {
+			TaskStatus_t status;
+			vTaskGetInfo(task, &status, pdTRUE, eInvalid);
+			SET(names[i], status.ulRunTimeCounter);
+		}
+	}
+	SET("mainStack", uxTaskGetStackHighWaterMark(NULL));
 	TaskHandle_t worker = xTaskGetHandle("camera");
 	TaskHandle_t hal = xTaskGetHandle("cam_task");
 	SET("worker", worker != NULL);

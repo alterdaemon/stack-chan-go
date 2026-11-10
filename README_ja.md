@@ -3,7 +3,7 @@
 このリポジトリは [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan) の
 [v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1)
 （コミット `6a8f7553610e5d91770901e76fd93a0c50cfd970`）から派生した
-**stackchan-community-mod** です。現在のバージョンは **2.0.1-r11** です。
+**stackchan-community-mod** です。現在のバージョンは **2.1.0-R1** です。
 派生版の変更履歴、比較方法、GPT-Live のインストール手順は
 [CHANGELOG-MOD.md](./CHANGELOG-MOD.md) を参照してください。
 以下の upstream Web インストーラーは upstream のファームウェアを書き込みます。

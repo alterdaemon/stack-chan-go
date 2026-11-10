@@ -1,9 +1,30 @@
 // Copyright (c) 2026 Shinya Ishikawa
 // SPDX-License-Identifier: Apache-2.0
 
-export function createHttpQueue({ execute, post, schedule, elapsed }) {
+export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
   let tail = Promise.resolve(),
-    queued = 0
+    queued = 0,
+    lastReceived,
+    lastNotified
+  function notifyIdle(id) {
+    return Promise.resolve()
+      .then(() => {
+        if (queued || id !== lastReceived || id === lastNotified) return
+        // The caller may terminate this VM as soon as this message arrives.
+        // Send outside the queue's async finally and any JS try/catch so XS
+        // has already released their native exception frames before teardown.
+        onIdle(id)
+        lastNotified = id
+      })
+      .catch(() => {
+        // IPC pressure must not strand an otherwise idle Worker indefinitely.
+        // The Timer only registers a reaction: its callback must return before
+        // another acknowledgement can trigger external Worker termination.
+        try {
+          schedule(() => notifyIdle(id), 25)
+        } catch {}
+      })
+  }
   const jobs = new Map()
   function reply(message, remaining) {
     return new Promise((resolve) => {
@@ -33,6 +54,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed }) {
       }
       return
     }
+    lastReceived = id
     if (queued >= 8) {
       try {
         post({ id, error: 'HTTPS request capacity' })
@@ -42,6 +64,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed }) {
     queued++
     const job = { cancelled: false }
     jobs.set(id, job)
+    let idleID
     const remaining = () => (job.cancelled ? 0 : request.timeoutMs - elapsed(started))
     tail = tail.then(async () => {
       try {
@@ -63,8 +86,11 @@ export function createHttpQueue({ execute, post, schedule, elapsed }) {
       } finally {
         queued--
         jobs.delete(id)
+        if (!queued) idleID = lastReceived
       }
     })
-    return tail
+    // Notification failures are handled on a separate chain so they cannot
+    // poison the processing tail or keep later HTTPS requests from starting.
+    return onIdle ? tail.then(() => (idleID === undefined ? undefined : notifyIdle(idleID))) : tail
   }
 }

@@ -39,6 +39,19 @@ void *heap_caps_malloc(size_t, unsigned);
 void *heap_caps_aligned_calloc(size_t, size_t, size_t, unsigned);
 int64_t esp_timer_get_time(void);
 
+// The test uses a shared duplex bus, as the CoreS3 manifests require.
+#define MODDEF_AUDIOOUT_I2S_NUM 1
+#define MODDEF_AUDIOIN_I2S_NUM 1
+#define MODDEF_AUDIOOUT_I2S_BCK_PIN 34
+#define MODDEF_AUDIOIN_I2S_BCK_PIN 34
+#define MODDEF_AUDIOOUT_I2S_LR_PIN 33
+#define MODDEF_AUDIOIN_I2S_LR_PIN 33
+#define MODDEF_AUDIOOUT_I2S_MCK_PIN 0
+#define MODDEF_AUDIOIN_I2S_MCK_PIN 0
+#define MODDEF_AUDIOOUT_I2S_DATAOUT_PIN 13
+#define MODDEF_AUDIOIN_I2S_DATAIN 14
+#define MODDEF_AUDIOIN_I2S_FORMAT_I2S 1
+
 typedef void *i2s_chan_handle_t;
 typedef struct { unsigned dma_desc_num, dma_frame_num; bool auto_clear; } i2s_chan_config_t;
 #define I2S_CHANNEL_DEFAULT_CONFIG(...) ((i2s_chan_config_t){0})

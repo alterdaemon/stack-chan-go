@@ -7,12 +7,14 @@ import {
   hostApplicationName,
   moddableOutputArguments,
 } from './build-output.mjs'
+import { validateCoreS3AudioBindings } from './core-s3-audio-bindings.mjs'
 import { prepareCoreS3IdfDependencies } from './idf-dependencies.mjs'
 import { coreS3SdkconfigSourceDirectory, prepareVersionSdkconfig } from './moddable-version.mjs'
+import { prepareWebRtcSolution } from './webrtc-solution.mjs'
 
 const appDirectory = path.join(firmwareDirectory, 'host', 'app')
 const standardManifestPath = path.join(appDirectory, 'manifest.json')
-const m5stackchanManifestPath = path.join(appDirectory, 'manifest_m5stackchan_cores3.json')
+const m5stackchanManifestPath = path.join(appDirectory, 'manifest_openai_live_integrated.json')
 
 export const firmwareBundleName = 'tech.moddable.stackchan'
 export const firmwareBundleSignature = firmwareBundleName.split('.').reverse().join('.')
@@ -58,6 +60,7 @@ export const firmwareBundleTargets = [
     sdkconfigSource: coreS3SdkconfigSourceDirectory,
     partitionSource: ['build', 'devices', 'esp32', 'targets', 'm5stack_cores3', 'sdkconfig', 'partitions.csv'],
     idfDependencyPlatform: 'm5stackchan_cores3',
+    realtimePerformance: true,
   },
 ]
 
@@ -105,6 +108,8 @@ export function buildFirmwareBundleTarget(
 ) {
   if (!moddableDirectory) throw new Error('MODDABLE environment variable is required')
   const target = resolveFirmwareBundleTarget(name)
+  const realtime = ['m5stack_cores3', 'm5stackchan_cores3'].includes(target.name)
+  const solutionDirectory = realtime ? prepareWebRtcSolution({ outputDirectory }) : undefined
   const sourceDirectory = Array.isArray(target.sdkconfigSource)
     ? path.join(moddableDirectory, ...target.sdkconfigSource)
     : target.sdkconfigSource
@@ -117,6 +122,8 @@ export function buildFirmwareBundleTarget(
     outputDirectory,
     sourceDirectory,
     partitionSourcePath,
+    realtime,
+    realtimePerformance: target.realtimePerformance,
   })
 
   if (target.idfDependencyPlatform) {
@@ -125,8 +132,13 @@ export function buildFirmwareBundleTarget(
       platformName: target.idfDependencyPlatform,
       applicationName: hostApplicationName,
       mode: 'release',
+      realtime,
+      solutionDirectory,
     })
   }
+
+  if (target.realtimePerformance)
+    runCommand(process.execPath, ['scripts/build-wifi-settings.mjs'], firmwareDirectory, process.env)
 
   mkdirSync(outputDirectory, { recursive: true })
   const bundleManifestPath = prepareBundleManifest(target, versionSdkconfig.directory, outputDirectory)
@@ -145,7 +157,11 @@ export function buildFirmwareBundleTarget(
         bundleManifestPath,
       ],
       firmwareDirectory,
-      { ...process.env, MODDABLE: moddableDirectory },
+      {
+        ...process.env,
+        MODDABLE: moddableDirectory,
+        ...(solutionDirectory && { ESP_WEBRTC_SOLUTION: solutionDirectory }),
+      },
     )
   } finally {
     rmSync(bundleManifestPath, { force: true })
@@ -159,6 +175,11 @@ export function buildFirmwareBundleTarget(
     'release',
     hostApplicationName,
   )
+  if (realtime)
+    validateCoreS3AudioBindings({
+      directory: path.join(outputDirectory, 'tmp/esp32', target.outputPlatform, 'release', hostApplicationName),
+      moddableDirectory,
+    })
   const stagingDirectory = path.join(outputDirectory, 'bundle-targets', target.bundleId)
   rmSync(stagingDirectory, { recursive: true, force: true })
   mkdirSync(stagingDirectory, { recursive: true })

@@ -6,10 +6,16 @@ at [v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit
 The upstream history, credits and licenses are retained. The changes below belong
 to this fork; upstream browser links still serve the upstream project.
 
-Current version: **2.0.1-r15**. R<N> corresponds to `2.0.1-r<N>` and Git tag
-`v2.0.1-r<N>`. These are fork versions, not releases published by upstream.
+Current series: **2.1.0-R<N>**, tagged `v2.1.0-R<N>`. The historical 2.0.1
+series uses `v2.0.1-r<N>` tags.
 
-## Revisions
+## 2.1.0 series
+
+| Version | Changes |
+| --- | --- |
+| **2.1.0-R1** | Merge upstream 2.1.0 into the R15 fork and use Moddable 10.1.0. Keep integrated GPT-Live and Realtime Mini, saved settings, 48 kHz audio, SPI completion waits and R15 camera teardown. Retain upstream CoreS3 display batching, WebRTC resource cleanup, TLS fix and Avatar DSL tooling. Use the SDK HTTP header-buffer fix for Wi-Fi Settings. See the [release and performance record](./docs/release-notes/v2.1.0-R1.md). |
+
+## 2.0.1 revisions
 
 | Version | Changes relative to the preceding revision |
 | --- | --- |
@@ -61,15 +67,22 @@ Earlier BINs retain their legacy filenames; new R10 files use the R10 product ve
 
 ## Compare
 
+`main` tracks the official upstream. The mod branches record each supported
+upstream base and the release tags identify the published revisions.
+
+| Upstream base | Mod branch | GitHub comparison path within this fork |
+| --- | --- | --- |
+| `v2.0.1` | `v2.0.1-mod` | `/compare/v2.0.1...v2.0.1-mod` |
+| `v2.1.0` | `v2.1.0-mod` | `/compare/v2.1.0...v2.1.0-mod` |
+| `v2.1.0` | Release `v2.1.0-R1` | `/compare/v2.1.0...v2.1.0-R1` |
+
 ```sh
-git log --oneline upstream/v2.0.1..main
-git diff --stat upstream/v2.0.1..main
-git diff v2.0.1-r10..v2.0.1-r11
+git diff --stat v2.0.1 v2.0.1-mod
+git diff --stat v2.1.0 v2.1.0-mod
+git diff v2.1.0 v2.1.0-R1
 ```
 
-Use any two revision tags to compare revisions. `upstream` points to the original
-repository; `upstream/v2.0.1` and the original `v2.0.1` tag mark the fork base.
-Detailed feature notes are in [docs/release-notes](./docs/release-notes/).
+Detailed notes are in [docs/release-notes](./docs/release-notes/).
 
 ## Install
 
@@ -79,13 +92,13 @@ For **M5StackChan CoreS3**, from the repository root. Choose one command; replac
 **Full image — resets settings, MODs and storage:**
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live.bin
 ```
 
 **App only — preserves other partitions on this project's supported flash layout:**
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live-app.bin
 ```
 
 Press **RST** briefly afterwards. Full images go at `0x0`; app-only images go at

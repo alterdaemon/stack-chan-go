@@ -4,8 +4,9 @@ This repository is **stackchan-community-mod**, a fork of
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan) starting at
 [v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit
 [`6a8f7553610e5d91770901e76fd93a0c50cfd970`](https://github.com/stack-chan/stack-chan/commit/6a8f7553610e5d91770901e76fd93a0c50cfd970).
-The current fork version is **2.0.1-r11**. Fork changes, version comparisons and
-GPT-Live installation commands are in [CHANGELOG-MOD.md](./CHANGELOG-MOD.md).
+The current fork version is **2.1.0-R1**. [Compare each series with upstream](./CHANGELOG-MOD.md#compare),
+[read the fork changelog](./CHANGELOG-MOD.md), or
+[install the GPT-Live firmware](./CHANGELOG-MOD.md#install).
 The upstream project and its history retain their original attribution and licenses.
 
 [![Build Stack-chan Firmware](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml/badge.svg)](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml)

@@ -9,8 +9,8 @@ const VERSIONED_PACKAGES = [
 ]
 
 export function versionFromReleaseTag(tag) {
-  const match = /^v(\d+\.\d+\.\d+(?:-r[1-9]\d*)?)$/.exec(tag)
-  if (!match) throw new Error(`release tag must match vX.Y.Z or vX.Y.Z-rN (N >= 1): ${tag}`)
+  const match = /^v(\d+\.\d+\.\d+(?:-[rR][1-9]\d*)?)$/.exec(tag)
+  if (!match) throw new Error(`release tag must match vX.Y.Z or vX.Y.Z-RN (N >= 1): ${tag}`)
   return match[1]
 }
 
@@ -57,5 +57,5 @@ export function validateRelease(rootDirectory, tag) {
     throw new Error(`pending Changesets must be consumed before release: ${pendingChangesets.join(', ')}`)
   }
 
-  return { releaseNotePath, version, prerelease: version.includes('-r') }
+  return { releaseNotePath, version, prerelease: /-[rR][1-9]\d*$/.test(version) }
 }

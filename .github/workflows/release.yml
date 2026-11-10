@@ -1,19 +1,9 @@
-name: Release Stack-chan
+name: Release Stack-chan Community
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "firmware/**"
-      - "web/**"
-      - "docs/release-notes/**"
-      - ".changeset/**"
-      - ".github/actions/setup/action.yml"
-      - ".github/workflows/release.yml"
   push:
     tags:
-      - "v*.*.*"
+      - "v*.*.*-R*"
 
 permissions:
   contents: read
@@ -24,105 +14,61 @@ concurrency:
 
 jobs:
   build-release-assets:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.metadata.outputs.version }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Resolve and validate release metadata
-        id: metadata
-        working-directory: ./firmware
+      - name: Validate release and series branch
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_REF: ${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = "push" ]; then
-            tag="$RELEASE_REF"
-          else
-            tag="v$(node -p "require('./package.json').version")"
-          fi
-          npm run check:release -- "$tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-      - name: Verify tagged commit is on main
-        if: github.event_name == 'push'
-        env:
-          TAGGED_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          tagged_commit=$(git rev-parse "$TAGGED_SHA^{commit}")
-          git merge-base --is-ancestor "$tagged_commit" refs/remotes/origin/main
-      - name: Setup firmware toolchain
-        uses: ./.github/actions/setup
+          npm --prefix firmware run check:release -- "$TAG"
+          branch="${TAG%-R*}-mod"
+          git fetch --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch"
+          git merge-base --is-ancestor "$TAG^{commit}" "refs/remotes/origin/$branch"
+      - uses: ./.github/actions/setup
         with:
-          target-branch: "10.0.2"
-      - name: Build firmware bundle
-        working-directory: ./firmware
-        run: source "$HOME/.local/share/xs-dev-export.sh" && npm run bundle
-      - name: Verify bundled targets
-        working-directory: ./firmware
-        run: |
-          set -euo pipefail
-          bundle="host/app/tech.moddable.stackchan"
-          for target in com.m5stack com.m5stack.core2 com.m5stack.cores3 m5stackchan_cores3; do
-            for binary in bootloader.bin partition-table.bin xs_esp32.bin; do
-              test -s "$bundle/$target/$binary"
-            done
-          done
-      - name: Prepare release assets
+          target-branch: "10.1.0"
+      - name: Install embedded Settings dependencies
+        run: npm --prefix web ci
+      - name: Build and validate both CoreS3 images
         working-directory: ./firmware
         env:
-          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ github.ref_name }}
         run: |
-          set -euo pipefail
-          mkdir -p release-assets
-          asset="stack-chan-firmware-v${VERSION}.zip"
-          cp "host/app/tech.moddable.stackchan.zip" "release-assets/$asset"
-          cd release-assets
-          sha256sum "$asset" > "$asset.sha256"
-          sha256sum --check "$asset.sha256"
-      - name: Upload release candidate assets
-        uses: actions/upload-artifact@v7
+          set -eo pipefail
+          source "$HOME/.local/share/xs-dev-export.sh"
+          source "$IDF_PATH/export.sh"
+          npm run build -- --mode=release
+          image="../gpt-live-package/StackChan-Community-$TAG-GPT-Live"
+          test -s "$image.bin"
+          test -s "$image-app.bin"
+      - uses: actions/upload-artifact@v7
         with:
-          name: stack-chan-release-v${{ steps.metadata.outputs.version }}
-          path: ./firmware/release-assets
+          name: stack-chan-community-images
+          path: ./gpt-live-package/*.bin
           if-no-files-found: error
 
   publish:
-    if: github.event_name == 'push'
     needs: build-release-assets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - name: Download verified release assets
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
-          name: stack-chan-release-v${{ needs.build-release-assets.outputs.version }}
+          name: stack-chan-community-images
           path: ./release-assets
-      - name: Publish GitHub Release
+      - name: Publish Community prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.build-release-assets.outputs.version }}
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          tag="v$VERSION"
-          title="ｽﾀｯｸﾁｬﾝ $tag"
-          notes="docs/release-notes/v$VERSION.md"
-          firmware="release-assets/stack-chan-firmware-$tag.zip"
-          checksum="$firmware.sha256"
-          case "$VERSION" in
-            *-r*) prerelease=true; latest=false ;;
-            *) prerelease=false; latest=true ;;
-          esac
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release edit "$tag" --verify-tag --title "$title" --notes-file "$notes" --draft=false --prerelease="$prerelease" --latest="$latest"
-            gh release upload "$tag" "$firmware" "$checksum" --clobber
-          else
-            gh release create "$tag" "$firmware" "$checksum" --verify-tag --title "$title" --notes-file "$notes" --prerelease="$prerelease" --latest="$latest"
-          fi
+          image="release-assets/StackChan-Community-$TAG-GPT-Live"
+          gh release create "$TAG" "$image.bin" "$image-app.bin" \
+            --verify-tag --title "Stack-chan Community $TAG" \
+            --notes-file "docs/release-notes/$TAG.md" --prerelease --latest=false

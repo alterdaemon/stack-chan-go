@@ -8,6 +8,11 @@
 #include "freertos/task.h"
 
 static atomic_uint ioMax[2], ioCount[2], aecMax, aecCount;
+static atomic_uint spiRequests, spiBytes;
+void stackchanProbeSPIRequest(unsigned bytes) {
+    atomic_fetch_add(&spiRequests, 1);
+    atomic_fetch_add(&spiBytes, bytes);
+}
 static int64_t ioLast[2], uiLast;
 static unsigned uiMax, uiCount;
 static int64_t frameAt;
@@ -58,6 +63,7 @@ void stackchanProbeAEC(unsigned elapsed) {
 void xs_io_reset(xsMachine *the) {
     uiLast = 0; uiMax = uiCount = 0;
     frameAt = 0; frameMax = 0;
+    atomic_store(&spiRequests, 0); atomic_store(&spiBytes, 0);
     atomic_store(&mainReady, 0); atomic_store(&mainBlocked, 0);
     atomic_store(&spiReady, 0); atomic_store(&spiBlocked, 0);
     for (unsigned i = 0; i < 8; i++) atomic_store(&running[i], 0);
@@ -118,6 +124,7 @@ void xs_io_stats(xsMachine *the) {
     SET("uiCore", xPortGetCoreID()); SET("uiAffinity", xTaskGetCoreID(xTaskGetCurrentTaskHandle()));
     SET("uiPriority", uxTaskPriorityGet(NULL));
     SET("frameMaxUs", frameMax);
+    SET("spiRequests", atomic_load(&spiRequests)); SET("spiBytes", atomic_load(&spiBytes));
     SET("mainReady", atomic_load(&mainReady)); SET("mainBlocked", atomic_load(&mainBlocked));
     SET("spiReady", atomic_load(&spiReady)); SET("spiBlocked", atomic_load(&spiBlocked));
     SET("spiAffinity", spiTask ? xTaskGetCoreID(spiTask) : -2);

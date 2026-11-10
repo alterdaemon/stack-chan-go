@@ -581,6 +581,10 @@ void modSPIFlush(void)
 
 static void modSPITxCommon(modSPIConfiguration config, uint8_t *data, uint16_t count, modSPIBufferLoader loader)
 {
+#if MODDEF_STACKCHAN_LIVE_PROBE
+    extern void stackchanProbeSPIRequest(unsigned bytes);
+    stackchanProbeSPIRequest(count);
+#endif
 	if (!config->sync && (config == gConfig)) {
 		while (true) {
 			xSemaphoreTake(gSPIMutex, portMAX_DELAY);

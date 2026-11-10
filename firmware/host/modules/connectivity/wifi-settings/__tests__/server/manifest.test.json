@@ -7,8 +7,6 @@
     "../../../../testing/manifest.json"
   ],
   "modules": {
-    "~": ["$(MODULES)/io/http/server/httpserver"],
-    "embedded:network/http/server": "../../../../../../dist/wifi-settings/httpserver",
     "main": "./server.test",
     "wifi-settings-server": "../../wifi-settings-server",
     "preference": "../../../../testing/fakes/preference",

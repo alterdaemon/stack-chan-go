@@ -6,8 +6,6 @@
     "$(MODULES)/files/resource/manifest.json"
   ],
   "modules": {
-    "~": ["$(MODULES)/io/http/server/httpserver"],
-    "embedded:network/http/server": "../../../../dist/wifi-settings/httpserver",
     "wifi-settings-server": "./wifi-settings-server"
   },
   "resources": {

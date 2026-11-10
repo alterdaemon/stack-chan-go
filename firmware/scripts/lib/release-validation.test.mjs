@@ -35,6 +35,7 @@ function createReleaseFixture(version = '1.0.0') {
 
 test('versionFromReleaseTag accepts stable versions and numbered fork revisions', () => {
   assert.equal(versionFromReleaseTag('v1.0.0'), '1.0.0')
+  assert.equal(versionFromReleaseTag('v2.1.0-R1'), '2.1.0-R1')
   for (let revision = 1; revision <= 11; revision++) {
     assert.equal(versionFromReleaseTag(`v2.0.1-r${revision}`), `2.0.1-r${revision}`)
   }

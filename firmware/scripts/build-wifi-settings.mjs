@@ -4,9 +4,6 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { prepareWiFiHTTPServer } from './lib/wifi-http-server.mjs'
-
-prepareWiFiHTTPServer()
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const web = join(root, 'web')

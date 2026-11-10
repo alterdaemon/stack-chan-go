@@ -21,7 +21,7 @@
       "modules": {
         "camera": "./device/camera",
         "*": "../../platforms/m5stackchan_cores3/camera/camera.c",
-        "~": "$(MODDABLE)/modules/io/imagein/camera/esp32/camera.c"
+        "~": "$(MODDABLE)/modules/embedded/io/image/in/camera/esp32/camera.c"
       },
       "config": {
         "cameraReleaseOnStop": true

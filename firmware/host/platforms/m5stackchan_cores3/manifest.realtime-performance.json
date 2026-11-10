@@ -13,13 +13,7 @@
     "C_FLAGS": "-I$(SUBPLATFORMDIRECTORY) -I$(MODDABLE)/modules/piu/MC -I$(SUBPLATFORMDIRECTORY)/../../modules/realtime-conversation/esp32 -I$(MODDABLE)/modules/pins/spi/esp32"
   },
   "modules": {
-    "*": [
-      "./io-performance.c",
-      "./media-scheduler.c",
-      "./opus-policy.c",
-      "./spi/modSPI.c"
-    ],
-    "io-performance": "./io-performance",
+    "*": "./spi/modSPI.c",
     "setup/realtime-performance": "./setup-realtime",
     "screen-scheduler": "./screen-scheduler",
     "~": "$(MODULES)/pins/spi/esp32/modSPI.c"

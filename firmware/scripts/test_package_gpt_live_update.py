@@ -103,7 +103,7 @@ class UpdateTests(unittest.TestCase):
             fixture = {
                 'firmware/host/app/gpt-live-layout.json': json.dumps(self.layout).encode(),
                 'firmware/host/app/manifest_openai_live_settings.json': json.dumps({'config': settings}).encode(),
-                'firmware/package.json': json.dumps({'version': f'0.0.0-r{package.REVISION}'}).encode(),
+                'firmware/package.json': json.dumps({'version': f'0.0.0-R{package.REVISION}'}).encode(),
                 project + '/manifest_flat.json': json.dumps({'config': settings, 'modules': modules}).encode(),
                 build + '/sdkconfig': b'',
                 build + '/build/flasher_args.json': json.dumps({

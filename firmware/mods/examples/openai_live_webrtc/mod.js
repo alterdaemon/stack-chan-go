@@ -6,6 +6,7 @@ import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
 const MUTE = 'openai-live:mute'
+let session
 const messages = {
   idle: 'GPT-Live stopped',
   standby: 'GPT-Live standby',
@@ -155,7 +156,7 @@ export function onContextCreated(robot) {
       // A rendering failure must not prevent session cleanup.
     }
   }
-  const session = new LiveSession({
+  session = new LiveSession({
     Timer,
     Conversation,
     audio: robot.audio,
@@ -234,4 +235,8 @@ export function onContextCreated(robot) {
     },
   })
   return session
+}
+
+export function onClose() {
+  return session?.stop()
 }
