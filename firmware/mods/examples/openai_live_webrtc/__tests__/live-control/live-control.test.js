@@ -65,6 +65,10 @@ async function run() {
     assert(Math.abs(opacity - 0.25) < 0.005, 'LIVE background stays 75% transparent across session states')
   }
   assertTranslucent()
+  control.delegate('onLiveState', 'standby')
+  equal(control.first.string, 'STANDBY', 'standby is visible on the existing LIVE button')
+  assert(control.active, 'standby leaves LIVE available for manual resume')
+  control.delegate('onLiveState', 'idle')
   function touch(phase, x, y) {
     screen.context[`onTouch${phase}`](0, x, y, Time.ticks)
   }

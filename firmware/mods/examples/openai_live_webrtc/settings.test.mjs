@@ -114,6 +114,8 @@ test('backend settings and hosted search are forwarded without adding instructio
     networkReady: Promise.resolve({ status: 'connected' }),
     acquireLowLatency: () => ({ close() {} }),
     amp: {},
+    Timer: { repeat() {}, clear() {} },
+    now: () => 0,
     settings: readLiveSettings(
       {
         backendModel: 'gpt-6.1-terra',

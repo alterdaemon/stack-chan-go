@@ -1,5 +1,8 @@
 // Conversation owns the protocol, native media and HTTP worker. This adapter
-// only coordinates the host's audio/radio ownership and explicit user actions.
+// only coordinates host ownership, standby and a small RAM transcript tail.
+const IDLE_MS = 60000
+const HISTORY_CHARS = 2048
+const HISTORY_MESSAGES = 6
 function identifier(value, fallback) {
   return typeof value === 'string' && /^[a-z][a-z0-9_]{0,63}$/i.test(value) && !/^sk_/i.test(value) ? value : fallback
 }
@@ -48,13 +51,14 @@ export function formatLiveError(detail) {
 }
 
 export class LiveSession {
-  constructor({ Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState }) {
-    Object.assign(this, { Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState })
+  constructor({ Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer, now }) {
+    Object.assign(this, { Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer, now })
+    this.history = []
   }
 
   start() {
     if (this.active) return this.active.starting
-    const entry = { cancelled: false }
+    const entry = { cancelled: false, backend: new Map() }
     this.active = entry
     this.onState('connecting')
     entry.starting = this.connect(entry)
@@ -97,6 +101,13 @@ export class LiveSession {
         instructions: this.settings.bargeIn
           ? `${this.settings.instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
           : this.settings.instructions,
+        input: this.history.length
+          ? this.history.map(({ role, text }) => ({
+              type: 'message',
+              role,
+              content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
+            }))
+          : undefined,
         delegation: {
           type: 'responses',
           responses: {
@@ -115,6 +126,12 @@ export class LiveSession {
           if (this.active !== entry) return
           if (state === 'closed' || state === 'error') void this.stop()
         },
+        onTranscript: (fragment) => {
+          if (this.active !== entry || entry.cancelled) return
+          entry.lastActivity = this.now()
+          this.remember(fragment)
+        },
+        onEvent: (event) => this.receive(entry, event),
       }
       site = 'session_ctor'
       const conversation = new this.Conversation(options)
@@ -126,6 +143,9 @@ export class LiveSession {
       site = 'connect_wait'
       await conversation.connect()
       if (entry.cancelled || this.active !== entry) return false
+      entry.lastActivity = this.now()
+      entry.stats = conversation.stats
+      entry.idleTimer = this.Timer.repeat(() => this.checkIdle(entry), 1000)
       this.onState('connected')
       return true
     } catch (error) {
@@ -139,11 +159,86 @@ export class LiveSession {
     }
   }
 
-  stop() {
+  remember({ role, delta }) {
+    if (!delta || (role !== 'user' && role !== 'assistant')) return
+    const last = this.history[this.history.length - 1]
+    if (last?.role === role) last.text = (last.text + delta.slice(-HISTORY_CHARS)).slice(-HISTORY_CHARS)
+    else this.history.push({ role, text: delta.slice(-HISTORY_CHARS) })
+    while (this.history.length > HISTORY_MESSAGES) this.history.shift()
+    let excess = this.history.reduce((size, message) => size + message.text.length, 0) - HISTORY_CHARS
+    while (excess > 0) {
+      const first = this.history[0]
+      if (first.text.length <= excess) {
+        excess -= first.text.length
+        this.history.shift()
+      } else {
+        first.text = first.text.slice(excess)
+        break
+      }
+    }
+  }
+
+  receive(entry, message) {
+    if (this.active !== entry || entry.cancelled) return
+    if (message.type === 'session.delegation.created') {
+      entry.backend.set(message.delegation.id, message.delegation.response_id)
+      entry.lastActivity = this.now()
+    } else if (message.type === 'response.event') {
+      const event = message.event
+      const response = event.response?.id ?? event.response_id
+      const id = message.delegation_id ?? response
+      if (['response.created', 'response.queued', 'response.in_progress'].includes(event.type))
+        entry.backend.set(id, response)
+      else if (
+        ['response.completed', 'response.failed', 'response.incomplete', 'response.cancelled'].includes(event.type)
+      ) {
+        // Some envelopes omit delegation_id; retain the response ID from startup.
+        for (const [key, value] of entry.backend)
+          if (key === id || (response !== undefined && value === response)) entry.backend.delete(key)
+      }
+      entry.lastActivity = this.now()
+    }
+    // Match the protocol's bounded concurrent work; never grow a task ledger forever.
+    if (entry.backend.size > 8) throw new Error('Too many pending Live delegations')
+  }
+
+  checkIdle(entry) {
+    if (this.active !== entry || entry.cancelled) return
+    try {
+      const stats = entry.conversation.stats
+      const previous = entry.stats
+      const now = this.now()
+      // Cumulative native counters catch short speech/playback between JS polls.
+      // Missing or stalled capture is not evidence of silence. Usage heartbeats
+      // are deliberately ignored, and pending backend work blocks standby.
+      if (
+        !stats ||
+        !previous ||
+        !Number.isFinite(stats.inputActivity) ||
+        !Number.isFinite(stats.audibleMs) ||
+        stats.capturedSamples === previous.capturedSamples ||
+        stats.inputActivity !== previous.inputActivity ||
+        stats.audibleMs !== previous.audibleMs ||
+        entry.backend.size
+      )
+        entry.lastActivity = now
+      entry.stats = stats
+      if ((now - entry.lastActivity) >>> 0 >= IDLE_MS) void this.stop('standby')
+    } catch (error) {
+      entry.failure = 'error'
+      entry.diagnostic ??= diagnostic(error, 'events', 'idle_check')
+      void this.stop()
+    }
+  }
+
+  stop(state = 'idle') {
     const entry = this.active
     if (!entry) return Promise.resolve()
     if (entry.closing) return entry.closing
     entry.cancelled = true
+    entry.stoppedState = state
+    if (entry.idleTimer !== undefined) this.Timer.clear(entry.idleTimer)
+    entry.idleTimer = undefined
     this.onState('closing')
     entry.closing = this.finish(entry)
     return entry.closing
@@ -179,7 +274,8 @@ export class LiveSession {
       }
       if (this.active === entry) {
         this.active = undefined
-        this.onState(entry.failure ?? 'idle', entry.diagnostic)
+        if (entry.failure || entry.stoppedState !== 'standby') this.history.length = 0
+        this.onState(entry.failure ?? entry.stoppedState, entry.diagnostic)
       }
     }
   }

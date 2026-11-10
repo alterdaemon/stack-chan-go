@@ -10,6 +10,7 @@
     "openai-live-integrated": "../../mod",
     "openai-live-session": "../../session",
     "openai-live-settings": "../../settings",
+    "openai-live-options": "../../../../../host/modules/preferences/openai-live-options",
     "realtimeConversation": "../../../../../host/modules/realtime-conversation/realtimeConversation",
     "realtimeConversation/core": "../../../../../host/modules/realtime-conversation/core",
     "realtimeConversation/tools": "../../../../../host/modules/realtime-conversation/tools",

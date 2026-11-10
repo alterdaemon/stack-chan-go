@@ -63,6 +63,12 @@ declare module 'realtimeConversation' {
     /** Local output pitch, integer semitones from -6 to 6. Zero bypasses DSP. */
     pitch?: number
     instructions?: string
+    /** Text context for a fresh session; caller controls retention and size. */
+    input?: {
+      type: 'message'
+      role: 'user' | 'assistant' | 'developer'
+      content: { type: 'input_text' | 'output_text'; text: string }[]
+    }[]
     /** Keep the microphone active with AEC during playback; defaults to false.
      * GPT-Live handles yielding. This does not guarantee immediate playback stop. */
     bargeIn?: boolean
@@ -84,6 +90,9 @@ declare module 'realtimeConversation' {
     cleanLevel: number
     referenceLevel: number
     outputIdleMs: number
+    /** Cumulative energetic, unmuted input frames; not a semantic VAD result. */
+    inputActivity: number
+    audibleMs: number
     silenceMs: number
     maxSilenceMs: number
     freeHeap: number

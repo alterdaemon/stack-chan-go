@@ -4,6 +4,9 @@ export default class Transport {
   constructor(callback) {
     this.callback = callback
     this.sent = []
+    this.polls = 0
+    this.inputActivity = 0
+    this.audibleMs = 0
     transports.push(this)
   }
   setVolume() {}
@@ -22,4 +25,7 @@ export default class Transport {
     if (JSON.parse(text).type === 'session.close') this.message({ type: 'session.closed', reason: 'client_request' })
   }
   async close() {}
+  get stats() {
+    return { capturedSamples: ++this.polls * 16000, inputActivity: this.inputActivity, audibleMs: this.audibleMs }
+  }
 }

@@ -1,6 +1,12 @@
-Fork Community v2.0.1: 2.0.1-r10 + zintegrowany GPT-Live (M5StackChan CoreS3).
+Fork Community v2.0.1: 2.0.1-r11 + zintegrowany GPT-Live (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.0.1).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
+R11: po 60 s bez aktywnosci wejscia, odtwarzania i backendu GPT-Live
+przechodzi do STANDBY. Sesja OpenAI oraz WebRTC, audio, AEC i Pitch sa zamykane.
+LIVE wznawia nowa sesje z ogonem transkrypcji w RAM: do 6 fragmentow i 2048 znakow.
+Jawne STOP i restart urzadzenia usuwaja historie. Brak zapisu historii do NVS.
+Aktywnosc audio jest liczona natywnie; kontrola bezczynnosci raz na sekunde.
+Prog energii wejscia wymaga sprawdzenia w warunkach akustycznych CoreS3.
 Poprawka R10: AEC przy Voice interruption On dziala w osobnym zadaniu
 o priorytecie nizszym od interfejsu. Obsluga I2S nie czeka na AEC.
 
@@ -82,8 +88,8 @@ PAKOWANIE ISTNIEJACEJ KOMPILACJI (bez ponownego budowania)
 W tym samym aktywnym srodowisku, z katalogu projektu:
   python3 firmware/scripts/package-gpt-live-update.py
 Wynik w gpt-live-package/, zawsze dwa pliki z tej samej kompilacji:
-  StackChan-Community-v2.0.1-r10-GPT-Live.bin      - pelny obraz, 16 MiB
-  StackChan-Community-v2.0.1-r10-GPT-Live-app.bin  - sama aplikacja
+  StackChan-Community-v2.0.1-r11-GPT-Live.bin      - pelny obraz, 16 MiB
+  StackChan-Community-v2.0.1-r11-GPT-Live-app.bin  - sama aplikacja
 Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania obu BIN-ow.
 Pelny obraz zawiera bootloader, tabele partycji i aplikacje z biezacego builda.
 Pozostale bajty sa wypelnione 0xFF, w tym obszary NVS, xs i storage.
@@ -91,16 +97,16 @@ Skrypt nie zapisuje raportow ani plikow pomocniczych.
 
 Przed nowa edycja ustaw kolejny wolny numer REVISION w
 firmware/scripts/package-gpt-live-update.py oraz zaktualizuj nazwy i komendy
-w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r10; nastepna: r11.
+w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r11; nastepna: r12.
 Zachowuj poprzednie BIN-y. Skrypt odrzuca inna zawartosc pod istniejaca rewizja;
 ponowne pakowanie identycznych danych jest dozwolone.
 
 INSTALACJA (z katalogu projektu)
 Pelna instalacja / odtworzenie, zapis calego flash i wyczyszczenie danych:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r10-GPT-Live.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r11-GPT-Live.bin
 
 Aktualizacja samej aplikacji, zachowuje pozostale partycje przy zgodnej mapie:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r10-GPT-Live-app.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r11-GPT-Live-app.bin
 Po wgraniu krotko nacisnij RST.
 Adres okresla miejsce zapisu w urzadzeniu, nie wybiera fragmentu pliku.
 Pelnego obrazu nie wolno wgrywac na 0x10000.

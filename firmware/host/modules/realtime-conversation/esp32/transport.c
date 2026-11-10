@@ -383,6 +383,7 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("dataMessages", atomic_load(&t->dataMessages));
 	STAT("renderedSamples", stats.rendered);
 	STAT("audibleMs", stats.audibleMs);
+    STAT("inputActivity", stats.inputActivity);
 	STAT("underruns", stats.underruns);
 	STAT("overruns", stats.overruns);
 	STAT("micLevel", stats.micLevel);

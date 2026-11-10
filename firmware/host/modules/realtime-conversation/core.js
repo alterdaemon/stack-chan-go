@@ -103,6 +103,7 @@ export default class Conversation {
       pitch: options.pitch ?? 0,
       bargeIn: options.bargeIn === true,
       delegation: options.delegation === undefined ? undefined : copyDelegation(options.delegation),
+      input: options.input === undefined ? undefined : copyDelegation(options.input),
       onStateChanged: options.onStateChanged,
       onTranscript: options.onTranscript,
       onEvent: options.onEvent,
@@ -269,6 +270,7 @@ export default class Conversation {
             session: {
               model: options.model,
               instructions: options.instructions,
+              input: options.input,
               audio: { output: { voice: options.voice } },
               delegation: options.delegation,
               store: false,

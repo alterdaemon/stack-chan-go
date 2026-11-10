@@ -802,4 +802,22 @@ await test('pitch stays local while voice reaches the Live session', async () =>
     check(rejected, 'invalid pitch must fail before native startup')
   }
 })
+await test('saved text seeds a new session through input without altering instructions or retaining the caller array', async () => {
+  const input = [
+    { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Order 42.' }] },
+    { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Ready.' }] },
+  ]
+  const h = harness({ input, instructions: 'Speak Polish.' })
+  input[0].content[0].text = 'changed after construction'
+  await h.connect()
+  const session = JSON.parse(h.requests[0].init.body).session
+  equal(session.instructions, 'Speak Polish.')
+  equal(session.input[0].content[0].text, 'Order 42.')
+  equal(session.input[1].content[0], { type: 'output_text', text: 'Ready.' })
+  equal(session.store, false)
+  const closing = h.c.close()
+  h.message({ type: 'session.closed', reason: 'close_requested' })
+  await closing
+  equal(h.disposed, 1)
+})
 console.log(`${count} tests passed`)

@@ -2,12 +2,14 @@ import Modules from 'modules'
 import { diagnostic, formatLiveError, LiveSession } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
+import Time from 'time'
 import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
 const MUTE = 'openai-live:mute'
 const messages = {
   idle: 'GPT-Live stopped',
+  standby: 'GPT-Live standby',
   connecting: 'Connecting GPT-Live',
   connected: 'GPT-Live connected',
   closing: 'Stopping GPT-Live',
@@ -57,7 +59,9 @@ function createLiveButton(toggle) {
               ? 'LIVE...'
               : state === 'closing'
                 ? 'STOP...'
-                : 'LIVE OFF'
+                : state === 'standby'
+                  ? 'STANDBY'
+                  : 'LIVE OFF'
         content.first.skin = this.skin
       }
       onLiveNotice(content, notice) {
@@ -148,6 +152,8 @@ export function onContextCreated(robot) {
     }
   }
   const session = new LiveSession({
+    Timer,
+    now: () => Time.ticks,
     Conversation,
     audio: robot.audio,
     networkReady: robot.connectivity.network?.ready,

@@ -16,6 +16,8 @@ function fixture(overrides = {}) {
     events = [],
     instances = []
   let connecting, closing, mute
+  let ticks = 0
+  const timers = new Map()
   class Conversation {
     constructor(options) {
       this.options = options
@@ -29,14 +31,18 @@ function fixture(overrides = {}) {
     }
     async close() {
       events.push('native closing')
-      if (closing) await closing.promise
+      const result = closing ? await closing.promise : undefined
       connecting?.reject(new Error('cancelled'))
       events.push('native closed')
-      return { finalized: true }
+      return result ?? { finalized: true }
     }
     async setMuted(value) {
       if (mute) await mute.promise
       this.muted = value
+    }
+    activity = { capturedSamples: 0, inputActivity: 0, audibleMs: 0 }
+    get stats() {
+      return { ...this.activity }
     }
   }
   const session = new LiveSession({
@@ -62,6 +68,17 @@ function fixture(overrides = {}) {
       states.push(state)
       if (detail) diagnostics.push(detail)
     },
+    Timer: {
+      repeat(callback, interval) {
+        const id = {}
+        timers.set(id, { callback, interval })
+        return id
+      },
+      clear(id) {
+        timers.delete(id)
+      },
+    },
+    now: () => ticks,
     ...overrides,
   })
   return {
@@ -70,6 +87,12 @@ function fixture(overrides = {}) {
     diagnostics,
     events,
     instances,
+    timers,
+    tick(milliseconds = 1000, capture = true) {
+      ticks = (ticks + milliseconds) >>> 0
+      if (capture) for (const instance of instances) instance.activity.capturedSamples += 16000
+      for (const { callback } of [...timers.values()]) callback()
+    },
     connectPending() {
       connecting = deferred()
       return connecting
@@ -340,4 +363,205 @@ test('chosen voice, local pitch and composed style reach each new conversation',
   assert.equal(conversation.options.pitch, 4)
   assert.equal(conversation.options.instructions, 'Polish. Speaking style: calm.')
   await f.session.stop()
+})
+
+test('60 seconds of idle closes once, releases ownership, stops polling and exposes standby only after cleanup', async () => {
+  const f = fixture()
+  await f.session.start()
+  assert.equal([...f.timers.values()][0].interval, 1000)
+  const staleTick = [...f.timers.values()][0].callback
+  f.tick(59000)
+  assert.equal(f.states.at(-1), 'connected')
+  const closing = f.closePending()
+  f.tick()
+  assert.equal(f.states.at(-1), 'closing')
+  assert.equal(f.timers.size, 0)
+  assert.ok(!f.events.includes('audio released'))
+  staleTick()
+  assert.equal(f.events.filter((event) => event === 'native closing').length, 1)
+  closing.resolve()
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+  assert.equal(f.session.active, undefined)
+  assert.deepEqual(f.events.slice(-4), ['native closed', 'amp 24000', 'radio released', 'audio released'])
+  assert.equal(await f.session.start(), true)
+  staleTick()
+  assert.equal(f.states.at(-1), 'connected')
+  await f.session.stop()
+  assert.equal(f.timers.size, 0)
+})
+
+test('brief capture and playback between polls each restart the whole idle interval', async () => {
+  for (const counter of ['inputActivity', 'audibleMs']) {
+    const f = fixture()
+    await f.session.start()
+    f.tick(59000)
+    f.instances[0].activity[counter]++
+    f.tick()
+    f.tick(59000)
+    assert.equal(f.states.at(-1), 'connected')
+    f.tick()
+    await f.session.stop()
+    assert.equal(f.states.at(-1), 'standby')
+  }
+})
+
+test('missing or stalled audio statistics cannot establish inactivity', async () => {
+  const f = fixture()
+  await f.session.start()
+  f.tick(120000, false)
+  assert.equal(f.states.at(-1), 'connected')
+  f.instances[0].activity.inputActivity = undefined
+  f.tick(120000)
+  assert.equal(f.states.at(-1), 'connected')
+  f.instances[0].activity.inputActivity = 0
+  f.tick(59000)
+  assert.equal(f.states.at(-1), 'connected')
+  await f.session.stop()
+})
+
+test('overlapping backend tasks block standby through quiet reasoning and every terminal outcome releases them', async () => {
+  for (const terminal of ['completed', 'failed', 'incomplete', 'cancelled']) {
+    const f = fixture()
+    await f.session.start()
+    const receive = f.instances[0].options.onEvent
+    receive({ type: 'session.delegation.created', delegation: { id: 'a' } })
+    receive({ type: 'response.event', delegation_id: 'a', event: { type: 'response.created' } })
+    receive({ type: 'response.event', delegation_id: 'b', event: { type: 'response.created' } })
+    f.tick(120000)
+    assert.equal(f.states.at(-1), 'connected')
+    receive({ type: 'response.event', delegation_id: 'a', event: { type: `response.${terminal}` } })
+    f.tick(120000)
+    assert.equal(f.states.at(-1), 'connected')
+    receive({ type: 'response.event', delegation_id: 'b', event: { type: `response.${terminal}` } })
+    f.tick(59000)
+    assert.equal(f.states.at(-1), 'connected')
+    f.tick()
+    await f.session.stop()
+    assert.equal(f.states.at(-1), 'standby')
+  }
+})
+
+test('response IDs correlate backend work when the delegation ID is omitted', async () => {
+  const f = fixture()
+  await f.session.start()
+  const receive = f.instances[0].options.onEvent
+  receive({ type: 'response.event', event: { type: 'response.created', response: { id: 'response_1' } } })
+  f.tick(120000)
+  assert.equal(f.states.at(-1), 'connected')
+  receive({ type: 'response.event', event: { type: 'response.completed', response: { id: 'response_1' } } })
+  f.tick(60000)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+})
+
+test('a terminal response without delegation_id still releases a correlated delegation', async () => {
+  const f = fixture()
+  await f.session.start()
+  const receive = f.instances[0].options.onEvent
+  receive({ type: 'session.delegation.created', delegation: { id: 'del_1', response_id: 'response_1' } })
+  receive({
+    type: 'response.event',
+    delegation_id: 'del_1',
+    event: { type: 'response.created', response: { id: 'response_1' } },
+  })
+  f.tick(120000)
+  assert.equal(f.states.at(-1), 'connected')
+  receive({ type: 'response.event', event: { type: 'response.completed', response: { id: 'response_1' } } })
+  f.tick(60000)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+})
+
+test('usage heartbeats do not keep an idle session open; transcript activity does', async () => {
+  const f = fixture()
+  await f.session.start()
+  f.tick(59000)
+  f.instances[0].options.onTranscript({ role: 'user', delta: 'hello' })
+  f.tick()
+  assert.equal(f.states.at(-1), 'connected')
+  f.instances[0].options.onEvent({ type: 'session.usage.updated', usage: { seconds: 90 } })
+  f.tick(59000)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+})
+
+test('standby resumes a fresh session with bounded RAM text, current settings and no replayed audio', async () => {
+  const f = fixture()
+  f.session.settings.instructions = 'Polish. Speaking style: calm.'
+  f.session.settings.voice = 'cedar'
+  f.session.settings.pitch = -4
+  f.session.settings.bargeIn = true
+  await f.session.start()
+  const old = f.instances[0].options
+  old.onTranscript({ role: 'user', delta: 'My order ' })
+  old.onTranscript({ role: 'user', delta: 'is 42.' })
+  old.onTranscript({ role: 'assistant', delta: 'I will remember.' })
+  f.tick(60000)
+  await f.session.stop()
+  await f.session.start()
+  const current = f.instances[1].options
+  assert.deepEqual(current.input, [
+    { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'My order is 42.' }] },
+    { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'I will remember.' }] },
+  ])
+  assert.equal(current.voice, old.voice)
+  assert.equal(current.pitch, old.pitch)
+  assert.equal(current.instructions, old.instructions)
+  assert.equal(current.bargeIn, old.bargeIn)
+  old.onTranscript({ role: 'user', delta: 'stale text' })
+  old.onEvent({ type: 'session.delegation.created', delegation: { id: 'stale_task' } })
+  assert.ok(!JSON.stringify(f.session.history).includes('stale text'))
+  f.tick(60000)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+  await f.session.start()
+  assert.deepEqual(f.instances[2].options.input, current.input, 'resume does not append the seed to itself')
+  for (let i = 0; i < 100; i++)
+    f.instances[2].options.onTranscript({ role: i % 2 ? 'assistant' : 'user', delta: `${i} ${'x'.repeat(1000)}` })
+  f.instances[2].options.onTranscript({ role: 'assistant', delta: 'y'.repeat(100000) })
+  f.tick(60000)
+  await f.session.stop()
+  await f.session.start()
+  const input = f.instances[3].options.input
+  assert.ok(input.length <= 6)
+  assert.ok(input.reduce((size, message) => size + message.content[0].text.length, 0) <= 2048)
+  assert.ok(input.at(-1).content[0].text.endsWith('y'.repeat(100)))
+  await f.session.stop()
+  assert.equal(f.session.history.length, 0, 'explicit stop clears the retained context')
+  await f.session.start()
+  assert.equal(f.instances[4].options.input, undefined)
+  await f.session.stop()
+})
+
+test('many short turns evict old fragments without merging distinct speakers', async () => {
+  const f = fixture()
+  await f.session.start()
+  for (let i = 0; i < 10; i++)
+    f.instances[0].options.onTranscript({ role: i % 2 ? 'assistant' : 'user', delta: `turn ${i}` })
+  assert.equal(f.session.history.length, 6)
+  assert.equal(f.session.history[0].text, 'turn 4')
+  assert.equal(f.session.history.at(-1).text, 'turn 9')
+  await f.session.stop()
+})
+
+test('idle timing survives monotonic tick wrap and a failed close reports error instead of standby', async () => {
+  const f = fixture()
+  f.tick(0xfffffff0)
+  await f.session.start()
+  f.tick(59000)
+  assert.equal(f.states.at(-1), 'connected')
+  const closing = f.closePending()
+  f.tick()
+  closing.resolve({ finalized: true })
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+  await f.session.start()
+  const failure = f.closePending()
+  f.tick(60000)
+  failure.resolve({ finalized: false, reason: 'close_timeout' })
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'error')
+  assert.equal(f.timers.size, 0)
+  assert.ok(f.events.includes('audio released'))
 })

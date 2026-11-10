@@ -93,6 +93,7 @@ struct LiveAudio {
 	atomic_uint micLevel, cleanLevel, referenceLevel;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
+    atomic_uint inputActivity;
 	atomic_int error;
 	bool taskStarted, txEnabled, rxEnabled;
 	uint32_t pts;
@@ -189,6 +190,10 @@ static void captureFrame(void *context, const int16_t *mic, const int16_t *ref, 
     atomic_store(&a->micLevel, m / count);
     atomic_store(&a->referenceLevel, r / count);
     atomic_store(&a->cleanLevel, c / count);
+    // Reuse the existing mean PCM level, after AEC/input gating. A conservative
+    // energy gate (200/32768) can keep a noisy room awake; it is not semantic VAD.
+    // Count frames so brief input between 1 Hz JS polls cannot disappear.
+    if (!atomic_load(&a->muted) && c / count >= 200) atomic_fetch_add(&a->inputActivity, 1);
     if (atomic_load(&a->muted)) memset(clean, 0, count * sizeof(int16_t));
     if (atomic_load(&a->reading)) {
         if (xStreamBufferSpacesAvailable(a->input) >= count * sizeof(int16_t))
@@ -430,6 +435,7 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
 	*s = (LiveAudioStats){atomic_load(&a->captured), atomic_load(&a->rendered), atomic_load(&a->underruns),
 		atomic_load(&a->overruns), atomic_load(&a->micLevel), atomic_load(&a->cleanLevel), atomic_load(&a->referenceLevel), atomic_load(&a->outputIdleMs), atomic_load(&a->silenceMs), atomic_load(&a->maxSilenceMs), atomic_load(&a->sourceSamples), atomic_load(&a->requestedRate), atomic_load(&a->requestedChannels), atomic_load(&a->sourceFrameBytes)};
 	s->audibleMs = atomic_load(&a->audibleMs);
+    s->inputActivity = atomic_load(&a->inputActivity);
 }
 
 void xs_io_audio_levels(xsMachine *the) {
