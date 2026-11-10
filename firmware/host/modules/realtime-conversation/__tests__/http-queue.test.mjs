@@ -60,3 +60,31 @@ test('expired queued jobs never start and timer allocation failures do not poiso
     [974, 990],
   )
 })
+
+test('cancellation stops active HTTPS work and prevents canceled queued jobs from starting', async () => {
+  let cancelActive,
+    starts = 0
+  const replies = []
+  const queue = createHttpQueue({
+    execute: (_request, setCancel) =>
+      new Promise((resolve) => {
+        starts++
+        setCancel(() => {
+          cancelActive = true
+          resolve({ status: 200 })
+        })
+      }),
+    post: (message) => replies.push(message),
+    schedule() {},
+    elapsed: () => 0,
+  })
+  const first = queue({ id: 1, started: 0, request: { timeoutMs: 1000 } })
+  const second = queue({ id: 2, started: 0, request: { timeoutMs: 1000 } })
+  await new Promise(setImmediate)
+  queue({ id: 2, cancel: true })
+  queue({ id: 1, cancel: true })
+  await Promise.all([first, second])
+  assert.equal(cancelActive, true)
+  assert.equal(starts, 1)
+  assert.deepEqual(replies, [])
+})

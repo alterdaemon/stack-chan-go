@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Shinya Ishikawa
 // SPDX-License-Identifier: Apache-2.0
 // Standard ECMA-419 HTTP callbacks, bounded response and deterministic close.
-export function requestHttps(request, platform) {
+export function requestHttps(request, platform, setCancel = () => {}) {
   return new Promise((resolve, reject) => {
     let client,
       timer,
@@ -9,6 +9,7 @@ export function requestHttps(request, platform) {
       offset = 0,
       received = 0,
       status,
+      location,
       finished = false
     let body = request.body
     function finish(error) {
@@ -26,10 +27,12 @@ export function requestHttps(request, platform) {
         if (error) {
           buffer = undefined
           reject(error)
-        } else resolve({ status, body: buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer() })
+        } else resolve({ status, location, body: buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer() })
       }, 0)
     }
     try {
+      setCancel(() => finish(new Error('HTTPS request cancelled')))
+      if (finished) return
       const headers = new Map(request.headers)
       headers.set('content-length', String(body.byteLength))
       headers.set('connection', 'close')
@@ -49,6 +52,8 @@ export function requestHttps(request, platform) {
         onHeaders(code, responseHeaders) {
           if (finished) return
           status = code
+          const value = responseHeaders.get('location')
+          if (typeof value === 'string' && value.length <= 4096) location = value
           if (Number(responseHeaders.get('content-length')) > 131072) finish(new Error('HTTPS response exceeds limit'))
         },
         onWritable(count) {

@@ -14,6 +14,8 @@ export const PREFERENCE_KEYS = [
   'tts.volume',
   'ai.token',
   'ai.context',
+  'openailive.mode',
+  'openailive.realtimeVoice',
   'openailive.backendModel',
   'openailive.reasoningEffort',
   'openailive.bargeIn',
@@ -45,6 +47,8 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   'ai.token': '',
   'ai.context': '',
   // Populated by the device, including its firmware defaults.
+  'openailive.mode': 'live',
+  'openailive.realtimeVoice': 'marin',
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',
   'openailive.bargeIn': '0',
@@ -62,6 +66,7 @@ export const isPreferenceKey = (value: string): value is PreferenceKey =>
   (PREFERENCE_KEYS as readonly string[]).includes(value)
 export {
   OPENAI_LIVE_VOICES,
+  OPENAI_REALTIME_VOICES,
   OPENAI_LIVE_STYLES,
   OPENAI_LIVE_PITCH_MIN,
   OPENAI_LIVE_PITCH_MAX,

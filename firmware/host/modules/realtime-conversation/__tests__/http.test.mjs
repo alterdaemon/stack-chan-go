@@ -243,7 +243,7 @@ test('caller deadlines include Worker delivery/queue time; late replies cannot s
   await assert.rejects(a, /timed out/)
   const b = f.post()
   f.worker.onmessage({ id: f.sent[0].id, status: 200, body: encode('late') })
-  f.worker.onmessage({ id: f.sent[1].id, error: 'socket failed' })
+  f.worker.onmessage({ id: f.sent.at(-1).id, error: 'socket failed' })
   await assert.rejects(b, /socket failed/)
 })
 test('IPC and request capacity failures reject without creating an unbounded queue', async () => {
@@ -315,4 +315,50 @@ test('streamed overflow rejects after earlier fragments were accepted', async ()
   f.cb.onReadable.call(f.context, 1)
   await assert.rejects(f.promise, /limit/)
   assert.equal(f.closes, 1)
+})
+
+test('cancellation reaches the worker and a late response cannot settle the next job', async () => {
+  const f = proxyFixture()
+  const first = f.post()
+  first.cancel()
+  await assert.rejects(first, /cancelled/)
+  assert.deepEqual(f.sent[1], { id: f.sent[0].id, cancel: true })
+  const second = f.post()
+  f.worker.onmessage({ id: f.sent[0].id, status: 201, body: encode('late') })
+  f.worker.onmessage({
+    id: f.sent.at(-1).id,
+    status: 201,
+    location: '/v1/realtime/calls/rtc_test',
+    body: encode('sdp'),
+  })
+  assert.equal((await second).location, '/v1/realtime/calls/rtc_test')
+  assert.equal(await (await second).text(), 'sdp')
+})
+
+test('canceling an active HTTPS request closes its socket exactly once', async () => {
+  let stop
+  let closes = 0
+  const request = requestHttps(
+    post(),
+    {
+      createClient: () => ({
+        request() {},
+        close() {
+          closes++
+        },
+      }),
+      schedule: (fn, ms) => {
+        if (!ms) queueMicrotask(fn)
+        return 1
+      },
+      cancel() {},
+    },
+    (cancel) => {
+      stop = cancel
+    },
+  )
+  stop()
+  stop()
+  await assert.rejects(request, /cancelled/)
+  assert.equal(closes, 1)
 })

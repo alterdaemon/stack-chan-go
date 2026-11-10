@@ -34,6 +34,19 @@ export const OPENAI_LIVE_VOICES: readonly string[] = Object.freeze([
   'willow',
 ])
 export const OPENAI_LIVE_STYLES: readonly string[] = Object.freeze(['default', 'calm', 'expressive'])
+// https://developers.openai.com/api/docs/guides/realtime-conversations#voice-options
+export const OPENAI_REALTIME_VOICES: readonly string[] = Object.freeze([
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'sage',
+  'shimmer',
+  'verse',
+  'marin',
+  'cedar',
+])
 export const OPENAI_LIVE_PITCH_MIN = -6
 export const OPENAI_LIVE_PITCH_MAX = 6
 export const OPENAI_LIVE_STANDBY_MIN = 1
@@ -46,6 +59,8 @@ export function isLivePitch(value: unknown): boolean {
 }
 
 export function isLiveVoicePreference(prop: string, value: unknown): boolean {
+  if (prop === 'openailive.mode') return value === 'live' || value === 'realtime'
+  if (prop === 'openailive.realtimeVoice') return typeof value === 'string' && OPENAI_REALTIME_VOICES.includes(value)
   if (prop === 'openailive.standbySeconds') {
     if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return false
     const seconds = Number(value)

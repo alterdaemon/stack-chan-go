@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ToolRunner from 'realtimeConversation/tools'
+import { createWebSearchTool } from 'realtimeConversation/web-search'
 
 const ENDPOINT = 'https://api.openai.com/v1/live/sessions'
+const REALTIME_ENDPOINT = 'https://api.openai.com/v1/realtime/calls'
 
 export class ConversationError extends Error {
   constructor(message, code, stage, status) {
@@ -72,6 +74,15 @@ export default class Conversation {
   #tools
   #signaling
   #toolTimeout
+  #realtime = false
+  #callId
+  #signalRequest
+  #activeResponse
+  #continuation
+  #continuationTimer
+  #continuationAttempts = 0
+  #sentContinuation
+  #continuationInFlight = false
 
   constructor(options, platform) {
     if (!options || (!options.signaling && (typeof options.apiKey !== 'string' || !options.apiKey.trim())))
@@ -96,8 +107,11 @@ export default class Conversation {
     if (options.pitch !== undefined && (!Number.isInteger(options.pitch) || options.pitch < -6 || options.pitch > 6))
       throw new RangeError('pitch must be an integer between -6 and 6 semitones')
     this.#key = options.apiKey
+    this.#realtime = options.mode === 'realtime'
+    if (options.mode !== undefined && options.mode !== 'live' && !this.#realtime) throw new TypeError('Invalid mode')
+    if (this.#realtime && options.signaling) throw new TypeError('Realtime requires apiKey')
     this.#options = {
-      model: options.model ?? 'gpt-live-1',
+      model: this.#realtime ? 'gpt-realtime-2.1-mini' : (options.model ?? 'gpt-live-1'),
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
       pitch: options.pitch ?? 0,
@@ -113,17 +127,24 @@ export default class Conversation {
     for (const name of ['model', 'instructions', 'voice'])
       if (typeof this.#options[name] !== 'string') throw new TypeError(`invalid ${name}`)
     this.#platform = platform
-    this.#toolTimeout = options.toolTimeout
+    this.#toolTimeout = options.toolTimeout ?? (this.#realtime ? 50000 : undefined)
     if (options.tools !== undefined && !Array.isArray(options.tools)) throw new TypeError('Invalid tools')
-    if (options.tools?.length) {
-      if (this.#options.delegation?.type !== 'responses') throw new TypeError('Tools require Responses delegation')
-      this.#tools = new ToolRunner(options.tools, {
+    const tools =
+      this.#realtime && options.search
+        ? [createWebSearchTool({ ...options.search, apiKey: this.#key, fetch: platform.fetch })]
+        : options.tools
+    if (tools?.length) {
+      if (!this.#realtime && this.#options.delegation?.type !== 'responses')
+        throw new TypeError('Tools require Responses delegation')
+      this.#tools = new ToolRunner(tools, {
         platform,
-        timeout: options.toolTimeout,
+        timeout: this.#toolTimeout,
         send: (event) => this.#send(event),
         onError: (error) => this.#fail(error),
         onResult: (result) => this.#notify('onToolResult', result),
+        protocol: this.#realtime ? 'realtime' : 'live',
       })
+      if (this.#realtime) return
       const backend = this.#options.delegation.responses
       const definitions = backend.tools ?? []
       const names = new Set(definitions.filter((tool) => tool.type === 'function').map((tool) => tool.name))
@@ -180,10 +201,16 @@ export default class Conversation {
     try {
       this.#transport = this.#platform.createTransport((event) => this.#receive(event))
       this.#transport.setVolume(this.#volume)
+      // Realtime must acknowledge the requested prompt before receiving speech.
+      if (this.#realtime) this.#transport.setMuted(true)
       this.#connectTimer = this.#after(60000, () =>
         this.#fail(new ConversationError('Session startup timed out', 'connect_timeout', 'connect')),
       )
-      this.#transport.start({ bargeIn: this.#options.bargeIn, pitch: this.#options.pitch })
+      this.#transport.start({
+        bargeIn: this.#options.bargeIn,
+        pitch: this.#options.pitch,
+        ...(this.#realtime ? { realtime: true } : {}),
+      })
     } catch (error) {
       this.#fail(error)
     }
@@ -203,6 +230,11 @@ export default class Conversation {
     this.#tools?.close()
     this.#connection?.reject(new ConversationError('Connection cancelled', 'cancelled', 'connect'))
     this.#setState('closing')
+    if (this.#realtime) {
+      this.#signalRequest?.cancel?.()
+      void this.#finish({ finalized: !this.#signaled, reason: 'client_request' })
+      return this.#closing.promise
+    }
     if (!this.#signaled) {
       void this.#finish({ finalized: true, reason: 'not_started' })
     } else {
@@ -229,6 +261,11 @@ export default class Conversation {
       return Promise.reject(new ConversationError('Session is not connected', 'not_connected', 'mute'))
     if (this.#mute) return Promise.reject(new ConversationError('A mute command is pending', 'command_pending', 'mute'))
     if (value === this.#muted) return Promise.resolve()
+    if (this.#realtime) {
+      this.#transport.setMuted(value)
+      this.#muted = value
+      return Promise.resolve()
+    }
     const pending = { ...deferred(), value, id: `mute_${++this.#eventID}` }
     this.#mute = pending
     try {
@@ -263,6 +300,35 @@ export default class Conversation {
           },
         )
         if (!response) return
+      } else if (this.#realtime) {
+        const session = JSON.stringify({
+          type: 'realtime',
+          model: options.model,
+          instructions: options.instructions,
+          audio: {
+            input: {
+              turn_detection: this.#turnDetection(),
+            },
+            output: { voice: options.voice },
+          },
+          tools: this.#tools?.definitions ?? [],
+        })
+        // Pick a boundary absent from both fields, including user instructions.
+        let boundary = 'stackchan_realtime'
+        while (session.includes(boundary) || sdp.includes(boundary)) boundary += '_'
+        const body = `--${boundary}\r\nContent-Disposition: form-data; name="sdp"\r\nContent-Type: application/sdp\r\n\r\n${sdp}\r\n--${boundary}\r\nContent-Disposition: form-data; name="session"\r\nContent-Type: application/json\r\n\r\n${session}\r\n--${boundary}--\r\n`
+        this.#signaled = true
+        this.#signalRequest = this.#platform.fetch(REALTIME_ENDPOINT, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${key}`, 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+          body,
+        })
+        response = await this.#signalRequest
+        const location = response.location ?? response.headers?.get?.('location')
+        const match =
+          typeof location === 'string' &&
+          /^(?:https:\/\/api\.openai\.com)?\/v1\/realtime\/calls\/([a-zA-Z0-9_-]{1,256})$/.exec(location)
+        if (match) this.#callId = match[1]
       } else {
         this.#signaled = true
         response = await this.#platform.fetch(ENDPOINT, {
@@ -282,7 +348,18 @@ export default class Conversation {
         })
       }
       const text = await response.text()
-      if (response.status !== 201) {
+      if (this.#realtime && response.ok) {
+        if (this.#finishing || this.#result || this.#state === 'closing') {
+          if (this.#callId) await this.#hangup(this.#callId, key)
+          return
+        }
+        if (typeof text !== 'string' || !text.startsWith('v=0') || text.length > 65536)
+          throw new ConversationError('Missing SDP answer', 'invalid_sdp', 'signaling')
+        if (!this.#callId) throw new ConversationError('Missing call ID', 'invalid_session', 'signaling')
+        this.#transport.acceptAnswer(text)
+        return
+      }
+      if (response.status !== 201 || this.#realtime) {
         const error = new ConversationError(
           `Live session creation failed (HTTP ${response.status})`,
           'http_error',
@@ -324,6 +401,7 @@ export default class Conversation {
     } catch (error) {
       if (!this.#finishing && !this.#result) this.#fail(error)
     } finally {
+      this.#signalRequest = undefined
       this.#signalPending = false
     }
   }
@@ -352,6 +430,68 @@ export default class Conversation {
         throw new ConversationError('Invalid event', 'invalid_event', 'events')
       this.#tools?.receive(message)
       switch (message.type) {
+        case 'input_audio_buffer.speech_started':
+          if (this.#realtime && this.#options.bargeIn) {
+            this.#tools?.cancelPending()
+            this.#continuation = undefined
+            this.#sentContinuation = undefined
+          }
+          break
+        case 'response.created':
+          if (this.#realtime) {
+            this.#activeResponse = message.response?.id
+            this.#continuationInFlight = false
+          }
+          break
+        case 'session.created':
+        case 'session.updated':
+          if (!this.#realtime) break
+          if (this.#ready) break
+          if (typeof message.session?.id !== 'string' || !message.session.id)
+            throw new ConversationError('Missing session ID', 'invalid_session', 'events')
+          this.#sessionId = message.session.id
+          const turn = message.session.audio?.input?.turn_detection
+          if (
+            turn?.type !== 'server_vad' ||
+            turn.threshold !== this.#turnDetection().threshold ||
+            turn.create_response !== true ||
+            turn.interrupt_response !== this.#options.bargeIn ||
+            message.session.instructions !== this.#options.instructions
+          ) {
+            if (message.type === 'session.updated')
+              throw new ConversationError('Realtime session configuration mismatch', 'configuration_mismatch', 'events')
+            this.#send({
+              type: 'session.update',
+              event_id: 'realtime_setup',
+              session: {
+                type: 'realtime',
+                instructions: this.#options.instructions,
+                audio: {
+                  input: {
+                    turn_detection: this.#turnDetection(),
+                  },
+                },
+              },
+            })
+            break
+          }
+          this.#ready = true
+          this.#transport.setMuted(this.#muted)
+          this.#cancelTimer(this.#connectTimer)
+          this.#setState('connected')
+          this.#connection.resolve({ id: this.#sessionId })
+          break
+        case 'response.output_audio_transcript.delta':
+          if (this.#realtime && typeof message.delta === 'string')
+            this.#notify('onTranscript', { role: 'assistant', delta: message.delta })
+          break
+        case 'response.done':
+          if (this.#realtime) {
+            if (message.response?.usage) this.#usage = { ...message.response.usage }
+            if (message.response?.id === this.#activeResponse) this.#activeResponse = undefined
+            if (this.#continuation && !this.#activeResponse) this.#continueResponse()
+          }
+          break
         case 'session.started':
           if (message.session?.id !== this.#sessionId)
             throw new ConversationError('Session ID mismatch', 'session_mismatch', 'events')
@@ -399,6 +539,30 @@ export default class Conversation {
           break
         }
         case 'error': {
+          if (
+            this.#realtime &&
+            this.#sentContinuation &&
+            message.error?.code === 'conversation_already_has_active_response' &&
+            message.error?.event_id === this.#sentContinuation?.event_id &&
+            this.#continuationAttempts < 3
+          ) {
+            // VAD can start a response before response.created reaches the device.
+            // Retry only our continuation; never resend the function result.
+            this.#cancelTimer(this.#continuationTimer)
+            this.#continuationInFlight = false
+            this.#continuation ??= this.#sentContinuation
+            this.#continuationTimer = this.#after(250, () => this.#continueResponse())
+            break
+          }
+          if (
+            this.#realtime &&
+            this.#options.bargeIn &&
+            !this.#sentContinuation &&
+            message.error?.code === 'conversation_already_has_active_response' &&
+            typeof message.error?.event_id === 'string' &&
+            message.error.event_id.startsWith('tool_continue_')
+          )
+            break
           const error = attachErrorMetadata(
             new ConversationError(
               message.error?.message ?? 'Live command rejected',
@@ -424,8 +588,36 @@ export default class Conversation {
     }
   }
 
+  #turnDetection() {
+    return {
+      type: 'server_vad',
+      // Use a more sensitive VAD threshold when interruption is enabled.
+      threshold: this.#options.bargeIn ? 0.3 : 0.5,
+      create_response: true,
+      interrupt_response: this.#options.bargeIn,
+    }
+  }
   #send(message) {
+    if (this.#realtime && message.type === 'response.create') {
+      this.#continuation = message
+      this.#continuationAttempts = 0
+      this.#continueResponse()
+      return
+    }
     this.#transport.send(JSON.stringify(message))
+  }
+  #continueResponse() {
+    if (!this.#continuation || this.#activeResponse || this.#continuationInFlight || this.#state !== 'connected') return
+    const message = this.#continuation
+    this.#continuation = undefined
+    this.#sentContinuation = message
+    this.#continuationInFlight = true
+    this.#continuationAttempts++
+    try {
+      this.#transport.send(JSON.stringify(message))
+    } catch (error) {
+      this.#fail(error)
+    }
   }
   #sendClose() {
     if (this.#closeSent) return
@@ -458,8 +650,10 @@ export default class Conversation {
         await this.#signaling.hangup(id)
         return
       }
-      const response = await this.#platform.fetch(`${ENDPOINT}/${encodeURIComponent(id)}/hangup`, {
+      const endpoint = this.#realtime ? REALTIME_ENDPOINT : ENDPOINT
+      const response = await this.#platform.fetch(`${endpoint}/${encodeURIComponent(id)}/hangup`, {
         method: 'POST',
+        ...(this.#realtime ? { timeoutMs: 3000 } : {}),
         headers: { Authorization: `Bearer ${key}` },
         body: '',
       })
@@ -469,21 +663,32 @@ export default class Conversation {
           'onError',
           new ConversationError('Session hangup was not confirmed', 'hangup_failed', 'close', response.status),
         )
+      return response.ok
     } catch {
       this.#notify('onError', new ConversationError('Session hangup was not confirmed', 'hangup_failed', 'close'))
+      return false
     }
   }
   async #finish(result, failed = false) {
     if (this.#finishing || this.#result) return
     this.#finishing = true
     this.#tools?.close()
+    this.#signalRequest?.cancel?.()
+    this.#continuation = undefined
+    this.#sentContinuation = undefined
     for (const timer of this.#timers) this.#platform.clearTimeout(timer)
     this.#timers.clear()
     this.#rejectMute(new ConversationError('Session ended', 'closed', 'mute'))
     this.#connection?.reject(new ConversationError('Session ended before startup', 'closed', 'connect'))
     const transport = this.#transport
     this.#transport = undefined
-    if ((!result.finalized || this.#signaling) && this.#sessionId) void this.#hangup(this.#sessionId, this.#key)
+    if (this.#realtime) transport?.quiesce?.()
+    const hangup = this.#realtime && this.#callId ? this.#hangup(this.#callId, this.#key) : undefined
+    // Keep silent media clocks running while the peer ends its stream. Live
+    // already reaches teardown after session.closed or its grace deadline.
+    const confirmed = hangup ? await hangup : undefined
+    if (!this.#realtime && (!result.finalized || this.#signaling) && this.#sessionId)
+      void this.#hangup(this.#sessionId, this.#key)
     try {
       await transport?.close()
       this.#stats = transport?.stats
@@ -491,6 +696,12 @@ export default class Conversation {
       failed = true
       result = { ...result, finalized: false, reason: 'cleanup_error' }
       this.#notify('onError', error)
+    }
+    if (hangup) {
+      if (!failed && result.reason === 'client_request')
+        result = { ...result, finalized: confirmed, reason: confirmed ? 'client_request' : 'hangup_failed' }
+    } else if (this.#realtime && !result.finalized && result.reason === 'client_request') {
+      result = { ...result, reason: 'close_timeout' }
     }
     this.#key = undefined
     this.#result = result

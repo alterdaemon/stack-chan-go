@@ -7,7 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static atomic_uint ioMax[2], aecMax, aecCount;
+static atomic_uint ioMax[2], ioCount[2], aecMax, aecCount;
 static int64_t ioLast[2], uiLast;
 static unsigned uiMax, uiCount;
 static int64_t frameAt;
@@ -34,9 +34,11 @@ static const int16_t *input;
 static unsigned inputCount, inputOffset;
 static int64_t inputAt;
 static atomic_bool injecting;
+static atomic_bool syntheticMic;
+void xs_live_probe_synthetic_mic(xsMachine *the) { atomic_store(&syntheticMic, xsmcToBoolean(xsArg(0))); }
 static atomic_uint injectedSamples, inputPeak, sentPeak, sentSamples, probeUntil;
 void stackchanAudioReset(void) {
-    for (int i = 0; i < 2; i++) { ioLast[i] = 0; atomic_store(&ioMax[i], 0); }
+    for (int i = 0; i < 2; i++) { ioLast[i] = 0; atomic_store(&ioMax[i], 0); atomic_store(&ioCount[i], 0); }
     atomic_store(&aecMax, 0); atomic_store(&aecCount, 0);
     atomic_store(&injecting, false);
     atomic_store(&injectedSamples, 0); atomic_store(&inputPeak, 0);
@@ -44,6 +46,7 @@ void stackchanAudioReset(void) {
 }
 void stackchanAudioProgress(unsigned direction, int64_t at) {
     if (direction > 1) return;
+    atomic_fetch_add(&ioCount[direction], 1);
     unsigned gap = ioLast[direction] ? at - ioLast[direction] : 0;
     ioLast[direction] = at;
     if (gap > atomic_load(&ioMax[direction])) atomic_store(&ioMax[direction], gap);
@@ -58,7 +61,7 @@ void xs_io_reset(xsMachine *the) {
     atomic_store(&mainReady, 0); atomic_store(&mainBlocked, 0);
     atomic_store(&spiReady, 0); atomic_store(&spiBlocked, 0);
     for (unsigned i = 0; i < 8; i++) atomic_store(&running[i], 0);
-    for (int i = 0; i < 2; i++) atomic_store(&ioMax[i], 0);
+    for (int i = 0; i < 2; i++) { atomic_store(&ioMax[i], 0); atomic_store(&ioCount[i], 0); }
     atomic_store(&aecMax, 0); atomic_store(&aecCount, 0);
 }
 void xs_live_probe_input(xsMachine *the) {
@@ -66,12 +69,14 @@ void xs_live_probe_input(xsMachine *the) {
     void *data; xsUnsignedValue bytes;
     xsmcGetBufferReadable(xsArg(0), &data, &bytes);
     input = data; inputCount = bytes / 2; inputOffset = 0;
-    inputAt = -1; // The I2S task starts the clip two seconds after real playback begins.
+    inputAt = (xsmcArgc > 1 && xsmcToBoolean(xsArg(1))) ? esp_timer_get_time() : -1;
+    // Default: start two seconds after playback; optional immediate injection tests silence VAD.
     atomic_store(&injecting, true);
 }
 // Device test only: add a known voice clip before AEC, with real playback
 // reference and real encoding/networking. This is not an acoustic mic test.
 void stackchanProbeInput(int16_t *samples, unsigned count, unsigned playbackLevel) {
+    if (atomic_load(&syntheticMic)) for (unsigned i = 0; i < count; i++) samples[i * 2] = 0;
     if (!atomic_load(&injecting)) return;
     int64_t now = esp_timer_get_time();
     if (inputAt < 0) {
@@ -121,6 +126,7 @@ void xs_io_stats(xsMachine *the) {
     SET("runEncoder", atomic_load(&running[2])); SET("runSend", atomic_load(&running[3]));
     SET("runPeer", atomic_load(&running[4])); SET("runDecoder", atomic_load(&running[5]));
     SET("runRenderer", atomic_load(&running[6])); SET("runOther", atomic_load(&running[7]));
+    SET("ioWrites", atomic_load(&ioCount[0])); SET("ioReads", atomic_load(&ioCount[1]));
     SET("uiMaxUs", uiMax); SET("uiTicks", uiCount);
     SET("writeMaxUs", atomic_load(&ioMax[0])); SET("readMaxUs", atomic_load(&ioMax[1]));
     SET("aecMaxUs", atomic_load(&aecMax)); SET("aecCalls", atomic_load(&aecCount));

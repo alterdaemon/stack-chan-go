@@ -15,8 +15,9 @@ export default class ToolRunner {
   #closed = false
   #serial = 0
   #timeout
+  #protocol
 
-  constructor(tools, { platform, send, onError, onResult, timeout = 30000 }) {
+  constructor(tools, { platform, send, onError, onResult, timeout = 30000, protocol = 'live' }) {
     if (!Array.isArray(tools) || tools.length > 32) throw new TypeError('Invalid tools')
     if (!Number.isFinite(timeout) || timeout <= 0) throw new RangeError('Invalid tool timeout')
     this.#tools = new Map()
@@ -38,7 +39,7 @@ export default class ToolRunner {
           name: tool.name,
           description: tool.description ?? '',
           parameters: tool.parameters,
-          strict: tool.strict ?? true,
+          ...(protocol === 'realtime' ? {} : { strict: tool.strict ?? true }),
         }),
       )
     })
@@ -47,9 +48,16 @@ export default class ToolRunner {
     this.#error = onError
     this.#notify = onResult
     this.#timeout = timeout
+    this.#protocol = protocol
   }
 
   receive(envelope) {
+    if (this.#protocol === 'realtime') {
+      let event = envelope
+      if (event.type === 'response.done')
+        event = { ...event, type: event.response?.status === 'completed' ? 'response.completed' : 'response.cancelled' }
+      envelope = { type: 'response.event', delegation_id: 'realtime', event }
+    }
     if (this.#closed || envelope.type !== 'response.event') return
     const event = envelope.event,
       delegation = envelope.delegation_id
@@ -87,11 +95,25 @@ export default class ToolRunner {
   }
 
   async #execute(response, call) {
+    const cancellations = new Set()
+    const cancelWork = () => {
+      for (const cancel of cancellations) {
+        try {
+          cancel()
+        } catch {}
+      }
+      cancellations.clear()
+    }
     const context = {
       callId: call.callId,
       responseId: response.id,
       delegationId: response.delegation,
       isCancelled: () => this.#closed || response.cancelled || timedOut,
+      onCancel: (cancel) => {
+        if (context.isCancelled()) cancel()
+        else cancellations.add(cancel)
+        return () => cancellations.delete(cancel)
+      },
     }
     let timer,
       finish,
@@ -99,9 +121,14 @@ export default class ToolRunner {
     const stop = new Promise((resolve) => {
       finish = resolve
     })
-    response.waits.add(finish)
+    const cancelExecution = () => {
+      cancelWork()
+      finish({ error: 'tool_cancelled' })
+    }
+    response.waits.add(cancelExecution)
     timer = this.#platform.setTimeout(() => {
       timedOut = true
+      cancelWork()
       finish({ error: 'tool_timeout' })
     }, this.#timeout)
     const operation = Promise.resolve().then(async () => {
@@ -129,7 +156,8 @@ export default class ToolRunner {
       return await Promise.race([operation, stop])
     } finally {
       this.#platform.clearTimeout(timer)
-      response.waits.delete(finish)
+      response.waits.delete(cancelExecution)
+      cancellations.clear()
     }
   }
 
@@ -143,7 +171,7 @@ export default class ToolRunner {
         const call = calls[i],
           result = results[i]
         this.#send({
-          type: 'response.item.create',
+          type: this.#protocol === 'realtime' ? 'conversation.item.create' : 'response.item.create',
           event_id: `tool_result_${++this.#serial}`,
           item: {
             type: 'function_call_output',
@@ -174,9 +202,12 @@ export default class ToolRunner {
     this.#responses.delete(response.id)
     if (this.#active.get(response.delegation) === response.id) this.#active.delete(response.delegation)
   }
+  cancelPending() {
+    for (const response of this.#responses.values()) this.#retire(response)
+  }
   close() {
     this.#closed = true
-    for (const response of this.#responses.values()) this.#retire(response)
+    this.cancelPending()
     this.#tools.clear()
     this.#seen.clear()
   }

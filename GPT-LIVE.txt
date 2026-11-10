@@ -1,6 +1,20 @@
-Fork Community v2.0.1: 2.0.1-r12 + zintegrowany GPT-Live (M5StackChan CoreS3).
+Fork Community v2.0.1: 2.0.1-r13 + GPT-Live 1 / GPT-Realtime 2.1 Mini (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.0.1).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
+R13: Ustawienia OpenAI udostepniaja wybor GPT-Live 1 / GPT-Realtime 2.1 Mini.
+Domyslnie GPT-Live 1; zmiana trybu i glosu dziala od nastepnego startu LIVE.
+Mini uzywa gpt-realtime-2.1-mini, serwerowego VAD i pozostaje polaczony w ciszy.
+Auto disconnect dotyczy tylko GPT-Live. Glos jest zapamietywany osobno dla trybow.
+Voice interruption pozostaje dostepne w obu trybach; zapisane On/Off jest zachowane.
+Mini On uzywa serwerowego VAD z czulszym progiem oraz wyzszego priorytetu lokalnego AEC.
+Klucz AI, instrukcje i glosnosc sa wspolne. W Mini Model / Thinking effort
+wybieraja backend wyszukiwania Responses, wywolywany tylko przez search_web.
+Mini przekazuje caly zapisany prompt jako opis postaci w zadaniu dialogowym; ustawienia pozostaja bez zmian.
+Mini otwiera mikrofon dopiero po potwierdzeniu przez API zgodnego system promptu.
+Wyszukiwanie laczy sie bezposrednio z OpenAI; nie wymaga wlasnego serwera.
+Walidacja i ograniczenia R13 (takze amend promptu): docs/release-notes/v2.0.1-r13.md.
+
+Historia poprzedniego wydania (R12):
 R12 follow-up (amend): okno UI 4 ms co 20 ms, 8 ms podczas dotyku.
 Kolejne 2 ms mniej niz w poprzednim kandydacie 6/10 ms; priorytety bez zmian.
 LIVE STOP wycisza lokalnie bez czekania na zadanie WebRTC. Limit czekania na
@@ -15,7 +29,7 @@ Stabilny punkt odniesienia wskazany przez uzytkownika: commit 82eb5d45,
 tag v2.0.1-r12 (bez zmian). Oryginalne BIN-y zachowane pod nazwami:
   StackChan-Community-v2.0.1-r12-GPT-Live-stable.bin
   StackChan-Community-v2.0.1-r12-GPT-Live-stable-app.bin
-Standardowe nazwy BIN-ow i komendy ponizej dotycza nowego wariantu 4/8 ms.
+Nazwy BIN-ow i komendy ponizej dotycza R13, z zachowanymi oknami UI 4/8 ms.
 
 Bazowy R12: tylko Interruption On: okno UI 8 ms co 20 ms, 12 ms podczas dotyku.
 UI i I2S maja priorytet 20; zaleznosc wyswietlacza SPI ma 21.
@@ -139,8 +153,8 @@ PAKOWANIE ISTNIEJACEJ KOMPILACJI (bez ponownego budowania)
 W tym samym aktywnym srodowisku, z katalogu projektu:
   python3 firmware/scripts/package-gpt-live-update.py
 Wynik w gpt-live-package/, zawsze dwa pliki z tej samej kompilacji:
-  StackChan-Community-v2.0.1-r12-GPT-Live.bin      - pelny obraz, 16 MiB
-  StackChan-Community-v2.0.1-r12-GPT-Live-app.bin  - sama aplikacja
+  StackChan-Community-v2.0.1-r13-GPT-Live.bin      - pelny obraz, 16 MiB
+  StackChan-Community-v2.0.1-r13-GPT-Live-app.bin  - sama aplikacja
 Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania obu BIN-ow.
 Pelny obraz zawiera bootloader, tabele partycji i aplikacje z biezacego builda.
 Pozostale bajty sa wypelnione 0xFF, w tym obszary NVS, xs i storage.
@@ -148,16 +162,16 @@ Skrypt nie zapisuje raportow ani plikow pomocniczych.
 
 Przed nowa edycja ustaw kolejny wolny numer REVISION w
 firmware/scripts/package-gpt-live-update.py oraz zaktualizuj nazwy i komendy
-w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r12; nastepna: r13.
+w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r13; nastepna: r14.
 Zachowuj poprzednie BIN-y. Skrypt odrzuca inna zawartosc pod istniejaca rewizja;
 ponowne pakowanie identycznych danych jest dozwolone.
 
 INSTALACJA (z katalogu projektu)
 Pelna instalacja / odtworzenie, zapis calego flash i wyczyszczenie danych:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live.bin
 
 Aktualizacja samej aplikacji, zachowuje pozostale partycje przy zgodnej mapie:
-  esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-size 16MB --flash-freq 80m 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live-app.bin
+  esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-size 16MB --flash-freq 80m 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live-app.bin
 Aktualizacja aplikacji tym poleceniem sama restartuje urzadzenie.
 Adres okresla miejsce zapisu w urzadzeniu, nie wybiera fragmentu pliku.
 Pelnego obrazu nie wolno wgrywac na 0x10000.

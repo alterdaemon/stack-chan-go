@@ -86,6 +86,7 @@ struct LiveAudio {
 	aec_handle_t *aec;
     LivePitch *pitch;
 	bool bargeIn;
+    UBaseType_t dspPriority;
 	atomic_bool stopping, done, reading, muted, quiesced;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
@@ -159,9 +160,10 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 				// Paired, planar frames arrive through the existing input FIFO.
 				if (readInput(a, (uint8_t *)mic, a->chunk * 4) != a->chunk * 4)
 					return ESP_CAPTURE_ERR_NOT_SUPPORTED;
-				// Only capture DSP shares XS/UI priority. I2S never waits for it.
+				// Mini capture DSP stays ahead of normal UI; Live keeps its policy.
+				// I2S remains independent and never waits for this processing.
 				UBaseType_t priority = uxTaskPriorityGet(NULL);
-				vTaskPrioritySet(NULL, 6);
+				vTaskPrioritySet(NULL, a->dspPriority);
 #ifdef MODDEF_STACKCHAN_LIVE_PROBE
                 int64_t began = esp_timer_get_time();
 #endif
@@ -332,7 +334,7 @@ static void audioTask(void *ctx)
 	vTaskDelete(NULL);
 }
 
-int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch)
+int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch, bool realtime)
 {
   atomic_store(&quiesceAudio, false);
   int err = stackchanMediaAdapter();
@@ -342,6 +344,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	LiveAudio *a = calloc(1, sizeof(*a));
 	if (!a) return ESP_ERR_NO_MEM;
 	*out = a;
+    a->dspPriority = realtime ? 7 : 6;
     a->stage = "pitch_open";
     if ((err = livePitchOpen(&a->pitch, pitch))) return err;
 	atomic_store(&a->volume, 512);

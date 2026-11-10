@@ -4,7 +4,7 @@
 declare module 'realtimeConversation' {
   export type ConversationState = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed' | 'error'
   export interface Usage {
-    seconds: number
+    seconds?: number
     [key: string]: unknown
   }
   export interface CloseResult {
@@ -15,8 +15,8 @@ declare module 'realtimeConversation' {
   export interface Transcript {
     role: 'user' | 'assistant'
     delta: string
-    start_ms: number
-    end_ms: number
+    start_ms?: number
+    end_ms?: number
   }
   export interface ConversationError extends Error {
     site?: string
@@ -31,6 +31,7 @@ declare module 'realtimeConversation' {
     responseId: string
     delegationId: string
     isCancelled(): boolean
+    onCancel(callback: () => void): () => void
   }
   export interface ConversationTool {
     name: string
@@ -48,6 +49,9 @@ declare module 'realtimeConversation' {
     error?: string
   }
   export interface ConversationOptions {
+    mode?: 'live' | 'realtime'
+    /** Responses backend used only when Realtime calls search_web. */
+    search?: { model: string; reasoningEffort?: string }
     apiKey?: string
     signaling?: {
       createSession(input: {
@@ -58,6 +62,7 @@ declare module 'realtimeConversation' {
       acceptSession?(result: { session: { id: string }; [key: string]: unknown }): void
       hangup(input: { sessionId: string }): Promise<void>
     }
+    /** Live model override; Realtime always uses gpt-realtime-2.1-mini. */
     model?: string
     voice?: string
     /** Local output pitch, integer semitones from -6 to 6. Zero bypasses DSP. */
@@ -70,7 +75,7 @@ declare module 'realtimeConversation' {
       content: { type: 'input_text' | 'output_text'; text: string }[]
     }[]
     /** Keep the microphone active with AEC during playback; defaults to false.
-     * GPT-Live handles yielding. This does not guarantee immediate playback stop. */
+     * The selected provider handles interruption; immediate playback stop is not guaranteed. */
     bargeIn?: boolean
     delegation?: Record<string, unknown>
     tools?: ConversationTool[]

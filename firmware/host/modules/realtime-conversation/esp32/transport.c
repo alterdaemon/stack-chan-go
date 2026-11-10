@@ -31,7 +31,7 @@ typedef struct {
 	atomic_bool stopping, done, muted;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
-	bool started, errorRead, captureOnly, bargeIn;
+	bool started, errorRead, captureOnly, bargeIn, realtime;
     int pitch;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
@@ -157,7 +157,7 @@ static void worker(void *ctx)
 	LiveAudio *audio = NULL;
 	esp_webrtc_media_provider_t provider = {0};
 	esp_capture_sink_handle_t probeSink = NULL;
-	int err = liveAudioOpen(&audio, &provider, t->bargeIn, t->pitch);
+	int err = liveAudioOpen(&audio, &provider, t->bargeIn, t->pitch, t->realtime);
 	if (err) { t->failureStage = liveAudioStage(audio); goto done; }
 	if (atomic_load(&t->stopping)) goto done;
 	if (t->captureOnly) {
@@ -278,13 +278,17 @@ void xs_live_transport_start(xsMachine *the)
 	}
 	t->captureOnly = xsmcArgc && xsmcToBoolean(xsArg(0));
 	t->bargeIn = xsmcArgc > 1 && xsmcToBoolean(xsArg(1));
+    t->realtime = xsmcArgc > 3 && xsmcToBoolean(xsArg(3));
     if (xsmcArgc > 2) {
         double pitch = xsmcToNumber(xsArg(2));
         if (!(pitch >= -6 && pitch <= 6) || pitch != (int)pitch) xsRangeError("Invalid pitch");
         t->pitch = (int)pitch;
     }
 	t->started = true;
-	if (xTaskCreatePinnedToCore(worker, "live_peer", 12288, t, 10, NULL, 1) != pdPASS) {
+    /* Realtime returns function results while media runs. Keep control below
+     * I2S (20) and encoder/sender (19); Live retains its existing priority. */
+    UBaseType_t controlPriority = t->realtime ? 18 : 10;
+	if (xTaskCreatePinnedToCore(worker, "live_peer", 12288, t, controlPriority, NULL, 1) != pdPASS) {
 		t->started = false;
 		xsUnknownError("No memory for WebRTC task");
 	}

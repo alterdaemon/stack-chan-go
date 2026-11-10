@@ -77,6 +77,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     if (!activeClient) return
     // A new device must advertise these fields before they become editable.
     for (const key of [
+      'openailive.mode',
+      'openailive.realtimeVoice',
       'openailive.backendModel',
       'openailive.reasoningEffort',
       'openailive.bargeIn',
@@ -91,6 +93,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     }
     setValues((current) => ({
       ...current,
+      'openailive.mode': 'live',
+      'openailive.realtimeVoice': 'marin',
       'openailive.backendModel': '',
       'openailive.reasoningEffort': '',
       'openailive.bargeIn': '0',
@@ -134,6 +138,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     if (
       readOnlyRef.current.has(key) ||
       ([
+        'openailive.mode',
+        'openailive.realtimeVoice',
         'openailive.bargeIn',
         'openailive.voice',
         'openailive.pitch',
@@ -229,6 +235,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     values,
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
+    modeAvailable: currentValues.current['openailive.mode'] !== undefined,
+    realtimeVoiceAvailable: currentValues.current['openailive.realtimeVoice'] !== undefined,
     bargeInAvailable: currentValues.current['openailive.bargeIn'] !== undefined,
     voiceAvailable: currentValues.current['openailive.voice'] !== undefined,
     pitchAvailable: currentValues.current['openailive.pitch'] !== undefined,

@@ -38,9 +38,10 @@ export function diagnostic(error, stage, site) {
   return result
 }
 
-export function formatLiveError(detail) {
+export function formatLiveError(detail, mode = 'live') {
   if (!detail) detail = { stage: 'unknown', code: 'missing_diagnostic', site: 'error_display' }
-  const lines = ['GPT-Live error R4', `${detail.stage}/${detail.code}`]
+  const label = mode === 'realtime' ? 'GPT-Realtime 2.1 Mini' : 'GPT-Live 1'
+  const lines = [`${label} error`, `${detail.stage}/${detail.code}`]
   if (detail.site) lines.push(detail.site)
   if (detail.kind) lines.push(detail.kind)
   if (detail.status) lines.push(`HTTP ${detail.status}`)
@@ -91,15 +92,25 @@ export class LiveSession {
       this.amp.sampleRate = 48000
       stage = 'configuration'
       site = 'session_options'
+      // Frame the configured persona as Mini's dialogue task, including its first greeting.
+      // Build this in RAM; the saved prompt and GPT-Live instructions stay unchanged.
+      const instructions =
+        this.settings.mode === 'realtime' && this.settings.instructions?.trim()
+          ? `# Task
+Write and speak ONLY the next line of dialogue for the assistant described below. The user is the other participant. Answer the actual user question accurately. If a character or style is specified, this is a consensual performance and every line must embody it, including greetings.
+# Assistant specification
+${this.settings.instructions}`
+          : this.settings.instructions
       const options = {
+        mode: this.settings.mode,
         apiKey: this.settings.apiKey,
         model: this.settings.model,
         voice: this.settings.voice,
         pitch: this.settings.pitch ?? 0,
         bargeIn: this.settings.bargeIn === true,
         instructions: this.settings.bargeIn
-          ? `${this.settings.instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
-          : this.settings.instructions,
+          ? `${instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
+          : instructions,
         input: this.history.length
           ? this.history.map(({ role, text }) => ({
               type: 'message',
@@ -133,12 +144,22 @@ export class LiveSession {
         },
         onTranscript: (fragment) => {
           if (this.active !== entry || entry.cancelled) return
+          if (this.settings.mode === 'realtime') return
           // Only the robot's words renew standby. Microphone noise, incoming
           // speech, silent RTP and usage heartbeats cannot keep LIVE open.
           if (fragment.role === 'assistant' && fragment.delta?.trim()) this.armStandby(entry)
           this.remember(fragment)
         },
         onEvent: (event) => this.receive(entry, event),
+      }
+      if (this.settings.mode === 'realtime') {
+        // Realtime owns its conversation remotely; never feed GPT-Live's RAM tail.
+        delete options.input
+        delete options.delegation
+        options.search = {
+          model: this.settings.backendModel ?? 'gpt-6.1-terra',
+          reasoningEffort: this.settings.reasoningEffort,
+        }
       }
       site = 'session_ctor'
       const conversation = new this.Conversation(options)
@@ -211,6 +232,7 @@ export class LiveSession {
   armStandby(entry) {
     if (entry.idleTimer !== undefined) this.Timer.clear(entry.idleTimer)
     entry.idleTimer = undefined
+    if (this.settings.mode === 'realtime') return
     if (this.active !== entry || entry.cancelled || !entry.connected || entry.backend.size) return
     // One deadline. Pause only for a pending Responses request; start a full
     // interval when the last request ends. No audio statistics or VAD polling.
@@ -239,7 +261,7 @@ export class LiveSession {
         // The native transport has been released when close() resolves. Both
         // STOP and standby describe local shutdown; missing remote confirmation
         // remains a diagnostic. Earlier failures and cleanup errors stay errors.
-        if (!['close_timeout', 'connection_lost', 'transport_error'].includes(result.reason))
+        if (!['close_timeout', 'connection_lost', 'transport_error', 'hangup_failed'].includes(result.reason))
           entry.failure = 'error'
         entry.diagnostic ??= diagnostic({ code: result.reason }, 'close', 'native_close')
       }

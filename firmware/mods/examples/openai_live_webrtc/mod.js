@@ -126,7 +126,12 @@ export function onContextCreated(robot) {
     if (liveButton) {
       if (notices[state]) liveButton.delegate('onLiveNotice', notices[state])
     } else {
-      robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state])
+      const label = session.settings.mode === 'realtime' ? 'GPT-Realtime 2.1 Mini' : 'GPT-Live 1'
+      robot.ui.showBalloon(
+        state === 'error'
+          ? formatLiveError(detail, session.settings.mode)
+          : messages[state]?.replace('GPT-Live', label),
+      )
     }
     statusTimer = Timer.set(
       () => {
@@ -208,7 +213,7 @@ export function onContextCreated(robot) {
   }
   drawer.addDrawerButton({
     key: SESSION,
-    label: 'GPT-Live',
+    label: 'OpenAI LIVE',
     kind: 'toggle',
     initialState: false,
     callback: toggleLive,

@@ -39,6 +39,7 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
         options?.captureOnly === true,
         options?.bargeIn === true,
         options?.pitch ?? 0,
+        options?.realtime === true,
       )
     }
     acceptAnswer(sdp) {
@@ -53,8 +54,7 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
       this.#outgoingBytes += bytes
       // Stop local audio promptly on an explicit close, while DTLS/DataChannel
       // remain alive to receive final usage and session.closed.
-      if (data.includes('"session.close"') && JSON.parse(data).type === 'session.close')
-        this.quiesce()
+      if (data.includes('"session.close"') && JSON.parse(data).type === 'session.close') this.quiesce()
       this.#flush()
     }
     quiesce() {

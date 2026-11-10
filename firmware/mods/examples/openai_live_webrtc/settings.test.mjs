@@ -78,6 +78,7 @@ test('saved credentials and context are read afresh; deleting the key disables s
   const defaults = { apiKey: '', instructions: 'default', volume: 0.1 }
   const read = () => readLiveSettings(defaults, (domain, key) => values.get(`${domain}.${key}`))
   assert.deepEqual(read(), {
+    mode: 'live',
     apiKey: 'saved-key',
     instructions: 'Krótko po polsku.',
     volume: 0.35,
@@ -177,4 +178,28 @@ test('voice, pitch and style reload saved values and recover from invalid storag
     assert.equal(result.style, defaults.style)
     assert.equal(result.instructions, defaults.instructions)
   }
+})
+
+test('mode switches preserve separate voices and the shared key, instructions and volume', () => {
+  const saved = new Map([
+    ['ai.token', 'test-only'],
+    ['ai.context', 'Shared'],
+    ['tts.volume', '0.4'],
+    ['openailive.voice', 'bossa'],
+    ['openailive.realtimeVoice', 'cedar'],
+  ])
+  const read = () => readLiveSettings({ model: 'gpt-live-1' }, (domain, key) => saved.get(`${domain}.${key}`))
+  assert.equal(read().mode, 'live')
+  assert.equal(read().voice, 'bossa')
+  saved.set('openailive.mode', 'realtime')
+  assert.equal(read().model, 'gpt-realtime-2.1-mini')
+  assert.equal(read().voice, 'cedar')
+  assert.equal(read().apiKey, 'test-only')
+  assert.equal(read().instructions, 'Shared')
+  assert.equal(read().volume, 0.4)
+  saved.set('openailive.realtimeVoice', 'bossa')
+  assert.equal(read().voice, 'marin')
+  saved.set('openailive.mode', 'live')
+  assert.equal(read().model, 'gpt-live-1')
+  assert.equal(read().voice, 'bossa')
 })

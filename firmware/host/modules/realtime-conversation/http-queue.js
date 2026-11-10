@@ -4,6 +4,7 @@
 export function createHttpQueue({ execute, post, schedule, elapsed }) {
   let tail = Promise.resolve(),
     queued = 0
+  const jobs = new Map()
   function reply(message, remaining) {
     return new Promise((resolve) => {
       const send = () => {
@@ -23,7 +24,15 @@ export function createHttpQueue({ execute, post, schedule, elapsed }) {
       send()
     })
   }
-  return ({ id, started, request }) => {
+  return ({ id, started, request, cancel }) => {
+    if (cancel) {
+      const job = jobs.get(id)
+      if (job) {
+        job.cancelled = true
+        job.cancel?.()
+      }
+      return
+    }
     if (queued >= 8) {
       try {
         post({ id, error: 'HTTPS request capacity' })
@@ -31,20 +40,29 @@ export function createHttpQueue({ execute, post, schedule, elapsed }) {
       return
     }
     queued++
-    const remaining = () => request.timeoutMs - elapsed(started)
+    const job = { cancelled: false }
+    jobs.set(id, job)
+    const remaining = () => (job.cancelled ? 0 : request.timeoutMs - elapsed(started))
     tail = tail.then(async () => {
       try {
         const timeoutMs = remaining()
         if (timeoutMs <= 0) return
         let message
         try {
-          message = { id, ...(await execute({ ...request, timeoutMs })) }
+          message = {
+            id,
+            ...(await execute({ ...request, timeoutMs }, (cancelRequest) => {
+              job.cancel = cancelRequest
+              if (job.cancelled) cancelRequest()
+            })),
+          }
         } catch (error) {
           message = { id, error: String(error) }
         }
         await reply(message, remaining)
       } finally {
         queued--
+        jobs.delete(id)
       }
     })
     return tail

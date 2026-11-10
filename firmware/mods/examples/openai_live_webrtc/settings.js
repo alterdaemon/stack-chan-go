@@ -21,6 +21,8 @@ export function readLiveSettings(defaults, getPreference) {
   const backendModel = getPreference('openailive', 'backendModel')
   const reasoningEffort = getPreference('openailive', 'reasoningEffort')
   const bargeIn = getPreference('openailive', 'bargeIn')
+  const mode = getPreference('openailive', 'mode') === 'realtime' ? 'realtime' : 'live'
+  const realtimeVoice = getPreference('openailive', 'realtimeVoice')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
   const voiceSettings = {}
@@ -42,6 +44,13 @@ export function readLiveSettings(defaults, getPreference) {
   return {
     ...copyConfig(defaults),
     ...voiceSettings,
+    mode,
+    ...(mode === 'realtime'
+      ? {
+          model: 'gpt-realtime-2.1-mini',
+          voice: isLiveVoicePreference('openailive.realtimeVoice', realtimeVoice) ? realtimeVoice : 'marin',
+        }
+      : {}),
     bargeIn: bargeIn === 1 || bargeIn === '1',
     ...(typeof backendModel === 'string' && backendModel.trim() ? { backendModel: backendModel.trim() } : {}),
     ...(['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoningEffort) ? { reasoningEffort } : {}),

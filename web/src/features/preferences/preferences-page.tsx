@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   OPENAI_REASONING_EFFORTS,
   OPENAI_LIVE_VOICES,
+  OPENAI_REALTIME_VOICES,
   OPENAI_LIVE_PITCH_MIN,
   OPENAI_LIVE_PITCH_MAX,
   OPENAI_LIVE_STANDBY_MIN,
@@ -45,6 +46,8 @@ export function PreferencesPage() {
     !preferences.connected ||
     preferences.readOnly.has(name) ||
     (name.startsWith('openailive.') && !preferences.openaiAvailable) ||
+    (name === 'openailive.mode' && !preferences.modeAvailable) ||
+    (name === 'openailive.realtimeVoice' && !preferences.realtimeVoiceAvailable) ||
     (name === 'openailive.bargeIn' && !preferences.bargeInAvailable) ||
     (name === 'openailive.voice' && !preferences.voiceAvailable) ||
     (name === 'openailive.pitch' && !preferences.pitchAvailable) ||
@@ -272,6 +275,21 @@ export function PreferencesPage() {
           {section(
             'OpenAI',
             <>
+              {selectField(
+                'openailive.mode',
+                '会話モード',
+                [
+                  { value: 'live', label: 'GPT-Live 1', translate: false },
+                  { value: 'realtime', label: 'GPT-Realtime 2.1 Mini', translate: false },
+                ],
+                'モードは次回のLIVE開始時に適用されます。',
+                true
+              )}
+              {preferences.values['openailive.mode'] === 'realtime' && (
+                <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                  {t('Realtime Miniは無音でも接続を維持します。モデルと推論の強度は検索に使用します。')}
+                </p>
+              )}
               {inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
               {selectField(
                 'openailive.reasoningEffort',
@@ -279,9 +297,12 @@ export function PreferencesPage() {
                 OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
               )}
               {selectField(
-                'openailive.voice',
+                preferences.values['openailive.mode'] === 'realtime' ? 'openailive.realtimeVoice' : 'openailive.voice',
                 '声',
-                OPENAI_LIVE_VOICES.map((value) => ({ value, label: value, translate: false }))
+                (preferences.values['openailive.mode'] === 'realtime'
+                  ? OPENAI_REALTIME_VOICES
+                  : OPENAI_LIVE_VOICES
+                ).map((value) => ({ value, label: value, translate: false }))
               )}
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
@@ -312,7 +333,7 @@ export function PreferencesPage() {
                   { value: 'calm', label: '穏やか' },
                   { value: 'expressive', label: '表情豊か' },
                 ],
-                '声・ピッチ・話し方は次回のGPT-Live開始時に適用されます。',
+                '声・ピッチ・話し方は次回のLIVE開始時に適用されます。',
                 true
               )}
               {selectField(
@@ -322,23 +343,27 @@ export function PreferencesPage() {
                   { value: '0', label: '無効' },
                   { value: '1', label: '有効' },
                 ],
-                '発話中も音声を聞き取り、GPT-Liveが割り込みに対応します。初期設定は無効です。次回のGPT-Live開始時に適用されます。',
+                '発話中も音声を聞き取り、選択したモードで割り込みに対応します。初期設定は無効です。次回のLIVE開始時に適用されます。',
                 true
               )}
-              {inputField({
-                name: 'openailive.standbySeconds',
-                label: '自動切断までの秒数',
-                type: 'number',
-                min: OPENAI_LIVE_STANDBY_MIN,
-                max: OPENAI_LIVE_STANDBY_MAX,
-                step: 1,
-                required: true,
-              })}
-              <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
-                {t(
-                  'ロボットが話さないと自動切断します。別モデルへの応答待ち中は停止します。初期値は60秒。次回のGPT-Live開始時に適用されます。'
-                )}
-              </p>
+              {preferences.values['openailive.mode'] !== 'realtime' && (
+                <>
+                  {inputField({
+                    name: 'openailive.standbySeconds',
+                    label: '自動切断までの秒数',
+                    type: 'number',
+                    min: OPENAI_LIVE_STANDBY_MIN,
+                    max: OPENAI_LIVE_STANDBY_MAX,
+                    step: 1,
+                    required: true,
+                  })}
+                  <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                    {t(
+                      'ロボットが話さないと自動切断します。別モデルへの応答待ち中は停止します。初期値は60秒。次回のGPT-Live開始時に適用されます。'
+                    )}
+                  </p>
+                </>
+              )}
             </>
           )}
           {section(

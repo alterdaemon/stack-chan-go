@@ -121,6 +121,25 @@ test('empty key and unavailable network never acquire audio or create a session'
   }
 })
 
+test('Mini frames the saved prompt once per start without changing settings or Live instructions', async () => {
+  const instructions = 'Odpowiadaj krótko. Zachowaj znak: żółw.\nUse the configured character.'
+  const settings = Object.freeze({ apiKey: 'test-only', mode: 'realtime', bargeIn: false, instructions })
+  const f = fixture({ settings })
+  await f.session.start()
+  const first = f.instances[0].options.instructions
+  assert.ok(first.includes(instructions))
+  assert.strictEqual(f.session.settings, settings)
+  await f.session.stop()
+  await f.session.start()
+  assert.equal(f.instances[1].options.instructions, first)
+  assert.equal(settings.instructions, instructions)
+  await f.session.stop()
+  f.session.settings = { ...settings, mode: 'live' }
+  await f.session.start()
+  assert.equal(f.instances[2].options.instructions, instructions)
+  await f.session.stop()
+})
+
 test('interruption settings apply only to the next start and preserve user instructions', async () => {
   const f = fixture()
   f.session.settings.instructions = 'Answer in Polish.'
@@ -352,7 +371,8 @@ test('constructor failure reports an exact site, exception type and safe reason'
     kind: 'TypeError',
   })
   const display = formatLiveError(detail)
-  for (const value of ['R4', 'readonly_json', 'core_delegation', 'TypeError']) assert.ok(display.includes(value))
+  for (const value of ['GPT-Live 1', 'readonly_json', 'core_delegation', 'TypeError'])
+    assert.ok(display.includes(value))
   assert.equal(f.events.at(-1), 'audio released')
 })
 
@@ -645,4 +665,23 @@ test('late transport errors during standby close preserve resume context at ever
       }
     }
   }
+})
+
+test('Realtime Mini never arms Live standby and does not import its saved transcript tail', async () => {
+  const f = fixture({ settings: { mode: 'realtime', apiKey: 'test-only', standbySeconds: 1 } })
+  f.session.history.push({ role: 'assistant', text: 'Previous GPT-Live session' })
+  assert.equal(await f.session.start(), true)
+  const options = f.instances[0].options
+  assert.equal(options.mode, 'realtime')
+  assert.equal(options.input, undefined)
+  assert.equal(options.delegation, undefined)
+  assert.ok(options.search.model)
+  for (let i = 0; i < 100; i++) {
+    f.tick(1000)
+    options.onTranscript({ role: 'assistant', delta: 'speech' })
+  }
+  assert.equal(f.states.at(-1), 'connected')
+  assert.equal(f.timers.size, 0)
+  await f.session.stop()
+  assert.equal(f.session.history.length, 0)
 })

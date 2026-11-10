@@ -15,20 +15,29 @@ export function createHttpProxy({ createWorker, normalize, decode, schedule, can
       job.resolve({
         status: message.status,
         ok: message.status >= 200 && message.status < 300,
+        location: message.location,
         text: async () => decode(message.body),
       })
   }
 
-  return (url, options) =>
-    new Promise((resolve, reject) => {
+  return (url, options) => {
+    let cancelRequest
+    const promise = new Promise((resolve, reject) => {
       if (pending.size >= 8) throw new Error('HTTPS request capacity')
       const request = normalize(url, options),
         id = ++sequence
       const started = now()
       const job = { resolve, reject }
+      cancelRequest = (message = 'HTTPS request cancelled') => {
+        if (!pending.delete(id)) return
+        cancel(job.timer)
+        try {
+          worker.postMessage({ id, cancel: true })
+        } catch {}
+        reject(new Error(message))
+      }
       job.timer = schedule(() => {
-        pending.delete(id)
-        reject(new Error('HTTPS request timed out'))
+        cancelRequest('HTTPS request timed out')
       }, request.timeoutMs)
       pending.set(id, job)
       try {
@@ -39,4 +48,7 @@ export function createHttpProxy({ createWorker, normalize, decode, schedule, can
         reject(error)
       }
     })
+    promise.cancel = () => cancelRequest?.()
+    return promise
+  }
 }

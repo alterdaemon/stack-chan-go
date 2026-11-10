@@ -3,7 +3,9 @@
 
 import { createClosingClient, guardSocketCallbacks, requestHttps } from 'realtimeConversation/http-core'
 import { createHttpQueue } from 'realtimeConversation/http-queue'
+import { summarizeWebSearchResponse } from 'realtimeConversation/web-search'
 import tlsCache from 'ssl/cache'
+import TextDecoder from 'text/decoder'
 import Time from 'time'
 import Timer from 'timer'
 
@@ -26,11 +28,16 @@ self.onmessage = createHttpQueue({
   post: (message) => self.postMessage(message),
   schedule: platform.schedule,
   elapsed: (started) => Time.delta(started),
-  async execute(request) {
+  async execute(request, setCancel) {
     // The SDK session cache keys only by host, without the trust anchor.
     if (request.certificate) tlsCache.deleteSessionID()
     try {
-      return await requestHttps(request, platform)
+      const response = await requestHttps(request, platform, setCancel)
+      if (request.responseFormat === 'web-search' && response.status >= 200 && response.status < 300) {
+        const summary = summarizeWebSearchResponse(new TextDecoder().decode(response.body))
+        response.body = ArrayBuffer.fromString(JSON.stringify(summary))
+      }
+      return response
     } finally {
       if (request.certificate) tlsCache.deleteSessionID()
     }

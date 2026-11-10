@@ -154,6 +154,8 @@ test('loadPreferences reads the selected time zone from preferences', async () =
 test('OpenAI preferences expose host defaults and stored overrides without changing AI preferences', async () => {
   const { loadPreferences, config, preference } = await setup()
   const defaults = {
+    mode: 'live',
+    realtimeVoice: 'marin',
     backendModel: 'host-backend',
     reasoningEffort: 'medium',
     bargeIn: 0,
@@ -171,6 +173,8 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     'ai.context': 'shared-context',
   })
   assert.deepEqual(loadPreferences(DOMAIN.openailive), {
+    mode: 'live',
+    realtimeVoice: 'marin',
     backendModel: 'saved-backend',
     reasoningEffort: 'none',
     bargeIn: 0,
@@ -207,6 +211,8 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
   modules.resetModules({ 'mod/config': { openaiLive: { backendModel: 'mod-backend' } } })
   const fresh = await import(new URL('./loadPreference.js?openai-mod', import.meta.url).href)
   assert.deepEqual(fresh.default(DOMAIN.openailive), {
+    mode: 'live',
+    realtimeVoice: 'marin',
     backendModel: 'mod-backend',
     reasoningEffort: undefined,
     bargeIn: 0,
@@ -234,4 +240,26 @@ test('voice preferences survive reload and invalid saved values preserve firmwar
   assert.equal(result.voice, 'cedar')
   assert.equal(result.pitch, -2)
   assert.equal(result.style, 'calm')
+})
+
+test('mode and independent Realtime voice reload without changing saved Live voice', async () => {
+  const { loadPreferences, preference } = await setup()
+  preference.resetPreference({
+    'openailive.mode': 'realtime',
+    'openailive.realtimeVoice': 'cedar',
+    'openailive.voice': 'bossa',
+  })
+  let result = loadPreferences(DOMAIN.openailive)
+  assert.equal(result.mode, 'realtime')
+  assert.equal(result.realtimeVoice, 'cedar')
+  assert.equal(result.voice, 'bossa')
+  preference.resetPreference({
+    'openailive.mode': 'unknown',
+    'openailive.realtimeVoice': 'bossa',
+    'openailive.voice': 'bossa',
+  })
+  result = loadPreferences(DOMAIN.openailive)
+  assert.equal(result.mode, 'live')
+  assert.equal(result.realtimeVoice, 'marin')
+  assert.equal(result.voice, 'bossa')
 })

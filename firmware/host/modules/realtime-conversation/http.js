@@ -19,7 +19,9 @@ export default createHttpProxy({
       chunk: { initial: 256 * 1024, incremental: 16384 },
       stack: 1024,
       nativeStack: 6144,
-      priority: 3,
+      // Leave codec/RTP work on core 1. Mini AEC (7) precedes this worker (6).
+      priority: 6,
+      core: 0,
     }),
   normalize: (url, options) =>
     normalizeRequest(

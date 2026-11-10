@@ -6,7 +6,7 @@ at [v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit
 The upstream history, credits and licenses are retained. The changes below belong
 to this fork; upstream browser links still serve the upstream project.
 
-Current version: **2.0.1-r12**. R<N> corresponds to `2.0.1-r<N>` and Git tag
+Current version: **2.0.1-r13**. R<N> corresponds to `2.0.1-r<N>` and Git tag
 `v2.0.1-r<N>`. These are fork versions, not releases published by upstream.
 
 ## Revisions
@@ -25,6 +25,7 @@ Current version: **2.0.1-r12**. R<N> corresponds to `2.0.1-r<N>` and Git tag
 | **2.0.1-r10** | Add **Voice** (31 voices, default `marin`), **Pitch** (−6…+6 semitones, default `0`) and **Style** (Default/Calm/Expressive) to OpenAI Settings. Validate Wi-Fi/BLE writes and older-firmware capabilities. Apply saved settings on the next session; process pitch locally with Sonic and retain the processed AEC reference. Move full-duplex AEC to a background task below UI priority, keeping I2S submission non-blocking, with bounded buffering and worker regressions. Add DSP/session/form tests and a device signal test. Align product versions, locks, flash manifests, release validation and prerelease publication; restore per-revision English commits/tags and document fork provenance. |
 | **2.0.1-r11** | Add STANDBY and bounded RAM conversation resume. The final user-requested amendment uses one timer renewed only by nonblank assistant output transcripts, paused while a delegated Responses request is pending. Ignore microphone noise, incoming speech, audio counters and usage heartbeats; remove local standby VAD. Add OpenAI **Auto disconnect (seconds)** to Wi-Fi/BLE Settings, default 60, range 1–3600, read on the next start. The same rule applies at every Pitch with interruption On/Off. Confirm remote close and release native resources before showing STANDBY. Retain up to 6 transcript fragments / 2048 characters; explicit STOP clears context. Preserve Voice/Pitch/Style. Restore R9's direct microphone/AEC/capture path and remove the later AEC worker and its drop-on-full queue. Keep I2S/Pitch at priority 20 on core 1 and process full-duplex AEC sequentially in the existing capture reader on core 0, sharing UI priority only during DSP. Reuse the input FIFO for paired microphone/reference frames with the same nominal 200 ms capacity; retain processed tails across encoder reads. Give On's capture task an 8 KiB SRAM stack. Off and UI retain their scheduling. Preserve AEC settings and continuous capture during playback. Add a concurrent native regression that holds AEC for 100 ms of virtual time while verifying uninterrupted I2S progress and every microphone sample. Review the failed priority-3 worker/core-move attempts and compile negative controls for queue loss and speaker/DSP coupling. Physical audio/UI/interruption verification remains required. Keep the user-confirmed standby and RAM history implementation unchanged. Capture-source framing stays on its pre-R11 core. Replace both R11 images by explicit request. |
 | **2.0.1-r12** | Give full-duplex LIVE native 8/12 ms UI windows per 20 ms with a touch deadline, shared I2S priority and a runnable SPI dependency; leave Off scheduling unchanged. Drive the mouth from post-Pitch, post-volume speaker PCM independently of capture DSP. Keep media clocks running silently during graceful close. Preserve standby RAM context when remote finalization is unconfirmed, while retaining cleanup errors. Preserve the R11 checkpoint and both images. See the R12 validation record for device measurements and verification limits. |
+| **2.0.1-r13** | Add GPT-Realtime 2.1 Mini alongside GPT-Live 1, with one mode selector, independent voice selections, server VAD and no Live standby timer in Mini mode. Share LIVE, credentials, instructions, volume and native audio. Bridge Realtime search calls directly to Responses with bounded cancellable HTTPS. Amend: frame the saved Mini persona as its dialogue task without changing preferences; verify the echoed system prompt before enabling Mini microphone input; reapply mismatched startup instructions and reject an incorrect acknowledgment. See the [R13 validation record](./docs/release-notes/v2.0.1-r13.md) for completed checks and remaining verification. |
 
 R12 follow-up, **4/8 ms UI windows and faster local STOP** (amended follow-up,
 no revision bump by explicit user request): shorten elevated UI priority from
@@ -72,19 +73,22 @@ For **M5StackChan CoreS3**, from the repository root. Choose one command; replac
 **Full image — resets settings, MODs and storage:**
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live.bin
 ```
 
 **App only — preserves other partitions on this project's supported flash layout:**
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r13-GPT-Live-app.bin
 ```
 
 Press **RST** briefly afterwards. Full images go at `0x0`; app-only images go at
 `0x10000`. Use the full image when replacing firmware with a different layout.
 Build commands and layout details: [GPT-LIVE.txt](./GPT-LIVE.txt).
 
-The R12 4/8 ms follow-up is build-only at the user's request. No tests,
+The historical R12 4/8 ms follow-up was build-only at the user's request. No tests,
 installation or audio-quality assessment were performed for this variant;
 see the [follow-up record](./docs/release-notes/v2.0.1-r12-ui-4-8ms.md).
+
+R13's builds, Mini API/interruption tests and application-only installation are
+recorded in the [R13 validation record](./docs/release-notes/v2.0.1-r13.md).

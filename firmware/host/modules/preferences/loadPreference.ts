@@ -48,6 +48,8 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
   if (category === DOMAIN.openailive) {
     // Match GPT-Live's whole-block MOD override and expose only its editable fields.
     const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}
+    preference.mode = 'live'
+    preference.realtimeVoice = 'marin'
     preference.backendModel = live.backendModel
     preference.reasoningEffort = live.reasoningEffort
     preference.bargeIn = 0 // Opt-in, including installations with no saved preference.

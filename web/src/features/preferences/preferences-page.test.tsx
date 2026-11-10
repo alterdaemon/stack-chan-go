@@ -18,6 +18,8 @@ describe('PreferencesPage', () => {
       connected: true,
       busy: false,
       openaiAvailable: true,
+      modeAvailable: true,
+      realtimeVoiceAvailable: true,
       bargeInAvailable: true,
       voiceAvailable: true,
       pitchAvailable: true,
@@ -50,6 +52,23 @@ describe('PreferencesPage', () => {
     const token = screen.getByLabelText('Bearerトークン')
     expect(token).toHaveAttribute('name', 'mcp.token')
     expect(token).toHaveAttribute('type', 'password')
+  })
+
+  it('offers versioned Live and Mini labels and only Realtime voices in Mini mode', async () => {
+    const user = userEvent.setup()
+    const { state, unmount } = renderPreferences()
+    await user.click(screen.getByRole('combobox', { name: '会話モード' }))
+    expect(screen.getByRole('option', { name: 'GPT-Live 1' })).toBeVisible()
+    await user.click(screen.getByRole('option', { name: 'GPT-Realtime 2.1 Mini' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.mode', 'realtime')
+    unmount()
+    renderPreferences({ values: { ...DEFAULT_PREFERENCES, 'openailive.mode': 'realtime' } })
+    expect(screen.queryByRole('spinbutton', { name: '自動切断までの秒数' })).toBeNull()
+    expect(screen.getByRole('combobox', { name: '音声で割り込み（実験的）' })).toBeEnabled()
+    await user.click(screen.getByRole('combobox', { name: '声' }))
+    expect(await screen.findByRole('option', { name: 'cedar' })).toBeVisible()
+    expect(screen.queryByRole('option', { name: 'bossa' })).toBeNull()
+    await user.click(screen.getByRole('option', { name: 'cedar' }))
   })
 
   it('edits standby seconds under OpenAI and disables it on older firmware', () => {
@@ -136,14 +155,14 @@ describe('PreferencesPage', () => {
     const voice = screen.getByRole('combobox', { name: '声' })
     expect(voice).toHaveTextContent('marin')
     await user.click(voice)
-    await user.click(screen.getByRole('option', { name: 'cedar' }))
+    await user.click(await screen.findByRole('option', { name: 'cedar' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.voice', 'cedar')
     const pitch = screen.getByRole('slider', { name: 'ピッチ' })
     expect(pitch).toHaveValue('0')
     fireEvent.change(pitch, { target: { value: '-4' } })
     expect(state.update).toHaveBeenLastCalledWith('openailive.pitch', '-4')
     await user.click(screen.getByRole('combobox', { name: '話し方' }))
-    await user.click(screen.getByRole('option', { name: '穏やか' }))
+    await user.click(await screen.findByRole('option', { name: '穏やか' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.style', 'calm')
     unmount()
     renderPreferences({ voiceAvailable: false, pitchAvailable: false, styleAvailable: false })

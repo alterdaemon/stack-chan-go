@@ -31,6 +31,8 @@ export const PREF_KEYS: readonly [keyof typeof DOMAIN, string, StringConstructor
     [DOMAIN.ai, 'token', String],
     [DOMAIN.ai, 'context', String],
     [DOMAIN.openailive, 'backendModel', String],
+    [DOMAIN.openailive, 'mode', String],
+    [DOMAIN.openailive, 'realtimeVoice', String],
     [DOMAIN.openailive, 'reasoningEffort', String],
     [DOMAIN.openailive, 'bargeIn', Number],
     [DOMAIN.openailive, 'voice', String],
