@@ -6,6 +6,7 @@ on:
       - develop
       - feat/moddable-v10-foundation
       - main
+      - "v*-mod"
     paths:
       - "firmware/**"
       - "web/**"
@@ -21,6 +22,7 @@ on:
       - feat/webrtc-runtime-coexistence
       - feat/moddable-v10-foundation
       - main
+      - "v*-mod"
     paths:
       - "firmware/**"
       - "web/**"

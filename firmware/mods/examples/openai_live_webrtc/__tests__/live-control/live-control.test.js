@@ -1,7 +1,7 @@
 import { createAppControllerApplication } from 'app-controller'
 import { SimpleFace } from 'behaviors/face'
 import { ChatStatusBar } from 'chat-status-bar'
-import { onContextCreated } from 'openai-live-integrated'
+import { onClose, onContextCreated } from 'openai-live-integrated'
 import { Container } from 'piu/MC'
 import { assert, equal } from 'testing/assert'
 import Time from 'time'
@@ -174,6 +174,14 @@ async function run() {
   equal(released, 3, 'tap stops the conversation after returning to the face')
   equal(balloons.length, 0, 'tap, cancellation and drawer actions leave the avatar unobscured')
   equal(hiddenBalloons, 0, "LIVE notices never dismiss another feature's balloon")
+  gesture()
+  await waitFor('STARTED')
+  await onClose()
+  equal(released, 4, 'host close awaits conversation and the audio lease')
+  equal(label(), 'LIVE OFF', 'host close cancels notices and leaves the control idle')
+  gesture()
+  await delay()
+  equal(acquired, 4, 'the closing host cannot start another conversation')
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }
 

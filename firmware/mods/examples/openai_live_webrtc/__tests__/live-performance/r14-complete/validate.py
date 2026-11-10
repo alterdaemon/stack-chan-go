@@ -7,7 +7,7 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[7]
-manifest = json.loads((ROOT / 'firmware/host/app/manifest_openai_r14_complete.json').read_text())
+manifest = json.loads((ROOT / 'firmware/host/app/__tests__/live-performance/manifest_openai_r14_complete.json').read_text())
 tmp = ROOT / 'firmware/dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host'
 makefile = (tmp / 'makefile').read_text()
 js_modules = ['preference', 'live-probe', 'openai-live-integrated', 'openai-live-session',

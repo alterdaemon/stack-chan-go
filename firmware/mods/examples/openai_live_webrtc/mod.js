@@ -6,7 +6,7 @@ import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
 const MUTE = 'openai-live:mute'
-let session
+let closeSession
 const messages = {
   idle: 'GPT-Live stopped',
   standby: 'GPT-Live standby',
@@ -120,10 +120,14 @@ export function onContextCreated(robot) {
     liveButton,
     statusTimer
   let mouthTimer,
-    lastMouth = 0
-  function showStatus(state, detail) {
+    lastMouth = 0,
+    shuttingDown = false
+  function clearStatus() {
     if (statusTimer !== undefined) Timer.clear(statusTimer)
     statusTimer = undefined
+  }
+  function showStatus(state, detail) {
+    clearStatus()
     if (liveButton) {
       if (notices[state]) liveButton.delegate('onLiveNotice', notices[state])
     } else {
@@ -156,7 +160,7 @@ export function onContextCreated(robot) {
       // A rendering failure must not prevent session cleanup.
     }
   }
-  session = new LiveSession({
+  const session = new LiveSession({
     Timer,
     Conversation,
     audio: robot.audio,
@@ -186,7 +190,7 @@ export function onContextCreated(robot) {
         liveButton?.delegate('onLiveState', state)
         drawer.setDrawerButtonState(SESSION, active)
         drawer.setDrawerButtonState(MUTE, false)
-        showStatus(state, detail)
+        if (!shuttingDown) showStatus(state, detail)
       } catch {
         // Display failures must not prevent native audio/radio cleanup.
       }
@@ -195,8 +199,13 @@ export function onContextCreated(robot) {
       if (detail) trace(`[openai-live] diagnostic ${JSON.stringify(detail)}\n`)
     },
   })
+  closeSession = () => {
+    shuttingDown = true
+    clearStatus()
+    return session.stop()
+  }
   function toggleLive() {
-    if (session.active?.closing) return
+    if (shuttingDown || session.active?.closing) return
     if (session.active) void session.stop()
     else {
       try {
@@ -225,7 +234,7 @@ export function onContextCreated(robot) {
     kind: 'toggle',
     initialState: false,
     callback: () => {
-      if (changingMute) return
+      if (shuttingDown || changingMute) return
       changingMute = true
       const muted = !session.active?.conversation?.muted
       void session.setMuted(muted).then((value) => {
@@ -238,5 +247,5 @@ export function onContextCreated(robot) {
 }
 
 export function onClose() {
-  return session?.stop()
+  return closeSession?.()
 }

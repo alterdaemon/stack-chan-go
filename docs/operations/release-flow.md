@@ -38,16 +38,16 @@ Changesets are configured with `develop` as the release base branch. Version bum
 ## Fork revisions
 
 `stackchan-community-mod` forks [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1).
-The `upstream` remote points to that project. The `upstream/v2.0.1` tag and original
-`v2.0.1` tag identify its unmodified release; local commits follow that commit.
-See [CHANGELOG-MOD.md](../../CHANGELOG-MOD.md) for the revision history and comparisons.
+The `upstream` remote points to that project and `main` tracks
+`upstream/main`. The `v2.0.1-mod` and `v2.1.0-mod` branches carry the fork's
+revisions. See [CHANGELOG-MOD.md](../../CHANGELOG-MOD.md) for comparisons.
 
-Fork revision R<N> uses product version `2.0.1-r<N>` and tag `v2.0.1-r<N>`.
+The 2.1.0 series uses product version `2.1.0-R<N>` and tag `v2.1.0-R<N>`.
 Update both package versions and lockfile roots, all web flash manifest versions,
 the GPT-Live packager revision and filenames, and `docs/release-notes/v<version>.md`.
 Run `npm run check:release -- v<version>` from `firmware/` before tagging.
-The release workflow accepts stable tags and numbered revision tags; Fork revisions use
-`--prerelease=true --latest=false`, preserving the stable release as Latest.
+The Community release workflow verifies the series branch and publishes the two
+validated GPT-Live BINs as a prerelease.
 The ESP application descriptor retains the separate Moddable/host API compatibility
 version required by MOD loading; it is not the fork's product version.
 

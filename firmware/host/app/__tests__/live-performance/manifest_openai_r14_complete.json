@@ -1,0 +1,43 @@
+{
+  "include": ["./manifest_openai_r14_probe.json"],
+  "modules": {
+    "live-probe": "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/probe",
+    "preference": "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/preference",
+    "openai-live-integrated": "../../../../dist/r14-complete/mod",
+    "openai-live-session": "../../../../dist/r14-complete/session",
+    "realtimeConversation/http-worker": "../../../../dist/r14-complete/http-worker",
+    "r14-complete-options": "../../../../dist/r14-complete/run-options",
+    "r14-complete-remaining": "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/remaining",
+    "*": [
+      "../../../../dist/r14-complete/liveAudio.c",
+      "../../../../dist/r14-complete/livePitch.c",
+      "../../../../dist/r14-complete/opus-policy.c",
+      "../../../../dist/r14-complete/modSPI.c",
+      "../../../../dist/r14-complete/complete.c",
+      "../../../../dist/r14-complete/decoder-bench.c"
+    ],
+    "~": [
+      "../../../modules/realtime-conversation/esp32/liveAudio.c",
+      "../../../modules/realtime-conversation/esp32/livePitch.c",
+      "../../../modules/realtime-conversation/http-worker.js",
+      "../../../platforms/m5stackchan_cores3/opus-policy.c",
+      "../../../platforms/m5stackchan_cores3/spi/modSPI.c",
+      "$(MODULES)/files/preference/preference.js",
+      "../../../../mods/examples/openai_live_webrtc/mod.js",
+      "../../../../mods/examples/openai_live_webrtc/session.js",
+      "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-probe.js"
+    ]
+  },
+  "esp32Config": {
+    "CONFIG_HEAP_USE_HOOKS": "y"
+  },
+  "resources": {
+    "probe-opus": "../../../../dist/r14-complete/probe-opus.dat",
+    "https-fixture": "../../../../dist/r14-complete/https-fixture.dat"
+  },
+  "config": {
+    "r14SkipMeter": true,
+    "r14SoakSeconds": 3600,
+    "r14Cycles": 50
+  }
+}

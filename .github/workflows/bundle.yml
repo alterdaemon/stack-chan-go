@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - main
+      - "v*-mod"
     paths:
       - "firmware/**"
       - "web/**"
@@ -20,6 +21,7 @@ on:
       - develop
       - feat/webrtc-runtime-coexistence
       - main
+      - "v*-mod"
     paths:
       - "firmware/**"
       - "web/**"

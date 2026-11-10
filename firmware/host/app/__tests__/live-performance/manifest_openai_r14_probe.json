@@ -1,0 +1,29 @@
+{
+  "include": ["../../manifest_openai_live_integrated.json"],
+  "modules": {
+    "mod": "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/launch",
+    "live-probe": "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-probe",
+    "*": [
+      "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-probe.c",
+      "../../../../mods/examples/openai_live_webrtc/__tests__/live-performance/measure.c"
+    ]
+  },
+  "defines": {
+    "stackchan": {
+      "live_probe": 1,
+      "r14_probe": 1
+    }
+  },
+  "esp32Config": {
+    "CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS": "y",
+    "CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER": "y"
+  },
+  "resources": {
+    "probe-input": "../../../../dist/probe-input.pcm"
+  },
+  "config": {
+    "r14Followup": true,
+    "r14Pairs": 0,
+    "r14MediaOnly": true
+  }
+}
