@@ -1,7 +1,7 @@
 // Install through the screen's public start/stop/context interface. Piu may
 // request a 5 ms repeating idle timer; after a slow frame, replaying those old
 // ticks competes with application Workers without producing useful frames.
-export function scheduleScreen(screen, Timer, minimumIntervalMs = 16) {
+export function scheduleScreen(screen, Timer, minimumIntervalMs = 16, measure) {
   let timer, interval
   function stop() {
     interval = undefined
@@ -13,7 +13,12 @@ export function scheduleScreen(screen, Timer, minimumIntervalMs = 16) {
       stop()
       return
     }
-    context.onIdle()
+    measure?.(1)
+    try {
+      context.onIdle()
+    } finally {
+      measure?.(2)
+    }
     // onIdle may start, stop or replace the application. Preserve its choice.
     if (screen.context && interval !== undefined) Timer.schedule(timer, interval, interval)
     else stop()

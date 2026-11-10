@@ -12,6 +12,7 @@ test('delayed capture AEC preserves microphone frames while independent I2S keep
     // Only hardware/RTOS boundaries are replaced. Compile the actual audio task.
     for (const header of [
       'xsHost.h',
+      'mc.defines.h',
       'xsmc.h',
       'esp_timer.h',
       'esp_webrtc.h',

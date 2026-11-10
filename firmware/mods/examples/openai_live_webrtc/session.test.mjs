@@ -578,7 +578,7 @@ test('many short turns evict old fragments without merging distinct speakers', a
   await f.session.stop()
 })
 
-test('a failed close reports error instead of claiming successful standby', async () => {
+test('standby retains RAM history after a missing remote close acknowledgment, after local cleanup', async () => {
   const f = fixture()
   await f.session.start()
   f.tick(59000)
@@ -589,11 +589,60 @@ test('a failed close reports error instead of claiming successful standby', asyn
   await f.session.stop()
   assert.equal(f.states.at(-1), 'standby')
   await f.session.start()
+  f.instances.at(-1).options.onTranscript({ role: 'assistant', delta: 'retained context' })
   const failure = f.closePending()
   f.tick(60000)
+  f.instances.at(-1).options.onError({ code: 'close_timeout', stage: 'close' })
+  assert.equal(f.states.at(-1), 'closing')
+  assert.ok(!f.events.slice(f.events.lastIndexOf('native closing')).includes('audio released'))
   failure.resolve({ finalized: false, reason: 'close_timeout' })
   await f.session.stop()
-  assert.equal(f.states.at(-1), 'error')
+  assert.equal(f.states.at(-1), 'standby')
+  assert.equal(f.session.history.at(-1).text, 'retained context')
   assert.equal(f.timers.size, 0)
   assert.ok(f.events.includes('audio released'))
+  assert.equal(f.diagnostics.at(-1).code, 'close_timeout')
+  await f.session.start()
+  assert.equal(f.instances.at(-1).options.input.at(-1).content[0].text, 'retained context')
+  await f.session.stop()
+})
+
+test('standby keeps cleanup failures visible and retains the bounded transcript for retry', async () => {
+  for (const result of [{ finalized: false, reason: 'cleanup_error' }, new Error('native close failed')]) {
+    const f = fixture()
+    await f.session.start()
+    f.instances[0].options.onTranscript({ role: 'user', delta: 'retained despite cleanup failure' })
+    const closing = f.closePending()
+    f.tick(60000)
+    if (result instanceof Error) closing.reject(result)
+    else closing.resolve(result)
+    await f.session.stop()
+    assert.equal(f.states.at(-1), 'error')
+    assert.equal(f.session.history[0].text, 'retained despite cleanup failure')
+  }
+})
+
+test('late transport errors during standby close preserve resume context at every Pitch with On/Off', async () => {
+  for (const bargeIn of [false, true]) {
+    for (let pitch = -6; pitch <= 6; pitch++) {
+      for (const reason of ['close_timeout', 'connection_lost', 'transport_error']) {
+        const f = fixture()
+        Object.assign(f.session.settings, { bargeIn, pitch })
+        await f.session.start()
+        f.instances[0].options.onTranscript({ role: 'user', delta: 'context survives automatic close' })
+        const closing = f.closePending()
+        f.tick(60000)
+        f.instances[0].options.onError({ code: reason, stage: 'transport' })
+        f.instances[0].options.onStateChanged('error')
+        closing.resolve({ finalized: false, reason })
+        await f.session.stop()
+        assert.equal(f.states.at(-1), 'standby')
+        assert.equal(f.session.history[0].text, 'context survives automatic close')
+        await f.session.start()
+        assert.equal(f.instances[1].options.input[0].content[0].text, 'context survives automatic close')
+        await f.session.stop()
+        assert.equal(f.session.history.length, 0)
+      }
+    }
+  }
 })

@@ -117,6 +117,12 @@ export class LiveSession {
         },
         onError: (error) => {
           if (this.active !== entry) return
+          // close() owns the terminal result once shutdown has started. A late
+          // provider notification must not erase the requested standby state.
+          if (entry.cancelled) {
+            entry.diagnostic ??= diagnostic(error, 'close', 'close_event')
+            return
+          }
           entry.failure = 'error'
           entry.diagnostic ??= diagnostic(error, 'events', 'event_on_error')
           void this.stop()
@@ -230,7 +236,14 @@ export class LiveSession {
     try {
       const result = await entry.conversation?.close()
       if (result && !result.finalized) {
-        entry.failure = 'error'
+        // The native transport has been released when close() resolves. Standby
+        // describes local shutdown; a missing remote acknowledgment remains a
+        // diagnostic, not a reason to discard the RAM conversation tail.
+        if (
+          entry.stoppedState !== 'standby' ||
+          !['close_timeout', 'connection_lost', 'transport_error'].includes(result.reason)
+        )
+          entry.failure = 'error'
         entry.diagnostic ??= diagnostic({ code: result.reason }, 'close', 'native_close')
       }
     } catch (error) {
@@ -256,7 +269,7 @@ export class LiveSession {
       }
       if (this.active === entry) {
         this.active = undefined
-        if (entry.failure || entry.stoppedState !== 'standby') this.history.length = 0
+        if (entry.stoppedState !== 'standby') this.history.length = 0
         this.onState(entry.failure ?? entry.stoppedState, entry.diagnostic)
       }
     }

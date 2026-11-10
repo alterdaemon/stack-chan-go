@@ -19,4 +19,10 @@ export default Object.freeze({
   setMainPriority(priority) {
     native('xs_io_main_priority')(priority)
   },
+  setLiveUI(enabled) {
+    native('xs_io_live_ui')(enabled)
+  },
+  touch(active) {
+    native('xs_io_touch')(active)
+  },
 })

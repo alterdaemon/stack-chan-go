@@ -162,7 +162,7 @@ export function onContextCreated(robot) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
       if (state === 'connected' && mouthTimer === undefined && levels && robot.setMouthOpen) {
         mouthTimer = Timer.repeat(() => {
-          const level = levels.levels().referenceLevel ?? 0
+          const level = levels.levels().playbackLevel ?? 0
           updateMouth(Math.min(10, Math.round(level / 200)) / 10)
         }, 100)
       } else if (state !== 'connected') {
@@ -171,6 +171,7 @@ export function onContextCreated(robot) {
         updateMouth(0)
       }
       try {
+        levels?.setLiveUI?.(active && session.settings.bargeIn === true)
         robot.ui.setFaceMotionEnabled?.(!active)
       } catch {
         // Optional face controls must not prevent session cleanup.
@@ -185,7 +186,7 @@ export function onContextCreated(robot) {
       }
       // Only machine-readable diagnostics; never raw exception messages or bodies.
       trace(`[openai-live] ${state}\n`)
-      if (state === 'error' && detail) trace(`[openai-live] diagnostic ${JSON.stringify(detail)}\n`)
+      if (detail) trace(`[openai-live] diagnostic ${JSON.stringify(detail)}\n`)
     },
   })
   function toggleLive() {
@@ -227,4 +228,5 @@ export function onContextCreated(robot) {
       })
     },
   })
+  return session
 }

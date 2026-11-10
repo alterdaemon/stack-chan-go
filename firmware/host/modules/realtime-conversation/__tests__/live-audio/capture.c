@@ -72,7 +72,7 @@ int i2s_channel_write(i2s_chan_handle_t channel, const void *data, size_t bytes,
                       size_t *written, uint32_t timeout) {
     assert(taskPriority == ioPriority && bytes == BLOCK * 4);
     const int16_t *samples = data;
-    for (unsigned i = 0; i < BLOCK * 2; i++) assert(samples[i] == (session->pitch ? 100 : 200));
+    for (unsigned i = 0; i < BLOCK * 2; i++) assert(samples[i] == (atomic_load(&session->quiesced) ? 0 : (session->pitch ? 100 : 200)));
     pthread_mutex_lock(&lock);
     atomic_fetch_add(&writes, 1);
     pthread_cond_broadcast(&changed);
@@ -119,6 +119,9 @@ void aec_process(const aec_handle_t *aec, int16_t *mic, int16_t *ref, int16_t *c
     assert(taskPriority == uiPriority);
     assert(!((uintptr_t)mic % 16) && !((uintptr_t)ref % 16) && !((uintptr_t)clean % 16));
     if (delayDsp && !atomic_load(&dspCalls)) {
+        // The mouth meter must already follow I2S before capture DSP finishes.
+        assert(atomic_load(&session->playbackLevel) == (atomic_load(&session->quiesced) ? 0 : (session->pitch ? 100 : 200)));
+        assert(!atomic_load(&session->referenceLevel));
         // Hold DSP while the independent I2S task advances 100 ms of virtual
         // audio. The bounded FIFO must retain every paired microphone frame.
         pthread_mutex_lock(&lock);
@@ -134,7 +137,7 @@ void aec_process(const aec_handle_t *aec, int16_t *mic, int16_t *ref, int16_t *c
     unsigned start = atomic_load(&dspCalls) * aec->count;
     for (unsigned i = 0; i < aec->count; i++) {
         assert(mic[i] == 1000 + (start + i) % 113);
-        int reference = start + i < DMA_BLOCKS * BLOCK / 3 ? 0 : (session->pitch ? 100 : 200);
+        int reference = atomic_load(&session->quiesced) || start + i < DMA_BLOCKS * BLOCK / 3 ? 0 : (session->pitch ? 100 : 200);
         assert(ref[i] == reference);
         clean[i] = mic[i] - ref[i];
     }
@@ -145,7 +148,7 @@ static void *runClock(void *context) {
     audioTask(context);
     return NULL;
 }
-static void run(bool interruption, int semitones, bool mute, bool delay) {
+static void run(bool interruption, int semitones, bool mute, bool delay, bool quiesce) {
     struct Stream input = {.capacity = CAPTURE_BYTES * (interruption ? 2 : 1)};
     struct Stream output = {.playback = true};
     struct LivePitch pitch = {.semitones = semitones};
@@ -169,19 +172,24 @@ static void run(bool interruption, int semitones, bool mute, bool delay) {
     atomic_store(&blocks, 0); atomic_store(&writes, 0); atomic_store(&dspCalls, 0);
     atomic_store(&submitted, 0); atomic_store(&priorityChanges, 0);
     assert(!sourceStart(&audio.source));
+    atomic_store(&quiesceAudio, quiesce);
+    liveAudioMute(&audio, mute);
+    assert(atomic_load(&audio.quiesced) == quiesce);
+    assert(atomic_load(&audio.reading) && !atomic_load(&audio.stopping));
     assert(!pthread_create(&clockThread, NULL, runClock, &audio));
     unsigned total = 0;
     for (unsigned call = 0; call < 160; call++) {
         // Opus-sized requests straddle AEC frames. Retain and return the tail.
         int16_t captured[480];
-        unsigned count = call % 2 ? 480 : 160;
+        // Include the 20 ms / 320-sample read observed on the real device.
+        unsigned count = call < 80 ? (call % 2 ? 480 : 160) : 320;
         esp_capture_stream_frame_t frame = {.data = (uint8_t *)captured, .size = count * 2};
         assert(!sourceRead(&audio.source, &frame));
         assert(taskPriority == sourcePriority && frame.pts == total / 16);
         for (unsigned i = 0; i < count; i++) {
             unsigned index = total + i;
-            int reference = index < DMA_BLOCKS * BLOCK / 3 ? 0 : (semitones ? 100 : 200);
-            int expected = interruption && !mute ? 1000 + index % 113 - reference : 0;
+            int reference = quiesce || index < DMA_BLOCKS * BLOCK / 3 ? 0 : (semitones ? 100 : 200);
+            int expected = interruption && !mute && !quiesce ? 1000 + index % 113 - reference : 0;
             assert(captured[i] == expected);
         }
         total += count;
@@ -203,10 +211,12 @@ static void run(bool interruption, int semitones, bool mute, bool delay) {
 }
 int main(void) {
     for (int pitch = -6; pitch <= 6; pitch++) {
-        run(false, pitch, false, false);
-        run(true, pitch, false, true);
+        run(false, pitch, false, false, false);
+        run(true, pitch, false, true, false);
+        run(false, pitch, false, false, true);
+        run(true, pitch, false, true, true);
     }
-    run(true, 0, true, true);
-    run(true, 3, true, true);
+    run(true, 0, true, true, false);
+    run(true, 3, true, true, false);
     return 0;
 }

@@ -1,6 +1,14 @@
-Fork Community v2.0.1: 2.0.1-r11 + zintegrowany GPT-Live (M5StackChan CoreS3).
+Fork Community v2.0.1: 2.0.1-r12 + zintegrowany GPT-Live (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.0.1).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
+R12: tylko Interruption On: okno UI 8 ms co 20 ms, 12 ms podczas dotyku.
+UI i I2S maja priorytet 20; zaleznosc wyswietlacza SPI ma 21.
+Po zamknieciu wracaja poprzednie priorytety. Off zachowuje swoj harmonogram.
+Wskaznik ust pochodzi z PCM glosnika po Pitch i glosnosci, niezaleznie od AEC.
+Zamkniecie najpierw wycisza audio, pozostawiajac strumienie aktywne do
+session.closed; dopiero potem zwalnia zasoby. STANDBY zachowuje historie w RAM
+rowniez przy braku potwierdzenia serwera; brak potwierdzenia jest logowany.
+R11 pozostaje zapisanym punktem odniesienia wraz z oboma poprzednimi BIN-ami.
 R11 (amend): jeden timer STANDBY. Po polaczeniu odlicza domyslnie 60 s.
 Niepusta transkrypcja wypowiedzi robota odnawia caly czas. Mikrofon, szum,
 PCM/RTP i komunikaty usage nie odnawiaja timera. Nie ma lokalnego VAD.
@@ -23,14 +31,18 @@ FIFO On przenosi dwa kanaly zamiast jednego: 12800 B, nadal nominalnie 200 ms.
 Dodatkowe dwa bufory ramki sa przydzielane raz na sesje; nie ma nowych zadan,
 licznikow aktywnosci, timerow ani osobnej kolejki AEC. AUD_SRC On ma stos 8 KiB
 w SRAM. Przy Off zachowane sa dotychczasowe rozmiary, stos i priorytety.
-UI nie zmienia rdzenia ani priorytetu. Parametry AEC, mikrofon podczas mowy
+W R11 UI nie zmienia rdzenia ani priorytetu; R12 dodaje opisane wyzej okna.
+Parametry AEC, mikrofon podczas mowy
 robota, Pitch, Voice, Style, auto disconnect i pamiec sa zachowane.
 Historia poprzednich prob zostala sprawdzona: nie przywracamy workera o
 priorytecie 3 ani jego malej kolejki odrzucajacej ramki po zapelnieniu.
 Test skompilowanego toru audio zatrzymuje AEC na 100 ms czasu symulowanego;
 glosnik kontynuuje prace, a wszystkie probki mikrofonu dochodza w kolejnosci.
 Obejmuje wszystkie Pitch z On/Off i mute. RTOS, I2S, AEC i Sonic sa zastepnikami;
-test akustyczny, plynnosc UI i jakosc audio wymagaja potwierdzenia na robocie.
+Test R12 na robocie: przerwa UI 2855 -> 159 ms w porownaniu wariantow,
+428 ms w dluzszej rozmowie; maksymalna przerwa I2S 11,2 ms, zero overrun.
+Potwierdzono cyfrowy tor przerywania, STANDBY i wznowienie 6 fragmentow.
+Nie wykonano testu akustycznego mikrofonu ani nagrania jakosci glosnika.
 
 Model: gpt-live-1. Backend: gpt-6.1-terra, reasoning medium, web_search (auto).
 Glos: marin. Instrukcja domyslna pusta. Glosnosc domyslna 1.
@@ -55,7 +67,8 @@ Brak zapisanego openailive.bargeIn oznacza Off. Zmiana dziala od nastepnego star
 Poprawka R9: usuniete lokalne wyciszanie i polecenie stop wyzwalane przez sam VAD.
 On wlacza ciagly nasluch i AEC z silniejszym tlumieniem echa. O przerwaniu
 wypowiedzi decyduje GPT-Live; czas zatrzymania nie jest gwarantowany.
-Tryb wymaga testow akustycznych na robocie; nie byl sprawdzony na urzadzeniu.
+Testy cyfrowego toru na urzadzeniu opisano w docs/release-notes/v2.0.1-r12.md;
+odsluch akustyczny mikrofonu/glosnika nie zostal wykonany.
 R8: pelny wspoldzielony formularz Settings jest w firmware, pod http://IP-robota/settings/.
 Otwarcie samego IP przekierowuje do formularza. Nie wymaga zewnetrznego hostingu.
 Bluetooth nadal dziala bez hasla WWW i pozwala zmienic to haslo.
@@ -110,8 +123,8 @@ PAKOWANIE ISTNIEJACEJ KOMPILACJI (bez ponownego budowania)
 W tym samym aktywnym srodowisku, z katalogu projektu:
   python3 firmware/scripts/package-gpt-live-update.py
 Wynik w gpt-live-package/, zawsze dwa pliki z tej samej kompilacji:
-  StackChan-Community-v2.0.1-r11-GPT-Live.bin      - pelny obraz, 16 MiB
-  StackChan-Community-v2.0.1-r11-GPT-Live-app.bin  - sama aplikacja
+  StackChan-Community-v2.0.1-r12-GPT-Live.bin      - pelny obraz, 16 MiB
+  StackChan-Community-v2.0.1-r12-GPT-Live-app.bin  - sama aplikacja
 Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania obu BIN-ow.
 Pelny obraz zawiera bootloader, tabele partycji i aplikacje z biezacego builda.
 Pozostale bajty sa wypelnione 0xFF, w tym obszary NVS, xs i storage.
@@ -119,17 +132,17 @@ Skrypt nie zapisuje raportow ani plikow pomocniczych.
 
 Przed nowa edycja ustaw kolejny wolny numer REVISION w
 firmware/scripts/package-gpt-live-update.py oraz zaktualizuj nazwy i komendy
-w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r11; nastepna: r12.
+w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r12; nastepna: r13.
 Zachowuj poprzednie BIN-y. Skrypt odrzuca inna zawartosc pod istniejaca rewizja;
 ponowne pakowanie identycznych danych jest dozwolone.
 
 INSTALACJA (z katalogu projektu)
 Pelna instalacja / odtworzenie, zapis calego flash i wyczyszczenie danych:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r11-GPT-Live.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live.bin
 
 Aktualizacja samej aplikacji, zachowuje pozostale partycje przy zgodnej mapie:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r11-GPT-Live-app.bin
-Po wgraniu krotko nacisnij RST.
+  esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-size 16MB --flash-freq 80m 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r12-GPT-Live-app.bin
+Aktualizacja aplikacji tym poleceniem sama restartuje urzadzenie.
 Adres okresla miejsce zapisu w urzadzeniu, nie wybiera fragmentu pliku.
 Pelnego obrazu nie wolno wgrywac na 0x10000.
 
@@ -142,4 +155,5 @@ Poprawka ROM -> RAM i szczegolowa diagnostyka pozostaja w module GPT-Live.
 Testy: npm run test:unit, npm run test:gpt-live-package oraz testy Moddable
 mods/examples/openai_live_webrtc/__tests__.
 Gotowe BIN-y, wyniki kompilacji i katalog work/ sa poza Git.
-Test rzeczywistego API i fizycznego urzadzenia nie zostal wykonany.
+R12: testy na CoreS3 z rzeczywistym API wykonane automatycznie. Wyniki i
+ograniczenia: docs/release-notes/v2.0.1-r12.md. Weryfikacja akustyczna nie wykonana.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "xsHost.h"
+#include "mc.defines.h"
 #include "xsmc.h"
 #include "esp_timer.h"
 #include "io-performance.h"
@@ -85,10 +86,10 @@ struct LiveAudio {
 	aec_handle_t *aec;
     LivePitch *pitch;
 	bool bargeIn;
-	atomic_bool stopping, done, reading, muted;
+	atomic_bool stopping, done, reading, muted, quiesced;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
-	atomic_uint micLevel, cleanLevel, referenceLevel;
+	atomic_uint micLevel, cleanLevel, referenceLevel, playbackLevel;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
 	atomic_int error;
@@ -161,7 +162,14 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 				// Only capture DSP shares XS/UI priority. I2S never waits for it.
 				UBaseType_t priority = uxTaskPriorityGet(NULL);
 				vTaskPrioritySet(NULL, 6);
+#ifdef MODDEF_STACKCHAN_LIVE_PROBE
+                int64_t began = esp_timer_get_time();
+#endif
 				aec_process(a->aec, mic, ref, clean);
+#ifdef MODDEF_STACKCHAN_LIVE_PROBE
+                extern void stackchanProbeAEC(unsigned elapsed);
+                stackchanProbeAEC(esp_timer_get_time() - began);
+#endif
 				vTaskPrioritySet(NULL, priority);
 				captureStats(a, mic, ref, clean);
 				a->cleanOffset = 0;
@@ -174,9 +182,13 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 		}
 	} else offset = readInput(a, frame->data, frame->size);
 	if (offset != frame->size) return ESP_CAPTURE_ERR_NOT_SUPPORTED;
-    bool gated = atomic_load(&a->muted) || (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500);
+    bool gated = atomic_load(&a->muted) || atomic_load(&a->quiesced) || (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500);
     if (gated) memset(frame->data, 0, frame->size);
 	else liveAudioTransformCapture((int16_t *)frame->data, frame->size / 2);
+#ifdef MODDEF_STACKCHAN_LIVE_PROBE
+    extern void stackchanProbeCaptureOutput(const int16_t *samples, unsigned count);
+    stackchanProbeCaptureOutput((int16_t *)frame->data, frame->size / 2);
+#endif
 	atomic_fetch_add(&a->sourceSamples, frame->size / 2);
 	frame->pts = a->pts / 16;
 	a->pts += frame->size / 2;
@@ -260,8 +272,11 @@ static void audioTask(void *ctx)
 		else if (!missing && idle < 10000) idle += 10;
 		atomic_store(&a->outputIdleMs, idle);
 		unsigned volume = atomic_load(&a->volume);
+        unsigned playbackLevel = 0;
+        bool quiesced = atomic_load(&a->quiesced);
 		for (int i = BLOCK - 1; i >= 0; i--) {
-			int16_t sample = (int32_t)tx[i] * volume / 1024;
+			int16_t sample = quiesced ? 0 : (int32_t)tx[i] * volume / 1024;
+            playbackLevel += abs(sample);
 			tx[i * 2] = tx[i * 2 + 1] = sample;
 		}
 		size_t written = 0, received = 0;
@@ -272,6 +287,7 @@ static void audioTask(void *ctx)
 			atomic_store(&a->error, err ? err : ESP_ERR_INVALID_SIZE);
 			break;
 		}
+        atomic_store(&a->playbackLevel, playbackLevel / BLOCK);
 		for (int i = 0; i < BLOCK; i++) {
 			pair[i * 2] = rx[i * 2];
 			pair[i * 2 + 1] = reference[delay];
@@ -281,6 +297,10 @@ static void audioTask(void *ctx)
 		uint32_t count = BLOCK;
 		err = esp_ae_rate_cvt_process(a->resampler, pair, BLOCK, converted, &count);
 		if (err) { atomic_store(&a->error, err); break; }
+#ifdef MODDEF_STACKCHAN_LIVE_PROBE
+        extern void stackchanProbeInput(int16_t *samples, unsigned count, unsigned playbackLevel);
+        stackchanProbeInput(converted, count, playbackLevel);
+#endif
 		atomic_fetch_add(&a->rendered, got / 2);
 		for (uint32_t i = 0; i < count; i++) {
 			mic[accumulated] = converted[i * 2];
@@ -446,7 +466,9 @@ void liveAudioClose(LiveAudio *a)
 }
 void liveAudioMute(LiveAudio *a, bool mute) {
   if (a) atomic_store(&a->muted, mute);
-  if (atomic_exchange(&quiesceAudio, false)) liveAudioStop(a);
+  // Keep capture/encoder/RTP alive until session.closed. Stopping the source
+  // here used to terminate AUD_SRC before the close handshake had finished.
+  if (a && atomic_exchange(&quiesceAudio, false)) atomic_store(&a->quiesced, true);
 }
 void xs_live_audio_quiesce(xsMachine *the) {
   // The peer task owns the audio pointer and applies this on its next update.
@@ -464,14 +486,16 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
 }
 
 void xs_io_audio_levels(xsMachine *the) {
-  unsigned level = 0, idle = 10000;
+  unsigned level = 0, reference = 0, idle = 10000;
   portENTER_CRITICAL(&audioLock);
   if (activeAudio) {
-    level = atomic_load(&activeAudio->referenceLevel);
+    level = atomic_load(&activeAudio->playbackLevel);
+    reference = atomic_load(&activeAudio->referenceLevel);
     idle = atomic_load(&activeAudio->outputIdleMs);
   }
   portEXIT_CRITICAL(&audioLock);
   xsmcVars(1); xsmcSetNewObject(xsResult);
-  xsmcSetInteger(xsVar(0),level); xsmcSet(xsResult,xsID("referenceLevel"),xsVar(0));
+  xsmcSetInteger(xsVar(0),level); xsmcSet(xsResult,xsID("playbackLevel"),xsVar(0));
+  xsmcSetInteger(xsVar(0),reference); xsmcSet(xsResult,xsID("referenceLevel"),xsVar(0));
   xsmcSetInteger(xsVar(0),idle); xsmcSet(xsResult,xsID("outputIdleMs"),xsVar(0));
 }

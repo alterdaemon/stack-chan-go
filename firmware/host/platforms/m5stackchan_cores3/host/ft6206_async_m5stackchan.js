@@ -8,7 +8,10 @@
  */
 
 import config from 'mc/config'
+import Modules from 'modules'
 import Timer from 'timer'
+
+const performance = Modules.has('io-performance') ? Modules.importNow('io-performance') : undefined
 
 const ADDRESS = 0x38
 const REG_TOUCHES = 0x02
@@ -105,6 +108,7 @@ class FT6206 {
   }
 
   close(callback) {
+    performance?.touch(false)
     this.#io?.reset?.close()
     this.#io?.close((error) => callback?.(error))
     this.#io = undefined
@@ -163,6 +167,7 @@ class FT6206 {
     const io = this.#io
     this.#releaseTimer = undefined
     io.activeTouch = false
+    performance?.touch(false)
     if (io.none) return
     io.none = true
     io.sample = []
@@ -207,6 +212,7 @@ class FT6206 {
     this.#clearPendingRelease()
     delete io.none
     io.activeTouch = true
+    performance?.touch(true)
 
     const result = new Array(length)
     for (let i = 0; i < length; i++) {
