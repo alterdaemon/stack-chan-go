@@ -7,13 +7,15 @@
   },
   "config": {
     "ui": { "language": "en" },
+    "tts": { "volume": 1 },
     "openaiLive": {
       "model": "gpt-live-1",
-      "backendModel": "gpt-6-luna",
-      "reasoningEffort": "low",
+      "backendModel": "gpt-6.1-terra",
+      "reasoningEffort": "medium",
       "voice": "marin",
-      "instructions": "Rozmawiaj po polsku. Odpowiadaj krótko i naturalnie, zwykle jednym lub dwoma zdaniami. Nie odczytuj znaczników emocji. Gdy nie znasz odpowiedzi lub nie masz aktualnych danych, powiedz to wprost.",
-      "volume": 0.1
+      "instructions": "",
+      "volume": 1,
+      "tools": [{ "type": "web_search" }]
     }
   }
 }

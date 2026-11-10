@@ -8,6 +8,6 @@ export function readLiveSettings(defaults, getPreference) {
     ...defaults,
     apiKey: typeof token === 'string' ? token.trim() : (defaults.apiKey ?? ''),
     instructions: typeof context === 'string' && context.trim() ? context.trim() : defaults.instructions,
-    volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : (defaults.volume ?? 0.1),
+    volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : (defaults.volume ?? 1),
   }
 }

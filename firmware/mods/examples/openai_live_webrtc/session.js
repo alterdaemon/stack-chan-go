@@ -37,8 +37,9 @@ export class LiveSession {
         delegation: {
           type: 'responses',
           responses: {
-            model: this.settings.backendModel ?? 'gpt-6-luna',
+            model: this.settings.backendModel ?? 'gpt-6.1-terra',
             ...(this.settings.reasoningEffort ? { reasoning: { effort: this.settings.reasoningEffort } } : {}),
+            ...(this.settings.tools?.length ? { tools: this.settings.tools, tool_choice: 'auto' } : {}),
           },
         },
         onError: () => {
@@ -52,7 +53,7 @@ export class LiveSession {
         },
       })
       entry.conversation = conversation
-      conversation.setVolume(this.settings.volume ?? 0.1)
+      conversation.setVolume(this.settings.volume ?? 1)
       await conversation.connect()
       if (entry.cancelled || this.active !== entry) return false
       this.onState('connected')

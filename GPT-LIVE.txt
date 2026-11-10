@@ -1,0 +1,16 @@
+Wlasna integracja GPT-Live, Community v2.0.1, rewizja 2.
+
+Parametry: gpt-live-1 + gpt-6.1-terra, reasoning medium, glos marin,
+instrukcja domyslna pusta, glosnosc domyslna 1, web_search (auto).
+
+Konfiguracja kompilacji: firmware/host/app/manifest_openai_live_integrated.json
+Klucz API: AI / Token. Wlasna instrukcja: AI / Context. Zapisane tts.volume ma pierwszenstwo.
+
+Budowanie w obecnym srodowisku: bash build-gpt-live.sh
+Narzedzia SDK pozostaja poza repozytorium, w lokalizacji podanej w tym skrypcie.
+Inna lokalizacja: STACKCHAN_TOOLCHAINS=/sciezka/do/toolchains bash build-gpt-live.sh
+Kazde srodowisko musi miec natywne zaleznosci Moddable/ESP-IDF.
+Skrypt zweryfikowano w obecnym srodowisku; uruchomienia wewnatrz distrobox nie testowano.
+
+Wyniki: firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host
+Paczka i raporty wlasnej kompilacji: gpt-live-package/

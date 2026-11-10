@@ -34,14 +34,16 @@ test('stored volume is bounded and invalid or absent values preserve the default
   }
 })
 
-test('delegated reasoning is forwarded to the actual conversation request', async () => {
-  let options
+test('backend settings and hosted search are forwarded without adding instructions', async () => {
+  let options, volume
   const session = new LiveSession({
     Conversation: class {
       constructor(value) {
         options = value
       }
-      setVolume() {}
+      setVolume(value) {
+        volume = value
+      }
       async connect() {}
       async close() {
         return { finalized: true }
@@ -51,13 +53,29 @@ test('delegated reasoning is forwarded to the actual conversation request', asyn
     networkReady: Promise.resolve({ status: 'connected' }),
     acquireLowLatency: () => ({ close() {} }),
     amp: {},
-    settings: { apiKey: 'test-only', backendModel: 'test-model', reasoningEffort: 'low' },
+    settings: readLiveSettings(
+      {
+        backendModel: 'gpt-6.1-terra',
+        reasoningEffort: 'medium',
+        instructions: '',
+        volume: 1,
+        tools: [{ type: 'web_search' }],
+      },
+      (domain, key) => (domain === 'ai' && key === 'token' ? 'test-only' : undefined),
+    ),
     onState() {},
   })
   assert.equal(await session.start(), true)
   assert.deepEqual(options.delegation, {
     type: 'responses',
-    responses: { model: 'test-model', reasoning: { effort: 'low' } },
+    responses: {
+      model: 'gpt-6.1-terra',
+      reasoning: { effort: 'medium' },
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'auto',
+    },
   })
+  assert.equal(options.instructions, '')
+  assert.equal(volume, 1)
   await session.stop()
 })
