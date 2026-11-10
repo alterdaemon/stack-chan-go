@@ -15,8 +15,8 @@
 #define UI_PERIOD_US 20000
 #define UI_IDLE_US 4000
 #define UI_TOUCH_US 8000
-// modSPIFlush busy-yields while spiLoop drains the display. Boosting XS above
-// that dependency can stop rendering progress. SPI normally waits for DMA.
+// spiLoop completes display DMA and wakes blocked XS waiters. Preserve the
+// dependency priority and existing UI budgets; SPI normally waits for DMA.
 // XS shares I2S priority, allowing the clock to run on every scheduler tick;
 // codecs/RTP get the rest of each window, plus time when XS is blocked.
 // No task changes cores. Off restores the original priorities.

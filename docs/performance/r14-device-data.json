@@ -1,0 +1,27 @@
+{
+  "total_protected_bytes": 458752,
+  "bootloader_region_identical": true,
+  "partition_table_identical": true,
+  "phy_partition_identical": true,
+  "nvs_changed_byte_count": 109,
+  "nvs_logical_entries_before": 18,
+  "nvs_logical_entries_after": 18,
+  "changed_namespace_key_names": [
+    "tts.volume"
+  ],
+  "decoder": "ESP-IDF nvs_partition_tool minimal JSON; values compared privately, never logged",
+  "volume_restoration_via_preferences_api": true,
+  "all_nvs_value_groups_identical_after_restoration": true,
+  "restored_decoded_entries": 18,
+  "grouped_logical_keys": 17,
+  "comparison_note": "The official decoder includes multiple physical data entries for some keys. Compare complete grouped values, not only the last dictionary value. Native guarded restoration also read back the original volume.",
+  "initial_audit_all_nvs_values_identical": false,
+  "final_saved_values_match_baseline": true,
+  "verified_after_normal_r14_boot": true,
+  "decoded_physical_entries": 18,
+  "grouped_keys": 17,
+  "normal_release_boot_ready": true,
+  "initial_postprobe_low_region_byte_identical": false,
+  "initial_postprobe_high_region_byte_identical": true,
+  "initial_audit_after_first_app_write_before_boot": true
+}

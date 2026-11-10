@@ -1,0 +1,20 @@
+{
+  "160": {
+    "speech_frames": 221,
+    "max_abs_level_error": 1092,
+    "mean_abs_level_error": 115.00904977375566,
+    "tone_2kHz_full_stride": [
+      9888,
+      0
+    ]
+  },
+  "512": {
+    "speech_frames": 69,
+    "max_abs_level_error": 555,
+    "mean_abs_level_error": 61.391304347826086,
+    "tone_2kHz_full_stride": [
+      9888,
+      0
+    ]
+  }
+}

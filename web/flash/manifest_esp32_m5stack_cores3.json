@@ -1,6 +1,6 @@
 {
   "name": "Stack-chan",
-  "version": "2.0.1-r13",
+  "version": "2.0.1-r14",
   "builds": [
     {
       "chipFamily": "ESP32-S3",

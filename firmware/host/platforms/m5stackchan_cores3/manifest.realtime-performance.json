@@ -10,13 +10,19 @@
     }
   },
   "build": {
-    "C_FLAGS": "-I$(SUBPLATFORMDIRECTORY) -I$(MODDABLE)/modules/piu/MC -I$(SUBPLATFORMDIRECTORY)/../../modules/realtime-conversation/esp32"
+    "C_FLAGS": "-I$(SUBPLATFORMDIRECTORY) -I$(MODDABLE)/modules/piu/MC -I$(SUBPLATFORMDIRECTORY)/../../modules/realtime-conversation/esp32 -I$(MODDABLE)/modules/pins/spi/esp32"
   },
   "modules": {
-    "*": ["./io-performance.c", "./media-scheduler.c", "./opus-policy.c"],
+    "*": [
+      "./io-performance.c",
+      "./media-scheduler.c",
+      "./opus-policy.c",
+      "./spi/modSPI.c"
+    ],
     "io-performance": "./io-performance",
     "setup/realtime-performance": "./setup-realtime",
-    "screen-scheduler": "./screen-scheduler"
+    "screen-scheduler": "./screen-scheduler",
+    "~": "$(MODULES)/pins/spi/esp32/modSPI.c"
   },
   "defines": {
     "xs": {
@@ -28,5 +34,8 @@
       }
     }
   },
-  "include": ["$(MODDABLE)/modules/base/microseconds/manifest.json"]
+  "include": ["$(MODDABLE)/modules/base/microseconds/manifest.json"],
+  "esp32Config": {
+    "CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS": "n"
+  }
 }

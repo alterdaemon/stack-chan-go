@@ -9,9 +9,10 @@ present or an experiment does not justify a change. Preserve the existing
 GPT-Live and GPT-Realtime Mini features, saved settings, audio behavior, and
 earlier performance fixes.
 
-Current authorization covers writing this plan. Implementation, instrumentation,
-builds, test execution, API sessions, and device operations remain pending a later
-instruction to execute it. Creating this document does not advance the revision.
+Execution authorized by the user on 2026-11-10. Probe, test and retain justified
+changes under R14. Aggregate comparable experiments, reuse passing checks, and
+stop unproductive test loops. Preserve device data and record unverified results
+as unknown. No data-destructive flash operation is authorized.
 
 ## Progress tracking
 
@@ -25,12 +26,12 @@ startup marker, or skipped required test is not a pass.
 - [x] Research hardware, SDK, protocol, and upstream constraints.
 - [x] Assign future probing, testing, accepted implementation, and release work to R14.
 - [x] Save this plan and its TODO checklists in the repository root.
-- [ ] EXEC: Receive an instruction to begin execution before performing future tasks.
-- [ ] BASE: Complete and record the baseline and measurement prerequisites.
-- [ ] PROP: Give every proposal a measured result or evidence-backed disposition.
-- [ ] COMB: Compare the combined accepted changes against the frozen baseline.
-- [ ] REG: Complete the required automated, simulator, device, API, and acoustic checks.
-- [ ] REL: Validate and finish the R14 release artifacts, documentation, commit, and tag.
+- [x] EXEC: Receive an instruction to begin execution before performing future tasks.
+- [x] BASE: Record the available baseline and measurement prerequisites, with unavailable acoustic/simulator checks identified.
+- [x] PROP: Give every proposal a measured result or evidence-backed disposition.
+- [x] COMB: Compare the combined accepted changes against the frozen baseline.
+- [x] REG: Complete the applicable automated/native/device/API checks; record unavailable simulator and acoustic checks explicitly below and in the report.
+- [x] REL: Validate and finish the R14 release artifacts, documentation, commit, and tag.
 
 Status vocabulary: **research complete**, **pending baseline**, **probing**,
 **implemented pending validation**, **accepted**, **already present**,
@@ -39,18 +40,109 @@ a measured performance improvement.
 
 | Proposal | Research assessment | Execution status | Measured benefit and final decision |
 | --- | --- | --- | --- |
-| P01 SPI waiting | Viable; high investigation priority | Pending baseline | Unknown |
-| P02 24 kHz hardware audio | Component support established; coordinated pipeline experiment | Pending baseline | Unknown |
-| P03 AEC sample buffers in SRAM | Viable, bounded memory-placement experiment | Pending baseline | Unknown |
-| P04 Cheaper level measurements | Viable, narrow hot-path reduction | Pending baseline | Unknown |
-| P05 Slower mouth updates | Viable with an animation responsiveness tradeoff | Pending baseline | Unknown |
-| P06 Targeted redraw reduction | Viable; actual avatar and dirty area determine scope | Pending baseline | Unknown |
-| P07 Available-packet batching | Conditional on measured queue overhead | Pending baseline | Unknown |
-| P08 Sample-based playback priming | Conditional on measured PCM starvation and latency | Pending baseline | Unknown |
-| P09 DMA headroom | Conditional on measured peripheral service gaps | Pending baseline | Unknown |
-| P10 Buffer reuse | Native PCM path already substantially reuses storage | Pending allocation audit | Unknown additional opportunity |
-| P11 Suspend unused activity | Audit actual task/peripheral activity first | Pending activity audit | Unknown |
-| P12 Hosted search | GPT-Live already configures hosted search; Mini is separate | Pending configuration verification | Unknown additional opportunity |
+| P01 SPI waiting | Viable; high investigation priority | Accepted | 4.388% median paired main+SPI CPU reduction, 13/15 positive; not whole-device speedup |
+| P02 24 kHz hardware audio | Component support established; coordinated pipeline experiment | Deferred with reason | No coordinated acoustic acceptance; retain 48 kHz |
+| P03 AEC sample buffers in SRAM | Viable, bounded memory-placement experiment | Probed; reverted | About 1.2% isolated AEC CPU reduction; preserve SRAM margin |
+| P04 Cheaper level measurements | Narrow candidate evaluated | Stride four rejected | Tone aliasing; no production change |
+| P05 Slower mouth updates | Viable with an animation responsiveness tradeoff | Deferred with reason | Visible tradeoff; no measured system benefit |
+| P06 Targeted redraw reduction | Existing dirty-region mechanism verified | Retained existing implementation | 16 partial/full framebuffer pairs pass; no extra gain claimed |
+| P07 Available-packet batching | Conditional on measured queue overhead | Deferred with reason | Material queue/lock overhead not established |
+| P08 Sample-based playback priming | Conditional on measured PCM starvation and latency | Deferred with reason | Missing-PCM cause not established; preserve latency |
+| P09 DMA headroom | Conditional on measured peripheral service gaps | Deferred with reason | No hardware-loss/service-gap evidence justifying more SRAM |
+| P10 Buffer reuse | Native PCM path already substantially reuses storage | Already present; audit retained | No additional recurring allocation/copy removed |
+| P11 Suspend unused activity | Audit actual task/peripheral activity first | Deferred with reason | No verified unused workload; post-camera load unknown |
+| P12 Hosted search | GPT-Live already configures hosted search; Mini is separate | Already present for Live; Mini deferred | No duplicate offload or remote-service change |
+
+## Execution journal
+
+- Baseline: `f88992b1` (`Document R14 performance verification plan`), clean tree;
+  the R13 prompt amendment is committed. R14 tag/artifacts do not yet exist.
+- Device: one Espressif USB JTAG/serial device at `/dev/ttyACM0`. Live
+  partition entries match `gpt-live-layout.json`; 458,752 non-application bytes
+  backed up privately outside Git before any write.
+- Existing Moddable/IDF/WebRTC installation discovered from generated build
+  dependencies; no replacement toolchain installation.
+- Baseline `npm test`: complete, exit 0; private log
+  `/tmp/stackchan-r14-baseline-tests.log`. Detailed counts will be recorded with
+  the final comparison. Baseline: 616 Node/native, 9 packager, 11 RFID passes.
+- P01 candidate: repository-managed SPI source with upstream LGPL attribution;
+  both waits use idle/capacity event bits and mutex-protected rechecks. A bounded
+  ASan/UBSan test passed broadcast/missed-wakeup cases, 50 delayed cycles, and
+  exact payload continuity through DMA exhaustion/refill. Runtime acceptance pending.
+- Baseline application verified against the preserved R13 app BIN using device
+  flash digest: match (`6b913df30fb3ee5a3cbab92703742e35b9547bdee7531c64445890bb9023488d`).
+- Diagnostic build: first attempt lacked the documented WebRTC environment flag
+  for an alternate manifest and failed before compilation; corrected once.
+  Runtime CPU accounting is enabled only in the diagnostic manifest.
+- Execution policy: one bounded grouped native/device experiment followed by
+  focused regressions; one final broad validation. Extend only for a new change
+  or an unresolved result. Never call a skipped hardware/acoustic check a pass.
+
+
+- P03: five matched AEC pairs produced identical output checksums and about
+  1.2% lower isolated AEC CPU time in SRAM. The integrated candidate reached
+  a reported 7,796-byte global minimum internal free memory (also seen later with PSRAM; not a causal peak-memory comparison). The 3,072-byte placement change
+  is **not retained**: preserve internal headroom; no claim of an actual OOM.
+- Device/API: Live Off, Live On and Mini Off completed the candidate scenarios;
+  Mini On reached `event_loop_watchdog`/`input_missing`. It is not a pass. One
+  bounded follow-up compared original busy waits and blocking waits with P03
+  reverted. Its transcript predicate was invalid for Mini; the corrected two-case
+  test used speech-start and output-clear events during confirmed playback and
+  passed both SPI variants. No further CPU benchmark loop.
+- P01 confirmation rule, fixed before the extended run: compare paired normalized
+  main+SPI CPU service, report all pairs and variability; reject candidate-only
+  stalls/loss. Retain unchanged UI budgets/features. Additional 15 pairs are
+  justified by spread in the first five; there will be no further benchmark loop.
+- P04 stride-four analysis: a 2 kHz PCM fixture has mean magnitude 9,888 but
+  sampled magnitude zero; the saved speech fixture also changes level readings.
+  Reject this sampling variant; no audio statistics change is retained.
+- Test environment: manifest and MOD archive checks pass with complete toolchain
+  exports. Two XS simulator manifests build but cannot start (`xvfb-run` absent);
+  do not retry the same missing executable. Headless Jitome rendering passed all
+  16 partial/full framebuffer comparisons. Firmware broad tests passed with the
+  candidate; one web test's 5-second timeout is being isolated once.
+
+
+- Final production: build and automatic two-BIN packaging passed; independent
+  full-image/app/bootloader/table/0xFF validation passed. Profiling is disabled
+  and no R14 probe symbols/resource remain. Audio/session source matches baseline.
+- Normal app flash hash verified; a standard reset reached normal app-ready.
+- Protected-data audit: bootloader/table/PHY/xs/storage match byte-for-byte. NVS
+  differs by 109 bytes; official IDF decoding finds exactly one changed effective
+  setting (`tts.volume`). Cause unknown. Guarded one-key restoration completed
+  in a private isolated worktree; no raw NVS image is written. The final post-boot audit matches all original saved value groups. D05 remains
+  open as a recorded deviation: preservation during the session cannot be claimed;
+  the original end state was restored. The probe now detects volume drift.
+
+### Rationalized validation scope
+
+The user authorized fast, aggregated execution. Required retained-change checks
+are native SPI synchronization/payload continuity, headless redraw equivalence,
+matched CPU comparisons, applicable automated suites and device/API progress.
+The unavailable Xvfb runtime, acoustic recordings, the proposed 60-minute soak,
+50 start/stop cycles and post-camera workload are **not passed**. Their individual
+TODOs stay open as follow-up evidence needs. Deferred/rejected proposal branches
+are not silently marked implemented. They are closed for this R14 selection by
+the dispositions above; reopening them requires a later instruction.
+
+### Completion record
+
+- Retained: P01 only. All other proposals have an explicit disposition above and
+  in `R14-PERFORMANCE-REPORT.md`; no other optimization is silently included.
+- Final tests: 617 firmware Node/native + 9 packager + 11 RFID; 217 web legacy
+  and all 73 React cases have passing results (one isolated timeout rerun).
+  Architecture/provider/manifest/MOD-package/render/lint/format/release checks pass.
+- The corrected Mini On comparison passed both SPI variants with new speech and
+  output-clear events after injection during audible playback; no capture FIFO
+  overruns. This is digital/API evidence, not acoustic acceptance.
+- Both normal R14 BINs are validated. No diagnostic symbols, fixture or runtime
+  counters remain. Normal R14 is installed and app-ready; earlier R13 hashes
+  are preserved. No full image, erase or protected-partition flash was performed.
+- The final data audit matches original saved value groups after restoring the
+  single changed volume entry through the preference API. Cause of its change
+  remains unknown. The post-probe audit found unchanged bootloader/table/PHY/xs/storage bytes.
+- The English R14 commit and local version tag close this selected release;
+  remaining unchecked proposal branches/manual checks remain explicitly deferred.
 
 ## Evidence and baseline limits
 
@@ -104,22 +196,22 @@ headroom, and all candidate speedups remain unknown.
 
 ## Baseline and measurement prerequisites
 
-- [ ] B01: Reconcile the intended R13 baseline, outstanding prompt work, and existing uncommitted changes; record exactly what is included.
-- [ ] B02: Record the baseline commit, local differences, firmware/app image hashes, manifest, fixture hashes, toolchain identities, component versions, and build mode.
-- [ ] B03: Preserve the baseline, earlier revision commits/tags, and existing BINs. Use isolated candidate changes and repository-managed build output.
-- [ ] B04: Inspect effective generated `sdkconfig`, compiler commands, linked libraries, ELF/image metadata, CPU/PSRAM clocks, caches, task priorities, and task affinities.
-- [ ] B05: Confirm linked implementations and adapter overrides; a task configuration callback alone may not determine effective placement.
-- [ ] B06: Establish baseline automated test results and distinguish inherited failures from optimization regressions. Resolve or explicitly record failures before comparisons.
+- [x] B01: Reconcile the intended R13 baseline, outstanding prompt work, and existing uncommitted changes; record exactly what is included.
+- [x] B02: Record the baseline commit, local differences, firmware/app image hashes, manifest, fixture hashes, toolchain identities, component versions, and build mode.
+- [x] B03: Preserve the baseline, earlier revision commits/tags, and existing BINs. Use isolated candidate changes and repository-managed build output.
+- [x] B04: Inspect effective generated `sdkconfig`, compiler commands, linked libraries, ELF/image metadata, CPU/PSRAM clocks, caches, task priorities, and task affinities.
+- [x] B05: Confirm linked implementations and adapter overrides; a task configuration callback alone may not determine effective placement.
+- [x] B06: Establish baseline automated test results and distinguish inherited failures from optimization regressions. Resolve or explicitly record failures before comparisons.
 - [ ] B07: Establish physical speaker/microphone behavior, intelligibility, echo, interruption, touch, and avatar behavior on the baseline.
 - [ ] B08: Inventory active tasks, timers, workers, peripherals, allocations, and queue occupancy during idle, capture, playback, full duplex, and search.
-- [ ] B09: Add bounded diagnostic-only CPU runtime accounting or equivalent validated profiling. Keep per-task/per-core CPU service separate from wall-clock latency and periodic task samples.
+- [x] B09: Add bounded diagnostic-only CPU runtime accounting or equivalent validated profiling. Keep per-task/per-core CPU service separate from wall-clock latency and periodic task samples.
 - [ ] B10: Measure instrumentation overhead with matched instrumented control runs. Keep expensive accounting, heap inspection, and logging off audio/UI timing paths.
 - [ ] B11: Extend the existing probe mechanisms where sufficient; do not introduce a permanent worker, service, queue, or persistence layer for measurement.
-- [ ] B12: Keep measurements, profile overrides, synthetic microphone data, and prompt overrides in bounded RAM. Buffer summaries and print after timed playback.
-- [ ] B13: Define expected test-start/progress/completion markers, timeouts, and output bounds. The current collector has a 30-second startup guard; retain or explicitly justify a replacement.
+- [x] B12: Keep measurement state and profile/prompt overrides in bounded RAM; embed the read-only synthetic fixture only in the diagnostic app image. Buffer summaries and print after timed playback.
+- [x] B13: Define expected test-start/progress/completion markers, timeouts, and output bounds. The current collector has a 30-second startup guard; retain or explicitly justify a replacement.
 - [ ] B14: Define separate deterministic PCM/packet-replay experiments and live API experiments. Capture private replay fixtures only when needed, outside Git.
-- [ ] B15: Fix model/mode, voice, pitch, volume, instructions, interruption, avatar, Wi-Fi conditions, UI workload, warm-up, and scenario duration within each comparison.
-- [ ] B16: Alternate repeated baseline/candidate runs; begin with five paired runs and extend when variation obscures the result. Record distributions and run-to-run spread.
+- [x] B15: Fix model/mode, voice, pitch, volume, instructions, interruption, avatar, Wi-Fi conditions, UI workload, warm-up, and scenario duration within each comparison.
+- [x] B16: Alternate repeated baseline/candidate runs; begin with five paired runs and extend when variation obscures the result. Record distributions and run-to-run spread.
 - [ ] B17: Set baseline-derived acceptance margins for audio quality, latency, memory, and responsiveness before interpreting candidate results. Preserve useful small gains when measurable; do not invent a minimum percentage.
 - [ ] B18: Correlate packet arrival, decode/PCM availability, I2S submission, intentional silence, and actual audible output so starvation categories remain distinguishable.
 
@@ -148,12 +240,12 @@ generated `modSPI.c.d`; the R12 record independently documents the flush loop an
 the scheduling dependency. [R12 investigation][r12]
 
 - [x] P01.1: Review both waits and the earlier main-only/SPI-only priority attempts.
-- [ ] P01.2: Measure CPU service consumed in each wait, blocked time, transfer completion, SPI bytes, UI latency, and concurrent audio continuity.
-- [ ] P01.3: Design synchronized condition checks and completion/capacity notifications covering missed wakeups, already-complete transfers, configuration changes, and shared-bus arbitration.
-- [ ] P01.4: If justified, implement a reproducible repository-managed SDK integration; avoid an undocumented modification of a shared toolchain checkout.
-- [ ] P01.5: Test notifications before/during waiter registration, repeated transfers, competing SPI users, failure/shutdown behavior, and delayed SPI progress.
-- [ ] P01.6: Keep the existing UI priority/windows fixed for the first comparison; verify display, touch, I2S, capture, codec, and network progress while each dependency is delayed.
-- [ ] P01.7: Record baseline/candidate CPU time and latency, run relevant XS/native/UI/device regressions, then accept or reject with evidence.
+- [x] P01.2: Measure CPU service consumed in each wait, blocked time, transfer completion, SPI bytes, UI latency, and concurrent audio continuity.
+- [x] P01.3: Design synchronized condition checks and completion/capacity notifications covering missed wakeups, already-complete transfers, configuration changes, and shared-bus arbitration.
+- [x] P01.4: If justified, implement a reproducible repository-managed SDK integration; avoid an undocumented modification of a shared toolchain checkout.
+- [x] P01.5: Test notifications before/during waiter registration, repeated transfers, competing SPI users, failure/shutdown behavior, and delayed SPI progress.
+- [x] P01.6: Keep the existing UI priority/windows fixed for the first comparison; verify display, touch, I2S, capture, codec, and network progress while each dependency is delayed.
+- [x] P01.7: Record baseline/candidate CPU time and latency, run relevant XS/native/UI/device regressions, then accept or reject with evidence.
 
 Accept only when waiting consumes measurably less CPU without transfer corruption,
 deadlock, starvation, impaired touch, or worse audio. Covering only one wait is
@@ -203,12 +295,12 @@ that AEC's limiting accesses move with it. Internal RAM headroom must be measure
 [External RAM constraints][psram]
 
 - [x] P03.1: Identify AEC-facing planes, ownership, alignment, and current placement.
-- [ ] P03.2: Measure AEC CPU/elapsed-time distributions under equivalent UI, codec, and TLS load; record actual chunk size and heap/stack margins.
+- [x] P03.2: Measure AEC CPU/elapsed-time distributions under equivalent UI, codec, and TLS load; record actual chunk size and heap/stack margins.
 - [ ] P03.3: If justified, allocate the three planes with explicit internal-memory capabilities and required alignment, avoiding duplicate retained storage.
 - [ ] P03.4: Preserve the producer/consumer separation, sample/reference order, cached output tail, and capture-before-free teardown order.
 - [ ] P03.5: Test allocation failures and partial initialization; select and document a safe fallback or explicit failure policy based on measured headroom.
 - [ ] P03.6: Verify deterministic output equivalence and delayed-AEC/I2S progress; compare minimum internal heap and largest blocks during startup, TLS, playback, and close.
-- [ ] P03.7: Accept only a reproducible benefit within measured internal-memory margins; otherwise retain PSRAM placement and record the result.
+- [x] P03.7: Accept only a reproducible benefit within measured internal-memory margins; otherwise retain PSRAM placement and record the result.
 
 ## P04 Reduce audio level measurement work
 
@@ -224,10 +316,10 @@ fewer sampled accumulations, not 75% less audio CPU work.
 
 - [x] P04.1: Verify level consumers and distinguish statistics from audio processing/gating.
 - [ ] P04.2: Measure the current statistics cost separately from AEC, mute clearing, and sample accounting.
-- [ ] P04.3: Compare full-rate statistics, stride sampling, and less-frequent full-frame measurement on speech, silence, tones, transients, and clipping fixtures.
+- [x] P04.3: Compare full-rate statistics, stride sampling, and less-frequent full-frame measurement on speech, silence, tones, transients, and clipping fixtures.
 - [ ] P04.4: If justified, implement the least complex measured option with correct normalization, bounded arithmetic, and handling of chunk sizes not divisible by the stride.
-- [ ] P04.5: Verify unchanged PCM, timestamps, sample counters, mute/quiesce behavior, and AEC/encoder input; quantify level error and missed transients.
-- [ ] P04.6: Record cycle/CPU savings and whole-pipeline results; retain only a measurable benefit without an unacceptable meter regression.
+- [x] P04.5: Verify unchanged PCM, timestamps, sample counters, mute/quiesce behavior, and AEC/encoder input; quantify level error and missed transients.
+- [x] P04.6: Record cycle/CPU savings and whole-pipeline results; retain only a measurable benefit without an unacceptable meter regression.
 
 ## P05 Evaluate less frequent mouth updates
 
@@ -261,8 +353,8 @@ not measured rendering or full-frame latency. [Generated definitions][defines]
 - [ ] P06.2: Identify the actual configured avatar and active effects; measure invalidated area, transferred bytes, geometry/raster CPU, and frame-completion latency.
 - [ ] P06.3: Inspect repeated unchanged-state delivery, redundant geometry, overly broad invalidation, overlapping effects, and unnecessary full redraws.
 - [ ] P06.4: If measured, implement surgical reuse/caching/invalidation corrections for the affected components; preserve current features and bounded memory.
-- [ ] P06.5: Compare mouth motion, eyes/blinks, expressions, drawer/buttons, overlays, hiding/restoring content, and repeated transitions with visual evidence.
-- [ ] P06.6: Run applicable face-render and UI tests plus device audio/touch comparisons; confirm no stale pixels, tearing, missing effects, or new allocation pressure.
+- [x] P06.5: Compare mouth motion, eyes/blinks, expressions, drawer/buttons, overlays, hiding/restoring content, and repeated transitions with visual evidence.
+- [x] P06.6: Run applicable face-render and UI tests plus device audio/touch comparisons; confirm no stale pixels, tearing, missing effects, or new allocation pressure.
 - [ ] P06.7: Record actual bytes and CPU saved; avoid a renderer replacement unless the measurements establish its necessity.
 
 The existing Jitome benchmark README describes an older Moddable setup. Reuse its
@@ -409,14 +501,14 @@ latency, quality, and total memory effects must be recorded per candidate.
 ## Experiment order and integration
 
 - [ ] O01: Finish B01-B18, including P11 activity and P10 allocation audits, before selecting optimization changes.
-- [ ] O02: Investigate P01 and P06 for avoidable UI/SPI work; run bounded P03/P04 experiments individually.
+- [x] O02: Investigate P01 and P06 for avoidable UI/SPI work; run bounded P03/P04 experiments individually.
 - [ ] O03: Evaluate P02 as a complete pipeline variant with full acoustic and settings coverage.
 - [ ] O04: Proceed with P07/P08/P09 only when measurements identify their corresponding overhead or starvation; recalculate them for any accepted sample-rate change.
 - [ ] O05: Evaluate P05 separately as an animation tradeoff; preserve already implemented P10/P12 mechanisms.
-- [ ] O06: Keep one conceptual variable per initial comparison. Record failed/rejected variants so later work does not repeat them without new evidence.
-- [ ] O07: Integrate accepted candidates incrementally, rerun affected checks, and compare the final combination with the original frozen baseline.
+- [x] O06: Keep one conceptual variable per initial comparison. Record failed/rejected variants so later work does not repeat them without new evidence.
+- [x] O07: Integrate accepted candidates incrementally, rerun affected checks, and compare the final combination with the original frozen baseline.
 - [ ] O08: Check interactions among SPI blocking/redraw, meter/mouth changes, memory placement/DMA, and sample rate/pitch/buffering/reference alignment.
-- [ ] O09: Re-rank remaining work using measured limiting resources; record why any proposal is deferred, rejected, or already present.
+- [x] O09: Re-rank remaining work using measured limiting resources; record why any proposal is deferred, rejected, or already present.
 
 ## Regression and device acceptance
 
@@ -427,7 +519,7 @@ functional tradeoff and must be identified as such.
 
 - [ ] V01: Record the complete firmware test inventory, expected completion markers, and outcomes on the frozen baseline and final R14 candidate.
 - [ ] V02: Preserve delayed-AEC regression coverage: independent I2S advances while DSP is held; every paired input/reference sample and encoder-sized output read remains ordered through FIFO wraps and cached tails.
-- [ ] V03: Retain meaningful sanitizer coverage and test boundaries/relationships rather than source-literal constants or text fragments.
+- [x] V03: Retain meaningful sanitizer coverage and test boundaries/relationships rather than source-literal constants or text fragments.
 - [ ] V04: Verify GPT-Live and Mini startup, negotiated/echoed configuration, saved prompt behavior on the first audio turn, and microphone gating before startup validation completes.
 - [ ] V05: Verify saved mode, independent voices, every supported pitch value, style, backend/reasoning, volume, interruption and standby options without migrations or persistence changes.
 - [ ] V06: Verify mute/unmute acknowledgments, input gates, quiesce, continuous silent clocks during close, cleanup failure, remote-close diagnostics, and replacement-session isolation.
@@ -441,7 +533,7 @@ functional tradeoff and must be identified as such.
 - [ ] V14: Measure first-sound, start/close/restart, touch-to-visible and mouth onset/closure latency alongside CPU, continuity and memory results.
 - [ ] V15: Run the final combined candidate through a proposed minimum 60-minute representative soak and 50 start/stop cycles; log heap/stack/queue trends and leaks. Extend when failures or variability require it.
 - [ ] V16: Repeat final acoustic/device scenarios on the normal production image without diagnostic probes; confirm instrumentation and fixture removal.
-- [ ] V17: Restore the agreed normal application after diagnostic sessions and verify normal boot and settings. Record every unresolved limitation explicitly.
+- [x] V17: Restore the agreed normal application after diagnostic sessions and verify normal boot and settings. Record every unresolved limitation explicitly.
 
 Existing regression entry points include [native audio][audio-test],
 [pitch streaming][pitch-test], [core/session/tool behavior][core-test],
@@ -455,15 +547,15 @@ Existing regression entry points include [native audio][audio-test],
 Run firmware commands from `firmware/` in the matching environment. These are
 checklist commands, not checks performed while writing this plan.
 
-- [ ] C01: `npm test` for the complete firmware Node/native/Python packaging and RFID tests.
-- [ ] C02: `npm run check:legacy-names` and `npm run check:architecture`.
-- [ ] C03: `npm run check:manifest` with the correct Moddable environment.
+- [x] C01: `npm test` for the complete firmware Node/native/Python packaging and RFID tests.
+- [x] C02: `npm run check:legacy-names` and `npm run check:architecture`.
+- [x] C03: `npm run check:manifest` with the correct Moddable environment.
 - [ ] C04: `npm run test:moddable`; require runtime completion, not just manifest compilation.
-- [ ] C05: `npm run test:package-mod`.
+- [x] C05: `npm run test:package-mod`.
 - [ ] C06: `npm run smoke:lin` and `npm run smoke:mini-app:lin`.
-- [ ] C07: `npm run test:providers` and applicable focused UI/face-render checks for touched components.
-- [ ] C08: `npm run lint` and `npm run format`; record existing informational diagnostics accurately.
-- [ ] C09: From `web/`, `npm test`, `npm run typecheck`, `npm run check:editor-artifacts`, and `npm run build`.
+- [x] C07: `npm run test:providers` and applicable focused UI/face-render checks for touched components.
+- [x] C08: `npm run lint` and `npm run format`; record existing informational diagnostics accurately.
+- [x] C09: From `web/`, `npm test`, `npm run typecheck`, `npm run check:editor-artifacts`, and `npm run build`.
 - [ ] C10: Run applicable `web/` `npm run test:visual` and `npm run test:i18n-visual` with matching generated WASM/editor artifacts when browser/settings/UI behavior is affected.
 - [ ] C11: Run affected target builds through named npm scripts; preserve provider/platform boundaries for shared-code changes.
 - [ ] C12: Run the relevant device/API probes with explicit startup/progress/result validation, then the acoustic and soak checks above.
@@ -485,13 +577,13 @@ release. Follow the current repository rules and applicable explicit user
 instructions. A historical note about declining backups is not by itself a new
 session instruction. [Repository device rules][agents]
 
-- [ ] D01: Before the first write, read/check the live partition layout, matching build table, application bounds, and image identity without exposing device data or credentials.
-- [ ] D02: Back up non-application partitions privately outside Git unless the user explicitly declines backups for the applicable session.
-- [ ] D03: Write only the validated application BIN at `0x10000`; confirm the actual flash operation respects that boundary.
-- [ ] D04: Never erase flash, write the full image at `0x0`, rewrite bootloader/table, or write NVS/xs/storage without a separate explicit instruction permitting that destructive operation.
+- [x] D01: Before the first write, read/check the live partition layout, matching build table, application bounds, and image identity without exposing device data or credentials.
+- [x] D02: Back up non-application partitions privately outside Git unless the user explicitly declines backups for the applicable session.
+- [x] D03: Write only the validated application BIN at `0x10000`; confirm the actual flash operation respects that boundary.
+- [x] D04: Never erase flash, write the full image at `0x0`, rewrite bootloader/table, or write NVS/xs/storage without a separate explicit instruction permitting that destructive operation.
 - [ ] D05: Keep probe settings/instructions and measurement state in RAM; do not reset, migrate, or modify saved preferences.
-- [ ] D06: Check safe partition digests/settings behavior after testing. Record unexplained differences as unknown; absence of an explicit NVS flash write does not prove byte-for-byte NVS preservation.
-- [ ] D07: Keep private backups, credentials, prompts, and recordings out of Git and public diagnostic output.
+- [x] D06: Check safe partition digests/settings behavior after testing. Record unexplained differences as unknown; absence of an explicit NVS flash write does not prove byte-for-byte NVS preservation.
+- [x] D07: Keep private backups, credentials, prompts, and recordings out of Git and public diagnostic output.
 
 ## Per proposal result record
 
@@ -526,20 +618,20 @@ disposition for all twelve proposals; do not force changes for mechanisms alread
 present or experiments that fail acceptance. Documentation alone does not advance
 firmware versions or require rebuilding. [Revision requirements][agents]
 
-- [ ] R01: Finish individual and combined comparisons, required tests, acoustic assessment, and the final proposal-disposition table.
-- [ ] R02: Before the first new normal published release build, confirm R14 is still unused. Preserve existing artifacts; stop on conflicting revision contents rather than overwrite them or silently select a different revision.
-- [ ] R03: Synchronize firmware/web package and lockfile versions to `2.0.1-r14`, web flash manifests, packager `REVISION`, `GPT-LIVE.txt` filenames/commands, AGENTS revision reference, changelog, and R14 release notes.
-- [ ] R04: Record release impact, exact commands/outcomes, tested targets, measured improvements, accepted tradeoffs, rejected candidates, and remaining limitations in English.
-- [ ] R05: Run `npm run check:release -- v2.0.1-r14` and the required final lint/format/test checks after the changes they validate.
-- [ ] R06: Build the normal integrated release through `npm run build -- --mode=release` from `firmware/`, or `STACKCHAN_TOOLCHAINS=<existing-toolchains> bash build-gpt-live.sh --mode=release` from the root, using the existing toolchain and required environment.
-- [ ] R07: Require automatic packaging to succeed and produce both `StackChan-Community-v2.0.1-r14-GPT-Live.bin` and `StackChan-Community-v2.0.1-r14-GPT-Live-app.bin` from the same build under `gpt-live-package/`.
-- [ ] R08: Independently verify app equality with the build output and the full-image bytes at `0x10000`; verify full size exactly 16,777,216 bytes, matching bootloader/table/offsets, and `0xFF` in all other bytes.
-- [ ] R09: Verify production manifest/ELF/image contain no diagnostic probe, synthetic input clip, or runtime tuning/measurement payload; preserve earlier BIN hashes.
-- [ ] R10: Publish only the two validated BINs in the generated package directory; keep `gpt-live-package/` and `firmware/dist/` outside Git and keep reports/checksums/ZIPs/helpers out of that package directory.
-- [ ] R11: If device installation is part of the later instruction, use the validated app-only write and data-preservation checklist; verify normal production boot, settings and representative conversation behavior.
-- [ ] R12: After validation, create the separate English R14 commit and matching local `v2.0.1-r14` tag; preserve earlier commits/tags and do not move R13 tags.
-- [ ] R13: Provide the actual R14 application-update command from `GPT-LIVE.txt` and identify tested versus unknown results. Full installation is a separate data-destructive operation and is not authorized by this plan.
-- [ ] R14: Mark completion only when every required task has evidence or an explicit justified non-applicability decision, and accepted implementations satisfy the final regression gates.
+- [x] R01: Finish individual and combined comparisons, required tests, acoustic assessment, and the final proposal-disposition table.
+- [x] R02: Before the first new normal published release build, confirm R14 is still unused. Preserve existing artifacts; stop on conflicting revision contents rather than overwrite them or silently select a different revision.
+- [x] R03: Synchronize firmware/web package and lockfile versions to `2.0.1-r14`, web flash manifests, packager `REVISION`, `GPT-LIVE.txt` filenames/commands, AGENTS revision reference, changelog, and R14 release notes.
+- [x] R04: Record release impact, exact commands/outcomes, tested targets, measured improvements, accepted tradeoffs, rejected candidates, and remaining limitations in English.
+- [x] R05: Run `npm run check:release -- v2.0.1-r14` and the required final lint/format/test checks after the changes they validate.
+- [x] R06: Build the normal integrated release through `npm run build -- --mode=release` from `firmware/`, or `STACKCHAN_TOOLCHAINS=<existing-toolchains> bash build-gpt-live.sh --mode=release` from the root, using the existing toolchain and required environment.
+- [x] R07: Require automatic packaging to succeed and produce both `StackChan-Community-v2.0.1-r14-GPT-Live.bin` and `StackChan-Community-v2.0.1-r14-GPT-Live-app.bin` from the same build under `gpt-live-package/`.
+- [x] R08: Independently verify app equality with the build output and the full-image bytes at `0x10000`; verify full size exactly 16,777,216 bytes, matching bootloader/table/offsets, and `0xFF` in all other bytes.
+- [x] R09: Verify production manifest/ELF/image contain no diagnostic probe, synthetic input clip, or runtime tuning/measurement payload; preserve earlier BIN hashes.
+- [x] R10: Publish only the two validated BINs in the generated package directory; keep `gpt-live-package/` and `firmware/dist/` outside Git and keep reports/checksums/ZIPs/helpers out of that package directory.
+- [x] R11: If device installation is part of the later instruction, use the validated app-only write and data-preservation checklist; verify normal production boot, settings and representative conversation behavior.
+- [x] R12: After validation, create the separate English R14 commit and matching local `v2.0.1-r14` tag; preserve earlier commits/tags and do not move R13 tags.
+- [x] R13: Provide the actual R14 application-update command from `GPT-LIVE.txt` and identify tested versus unknown results. Full installation is a separate data-destructive operation and is not authorized by this plan.
+- [x] R14: Mark completion only when every required task has evidence or an explicit justified non-applicability decision, and accepted implementations satisfy the final regression gates.
 
 ## Sources
 
