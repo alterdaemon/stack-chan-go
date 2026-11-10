@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@/app/i18n-provider'
-import { PreferencesPage } from '@/features/preferences/preferences-page'
 import { DEFAULT_PREFERENCES, OPENAI_REASONING_EFFORTS } from '@/features/preferences/preference-model'
+import { PreferencesPage } from '@/features/preferences/preferences-page'
 import { usePreferences } from '@/features/preferences/use-preferences'
 
 vi.mock('@/features/preferences/use-preferences', () => ({
@@ -18,6 +18,7 @@ describe('PreferencesPage', () => {
       connected: true,
       busy: false,
       openaiAvailable: true,
+      bargeInAvailable: true,
       wwwAvailable: true,
       http: false,
       values: DEFAULT_PREFERENCES,
@@ -91,6 +92,22 @@ describe('PreferencesPage', () => {
     expect(screen.getAllByRole('option').map((node) => node.textContent)).toEqual([...OPENAI_REASONING_EFFORTS])
     await user.click(screen.getByRole('option', { name: 'none' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.reasoningEffort', 'none')
+  })
+
+  it('offers voice interruption off by default and disables it on older firmware', async () => {
+    const user = userEvent.setup()
+    const { state, unmount } = renderPreferences()
+    const field = screen.getByRole('combobox', {
+      name: '音声で割り込み（実験的）',
+    })
+    expect(field).toHaveTextContent('無効')
+    await user.click(field)
+    await user.click(screen.getByRole('option', { name: '有効' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.bargeIn', '1')
+    unmount()
+    renderPreferences({ bargeInAvailable: false })
+    expect(screen.getByRole('combobox', { name: '音声で割り込み（実験的）' })).toBeDisabled()
+    expect(screen.getByLabelText('モデル')).toBeEnabled()
   })
 
   it('requires a nonblank model and keeps the fields disabled while disconnected', () => {

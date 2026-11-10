@@ -4,6 +4,14 @@ import test from 'node:test'
 import { LiveSession } from './session.js'
 import { readLiveSettings } from './settings.js'
 
+test('voice interruption is opt-in and invalid or missing saved values stay off', () => {
+  let saved
+  const read = () => readLiveSettings({ bargeIn: true }, (_domain, key) => (key === 'bargeIn' ? saved : undefined))
+  for (saved of [undefined, '', 'false', 'true', '2', 2, false, true]) assert.equal(read().bargeIn, false)
+  for (saved of ['1', 1]) assert.equal(read().bargeIn, true)
+  for (saved of ['0', 0, undefined]) assert.equal(read().bargeIn, false)
+})
+
 test('OpenAI defaults come from the host manifest; saved overrides are read on every start', () => {
   const defaults = JSON.parse(
     readFileSync(new URL('../../../host/app/manifest_openai_live_settings.json', import.meta.url)),
@@ -50,7 +58,7 @@ test('saved credentials and context are read afresh; deleting the key disables s
   ])
   const defaults = { apiKey: '', instructions: 'default', volume: 0.1 }
   const read = () => readLiveSettings(defaults, (domain, key) => values.get(`${domain}.${key}`))
-  assert.deepEqual(read(), { apiKey: 'saved-key', instructions: 'Krótko po polsku.', volume: 0.35 })
+  assert.deepEqual(read(), { apiKey: 'saved-key', instructions: 'Krótko po polsku.', volume: 0.35, bargeIn: false })
   values.set('ai.token', '')
   values.set('ai.context', '')
   assert.equal(read().apiKey, '')

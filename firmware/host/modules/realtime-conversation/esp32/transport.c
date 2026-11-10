@@ -31,7 +31,7 @@ typedef struct {
 	atomic_bool stopping, done, muted;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
-	bool started, errorRead, captureOnly;
+	bool started, errorRead, captureOnly, bargeIn;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
 	const char *failureStage;
@@ -151,7 +151,7 @@ static void worker(void *ctx)
 	LiveAudio *audio = NULL;
 	esp_webrtc_media_provider_t provider = {0};
 	esp_capture_sink_handle_t probeSink = NULL;
-	int err = liveAudioOpen(&audio, &provider);
+	int err = liveAudioOpen(&audio, &provider, t->bargeIn);
 	if (err) { t->failureStage = liveAudioStage(audio); goto done; }
 	if (t->captureOnly) {
 		/* Match the RTP drain priority when comparing capture throughput. */
@@ -270,6 +270,7 @@ void xs_live_transport_start(xsMachine *the)
 		gAdapters = true;
 	}
 	t->captureOnly = xsmcArgc && xsmcToBoolean(xsArg(0));
+	t->bargeIn = xsmcArgc > 1 && xsmcToBoolean(xsArg(1));
 	t->started = true;
 	if (xTaskCreatePinnedToCore(worker, "live_peer", 12288, t, 10, NULL, 1) != pdPASS) {
 		t->started = false;

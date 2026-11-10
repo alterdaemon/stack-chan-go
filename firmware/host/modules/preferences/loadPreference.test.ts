@@ -152,7 +152,7 @@ test('loadPreferences reads the selected time zone from preferences', async () =
 
 test('OpenAI preferences expose host defaults and stored overrides without changing AI preferences', async () => {
   const { loadPreferences, config, preference } = await setup()
-  const defaults = { backendModel: 'host-backend', reasoningEffort: 'medium' }
+  const defaults = { backendModel: 'host-backend', reasoningEffort: 'medium', bargeIn: 0 }
   config.resetConfig({ openaiLive: { ...defaults, model: 'voice-model', apiKey: 'host-only' } })
   assert.deepEqual(loadPreferences(DOMAIN.openailive), defaults)
   preference.resetPreference({
@@ -161,8 +161,22 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     'ai.token': 'shared-token',
     'ai.context': 'shared-context',
   })
-  assert.deepEqual(loadPreferences(DOMAIN.openailive), { backendModel: 'saved-backend', reasoningEffort: 'none' })
+  assert.deepEqual(loadPreferences(DOMAIN.openailive), {
+    backendModel: 'saved-backend',
+    reasoningEffort: 'none',
+    bargeIn: 0,
+  })
   assert.deepEqual(loadPreferences(DOMAIN.ai), { token: 'shared-token', context: 'shared-context' })
+})
+
+test('voice interruption defaults off and survives saved settings reloads', async () => {
+  const { loadPreferences, config, preference } = await setup()
+  config.resetConfig({ openaiLive: { backendModel: 'host', bargeIn: true } })
+  assert.equal(loadPreferences(DOMAIN.openailive).bargeIn, 0)
+  for (const value of ['1', 1, '0', 0, 'invalid', 2]) {
+    preference.resetPreference({ 'openailive.bargeIn': value })
+    assert.equal(loadPreferences(DOMAIN.openailive).bargeIn, value === '1' || value === 1 ? 1 : 0)
+  }
 })
 
 test('OpenAI preferences use the same whole MOD configuration override as GPT-Live', async () => {
@@ -170,5 +184,9 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
   config.resetConfig({ openaiLive: { backendModel: 'host-backend', reasoningEffort: 'high' } })
   modules.resetModules({ 'mod/config': { openaiLive: { backendModel: 'mod-backend' } } })
   const fresh = await import(new URL('./loadPreference.js?openai-mod', import.meta.url).href)
-  assert.deepEqual(fresh.default(DOMAIN.openailive), { backendModel: 'mod-backend', reasoningEffort: undefined })
+  assert.deepEqual(fresh.default(DOMAIN.openailive), {
+    backendModel: 'mod-backend',
+    reasoningEffort: undefined,
+    bargeIn: 0,
+  })
 })

@@ -37,6 +37,7 @@ export function PreferencesPage() {
     !preferences.connected ||
     preferences.readOnly.has(name) ||
     (name.startsWith('openailive.') && !preferences.openaiAvailable) ||
+    (name === 'openailive.bargeIn' && !preferences.bargeInAvailable) ||
     (name === 'www.password' && !preferences.wwwAvailable)
 
   const inputField = ({ name, label, type = 'text', wide, ...props }: FieldProps) => (
@@ -64,6 +65,10 @@ export function PreferencesPage() {
     <div className={wide ? 'grid gap-2 sm:col-span-2' : 'grid gap-2'}>
       <Label htmlFor={name}>{t(label)}</Label>
       <Select
+        items={options.map((option) => ({
+          value: option.value,
+          label: option.translate === false ? option.label : t(option.label),
+        }))}
         value={preferences.values[name]}
         disabled={isDisabled(name)}
         onValueChange={(value) => value && preferences.update(name, value)}
@@ -260,6 +265,13 @@ export function PreferencesPage() {
                 'openailive.reasoningEffort',
                 '推論の強度',
                 OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
+              )}
+              {selectField(
+                'openailive.bargeIn',
+                '音声で割り込み（実験的）',
+                [{ value: '0', label: '無効' }, { value: '1', label: '有効' }],
+                '発話中も音声を聞き取り、GPT-Liveが割り込みに対応します。初期設定は無効です。次回のGPT-Live開始時に適用されます。',
+                true
               )}
             </>
           )}

@@ -18,10 +18,12 @@ export function readLiveSettings(defaults, getPreference) {
   const context = getPreference('ai', 'context')
   const backendModel = getPreference('openailive', 'backendModel')
   const reasoningEffort = getPreference('openailive', 'reasoningEffort')
+  const bargeIn = getPreference('openailive', 'bargeIn')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
   return {
     ...copyConfig(defaults),
+    bargeIn: bargeIn === 1 || bargeIn === '1',
     ...(typeof backendModel === 'string' && backendModel.trim() ? { backendModel: backendModel.trim() } : {}),
     ...(['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoningEffort) ? { reasoningEffort } : {}),
     apiKey: typeof token === 'string' ? token.trim() : (defaults.apiKey ?? ''),

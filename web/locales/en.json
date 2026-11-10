@@ -620,5 +620,9 @@
   "Wi-Fiで接続しています": "Connecting over Wi-Fi",
   "Wi-Fiで接続": "Connect over Wi-Fi",
   "Wi-Fi接続を切断しました": "Disconnected from Wi-Fi settings",
-  "WWWのパスワードに制御文字は使用できません。": "The WWW password cannot contain control characters."
+  "WWWのパスワードに制御文字は使用できません。": "The WWW password cannot contain control characters.",
+  "音声で割り込み（実験的）": "Voice interruption (experimental)",
+  "発話中も音声を聞き取り、GPT-Liveが割り込みに対応します。初期設定は無効です。次回のGPT-Live開始時に適用されます。": "Keep listening while speaking so GPT-Live can respond to interruptions. Off by default. Applies on the next GPT-Live start.",
+  "無効": "Off",
+  "有効": "On"
 }

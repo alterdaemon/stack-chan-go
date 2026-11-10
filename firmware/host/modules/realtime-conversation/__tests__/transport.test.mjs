@@ -44,6 +44,27 @@ test('successful native polls reschedule the same timer from completion', async 
   assert.deepEqual(seen, [{ type: 'message', data: 'hello' }])
   assert.deepEqual(f.scheduled, [{ timer, interval: timer.interval, repeat: timer.interval }])
 })
+
+test('native start receives an explicit opt-in, independent from capture probes', () => {
+  const starts = []
+  const Transport = createTransport({
+    Timer: { repeat: () => ({}) },
+    Base: class {},
+    native:
+      (name) =>
+      (...args) => {
+        if (name === 'xs_live_transport_start') starts.push(args)
+      },
+  })
+  new Transport(() => {}).start()
+  new Transport(() => {}).start({ bargeIn: true })
+  new Transport(() => {}).start({ captureOnly: true })
+  assert.deepEqual(starts, [
+    [false, false],
+    [false, true],
+    [true, false],
+  ])
+})
 test('CoreS3 offers initiate DTLS without changing other SDP attributes', async () => {
   const f = fixture()
   const seen = []

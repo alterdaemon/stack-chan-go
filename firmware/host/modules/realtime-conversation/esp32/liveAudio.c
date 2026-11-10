@@ -11,6 +11,7 @@
 #include "esp_heap_caps.h"
 #include "esp_ae_rate_cvt.h"
 #include "audio_render.h"
+#include "esp_aec.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/stream_buffer.h"
@@ -80,6 +81,8 @@ struct LiveAudio {
 	StreamBufferHandle_t input, output;
 
 	esp_ae_rate_cvt_handle_t resampler;
+	aec_handle_t *aec;
+	bool bargeIn;
 	atomic_bool stopping, done, reading, muted;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
@@ -128,7 +131,7 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 		offset += xStreamBufferReceive(a->input, frame->data + offset, frame->size - offset, pdMS_TO_TICKS(50));
 	if (offset != frame->size) return ESP_CAPTURE_ERR_NOT_SUPPORTED;
 	if (atomic_load(&a->muted)
-		|| atomic_load(&a->outputIdleMs) < 500
+		|| (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500)
 	) memset(frame->data, 0, frame->size);
 	else liveAudioTransformCapture((int16_t *)frame->data, frame->size / 2);
 	atomic_fetch_add(&a->sourceSamples, frame->size / 2);
@@ -223,9 +226,15 @@ static void audioTask(void *ctx)
 			mic[accumulated] = converted[i * 2];
 			ref[accumulated++] = converted[i * 2 + 1];
 			if (accumulated != a->chunk) continue;
-			memcpy(clean, mic, a->chunk * 2);
-			// Gate capture locally before any JavaScript or server mute ACK can run.
-			if (idle < 500) memset(clean, 0, a->chunk * 2);
+			if (a->aec) {
+				// Residual echo can still look like speech. Keep playback independent
+				// of capture activity; GPT-Live decides when to yield.
+				aec_process(a->aec, mic, ref, clean);
+			} else {
+				memcpy(clean, mic, a->chunk * 2);
+				// Default mode preserves the existing half-duplex input gate.
+				if (idle < 500) memset(clean, 0, a->chunk * 2);
+			}
 			unsigned m = 0, r = 0, c = 0;
 			for (int j = 0; j < a->chunk; j++) { m += abs(mic[j]); r += abs(ref[j]); c += abs(clean[j]); }
 			atomic_store(&a->micLevel, m / a->chunk);
@@ -245,7 +254,7 @@ static void audioTask(void *ctx)
 	vTaskDelete(NULL);
 }
 
-int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider)
+int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn)
 {
   atomic_store(&quiesceAudio, false);
   int err = stackchanMediaAdapter();
@@ -262,9 +271,21 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider)
 	a->stage = "audio_buffers";
 	a->input = audioStreamCreate(CAPTURE_BYTES, 1);
 	a->output = audioStreamCreate(PLAYBACK_BYTES, 1);
-	a->stage = "aec_create";
 	if (!a->input || !a->output) return ESP_ERR_NO_MEM;
+	a->bargeIn = bargeIn;
 	a->chunk = 160;
+	if (bargeIn) {
+		a->stage = "aec_create";
+		aec_config_t config = {.mic_num = 1, .ref_num = 1, .out_num = 1,
+			.filter_length = 4, .sample_rate = 16000,
+			.caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+			// ESP-SR's default FD level provides stronger residual echo suppression.
+			.mode = AEC_MODE_FD_LOW_COST, .nlp_level = AEC_NLP_LEVEL_AGGR};
+		a->aec = aec_create_from_config(&config);
+		if (!a->aec) return ESP_ERR_NO_MEM;
+		a->chunk = aec_get_chunksize(a->aec);
+		if (a->chunk <= 0 || a->chunk > 2048) return ESP_ERR_INVALID_SIZE;
+	}
 	atomic_store(&a->outputIdleMs, 1000);
 	a->buffers = heap_caps_aligned_calloc(16, BLOCK * (8 + DMA_BLOCKS) + a->chunk * 3, sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 	if (!a->buffers) return ESP_ERR_NO_MEM;
@@ -351,6 +372,7 @@ void liveAudioClose(LiveAudio *a)
 	if (a->rx) i2s_del_channel(a->rx);
 	if (a->tx) i2s_del_channel(a->tx);
 	if (a->resampler) esp_ae_rate_cvt_close(a->resampler);
+	if (a->aec) aec_destroy(a->aec);
 	if (a->input) audioStreamDelete(a->input);
 	if (a->output) audioStreamDelete(a->output);
 	free(a->buffers);

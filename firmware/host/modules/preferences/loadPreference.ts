@@ -45,10 +45,11 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
   const preference = { ...mcPreference, ...modPreference }
   if (category === DOMAIN.www) preference.password ??= ''
   if (category === DOMAIN.openailive) {
-    // Match GPT-Live's whole-block MOD override and expose only its two editable fields.
+    // Match GPT-Live's whole-block MOD override and expose only its editable fields.
     const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}
     preference.backendModel = live.backendModel
     preference.reasoningEffort = live.reasoningEffort
+    preference.bargeIn = 0 // Opt-in, including installations with no saved preference.
   }
   const lockedDriverType =
     category === DOMAIN.driver && mcPreference.typeLocked === true && typeof mcPreference.type === 'string'
@@ -72,6 +73,8 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
       preference[key] = ctor(value)
     }
   }
+
+  if (category === DOMAIN.openailive) preference.bargeIn = preference.bargeIn === 1 ? 1 : 0
 
   if (category === DOMAIN.ui && Preference.get(DOMAIN.ui, 'type') == null) {
     const legacyType = Preference.get(LEGACY_RENDERER_DOMAIN, 'type')

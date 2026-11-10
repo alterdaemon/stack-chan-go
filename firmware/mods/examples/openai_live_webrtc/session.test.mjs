@@ -94,6 +94,22 @@ test('empty key and unavailable network never acquire audio or create a session'
     assert.equal(f.session.active, undefined)
   }
 })
+
+test('interruption settings apply only to the next start and preserve user instructions', async () => {
+  const f = fixture()
+  f.session.settings.instructions = 'Answer in Polish.'
+  await f.session.start()
+  assert.equal(f.instances[0].options.bargeIn, false)
+  assert.equal(f.instances[0].options.instructions, 'Answer in Polish.')
+  f.session.settings.bargeIn = true
+  assert.equal(f.instances[0].options.bargeIn, false)
+  await f.session.stop()
+  await f.session.start()
+  assert.equal(f.instances[1].options.bargeIn, true)
+  assert.ok(f.instances[1].options.instructions.startsWith('Answer in Polish.'))
+  assert.ok(f.instances[1].options.instructions.length > f.instances[0].options.instructions.length)
+  await f.session.stop()
+})
 test('start, acknowledged mute and close reuse Conversation and release only after native close', async () => {
   const f = fixture()
   f.session.settings.backendModel = 'test-backend-model'

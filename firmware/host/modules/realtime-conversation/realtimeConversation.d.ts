@@ -61,6 +61,9 @@ declare module 'realtimeConversation' {
     model?: string
     voice?: string
     instructions?: string
+    /** Keep the microphone active with AEC during playback; defaults to false.
+     * GPT-Live handles yielding. This does not guarantee immediate playback stop. */
+    bargeIn?: boolean
     delegation?: Record<string, unknown>
     tools?: ConversationTool[]
     toolTimeout?: number

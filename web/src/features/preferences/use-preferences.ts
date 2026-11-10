@@ -75,7 +75,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     const activeClient = client.current
     if (!activeClient) return
     // A new device must advertise these fields before they become editable.
-    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort', 'www.password'] as const) {
+    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort', 'openailive.bargeIn', 'www.password'] as const) {
       delete currentValues.current[key]
       dirty.current.delete(key)
     }
@@ -83,6 +83,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       ...current,
       'openailive.backendModel': '',
       'openailive.reasoningEffort': '',
+      'openailive.bargeIn': '0',
       'www.password': '',
     }))
     setConnection('connecting')
@@ -116,7 +117,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
   }, [http])
 
   const update = useCallback((key: PreferenceKey, value: string) => {
-    if (readOnlyRef.current.has(key)) return
+    if (readOnlyRef.current.has(key) || (key === 'openailive.bargeIn' && currentValues.current[key] === undefined)) return
     if (currentValues.current[key] === value) dirty.current.delete(key)
     else dirty.current.add(key)
     setValues((current) => ({ ...current, [key]: value }))
@@ -140,7 +141,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       }
       if (
         (model !== undefined && !model.trim()) ||
-        (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort))
+        (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort)) ||
+        (payload['openailive.bargeIn'] !== undefined && !['0', '1'].includes(payload['openailive.bargeIn']))
       ) {
         setOperation({
           status: 'error',
@@ -201,6 +203,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     values,
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
+    bargeInAvailable: currentValues.current['openailive.bargeIn'] !== undefined,
     wwwAvailable: currentValues.current['www.password'] !== undefined,
     http,
     operation,

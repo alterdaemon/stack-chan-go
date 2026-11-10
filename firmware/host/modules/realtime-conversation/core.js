@@ -91,11 +91,14 @@ export default class Conversation {
     for (const name of ['onStateChanged', 'onTranscript', 'onEvent', 'onError', 'onToolResult'])
       if (options[name] !== undefined && typeof options[name] !== 'function')
         throw new TypeError(`${name} must be a function`)
+    if (options.bargeIn !== undefined && typeof options.bargeIn !== 'boolean')
+      throw new TypeError('bargeIn must be boolean')
     this.#key = options.apiKey
     this.#options = {
       model: options.model ?? 'gpt-live-1',
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
+      bargeIn: options.bargeIn === true,
       delegation: options.delegation === undefined ? undefined : copyDelegation(options.delegation),
       onStateChanged: options.onStateChanged,
       onTranscript: options.onTranscript,
@@ -176,7 +179,7 @@ export default class Conversation {
       this.#connectTimer = this.#after(60000, () =>
         this.#fail(new ConversationError('Session startup timed out', 'connect_timeout', 'connect')),
       )
-      this.#transport.start()
+      this.#transport.start({ bargeIn: this.#options.bargeIn })
     } catch (error) {
       this.#fail(error)
     }

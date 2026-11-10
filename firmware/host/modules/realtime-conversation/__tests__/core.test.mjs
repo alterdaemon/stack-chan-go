@@ -43,6 +43,7 @@ function harness(options = {}) {
     id = 0,
     disposed = 0,
     localMute = false
+  const starts = []
   let reply = async () => ({
     status: 201,
     ok: true,
@@ -67,7 +68,9 @@ function harness(options = {}) {
       createTransport(cb) {
         callback = cb
         return {
-          start() {},
+          start(options) {
+            starts.push(options)
+          },
           setVolume() {},
           setMuted(v) {
             localMute = v
@@ -101,6 +104,7 @@ function harness(options = {}) {
     c,
     requests,
     sent,
+    starts,
     events,
     transcripts,
     errors,
@@ -146,6 +150,33 @@ async function test(name, run) {
   count++
   console.log(`PASS ${name}`)
 }
+await test('unclassified local speech cannot force-stop a full-duplex answer', async () => {
+  for (const bargeIn of [false, true]) {
+    const h = harness({ bargeIn })
+    await h.connect()
+    equal(h.starts, [{ bargeIn }])
+    // Residual speaker echo can produce repeated speech detections. These
+    // detections do not establish caller intent and must not inject stop commands.
+    for (let i = 0; i < 50; i++) {
+      h.emit({ type: 'bargeIn' })
+      h.message({ type: 'session.output_transcript.delta', delta: 'word ', start_ms: i * 100, end_ms: (i + 1) * 100 })
+    }
+    equal(h.sent, [])
+    equal(h.c.state, 'connected')
+    equal(h.localMute, false)
+    equal(h.transcripts.length, 50)
+    // Genuine caller speech still reaches the normal Live event path.
+    h.message({ type: 'session.input_transcript.delta', delta: 'stop', start_ms: 5000, end_ms: 5400 })
+    equal(h.transcripts.at(-1).role, 'user')
+    equal(h.transcripts.at(-1).delta, 'stop')
+    equal(h.sent, [])
+    equal(JSON.parse(h.requests[0].init.body).session.bargeIn, undefined)
+    const closing = h.c.close()
+    h.message({ type: 'session.closed', reason: 'client_request' })
+    await closing
+  }
+})
+
 await test('Live session JSON and no session.start on WebRTC', async () => {
   const h = harness()
   await h.connect()

@@ -150,6 +150,7 @@ export class WiFiSettingsServer {
         (prop === 'tts.volume' && (Number(value) < 0 || Number(value) > 1)) ||
         (prop === 'openailive.backendModel' && !value.trim()) ||
         (prop === 'openailive.reasoningEffort' && !EFFORTS.includes(value)) ||
+        (prop === 'openailive.bargeIn' && !['0', '1'].includes(value)) ||
         (prop === 'www.password' && CONTROL_CHARACTERS.test(value))
       ) {
         return context.text('Invalid value', 400)

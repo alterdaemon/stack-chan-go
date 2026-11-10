@@ -6,6 +6,12 @@ AI / Token, AI / Context i zapisana glosnosc sa odczytywane przy kazdym starcie.
 R6: panel WWW ma sekcje OpenAI pomiedzy AI a MCP Server.
 Model i Thinking effort odczytuja wartosci zapisane lub domyslne z firmware.
 Zmiana modelu backendowego i effort obowiazuje od nastepnego startu GPT-Live.
+R9: sekcja OpenAI zawiera Voice interruption (experimental), domyslnie Off.
+Brak zapisanego openailive.bargeIn oznacza Off. Zmiana dziala od nastepnego startu.
+Poprawka R9: usuniete lokalne wyciszanie i polecenie stop wyzwalane przez sam VAD.
+On wlacza ciagly nasluch i AEC z silniejszym tlumieniem echa. O przerwaniu
+wypowiedzi decyduje GPT-Live; czas zatrzymania nie jest gwarantowany.
+Tryb wymaga testow akustycznych na robocie; nie byl sprawdzony na urzadzeniu.
 R8: pelny wspoldzielony formularz Settings jest w firmware, pod http://IP-robota/settings/.
 Otwarcie samego IP przekierowuje do formularza. Nie wymaga zewnetrznego hostingu.
 Bluetooth nadal dziala bez hasla WWW i pozwala zmienic to haslo.
@@ -60,8 +66,8 @@ PAKOWANIE ISTNIEJACEJ KOMPILACJI (bez ponownego budowania)
 W tym samym aktywnym srodowisku, z katalogu projektu:
   python3 firmware/scripts/package-gpt-live-update.py
 Wynik w gpt-live-package/, zawsze dwa pliki z tej samej kompilacji:
-  StackChan-Community-v2.0.1-r8-GPT-Live.bin      - pelny obraz, 16 MiB
-  StackChan-Community-v2.0.1-r8-GPT-Live-app.bin  - sama aplikacja
+  StackChan-Community-v2.0.1-r9-GPT-Live.bin      - pelny obraz, 16 MiB
+  StackChan-Community-v2.0.1-r9-GPT-Live-app.bin  - sama aplikacja
 Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania obu BIN-ow.
 Pelny obraz zawiera bootloader, tabele partycji i aplikacje z biezacego builda.
 Pozostale bajty sa wypelnione 0xFF, w tym obszary NVS, xs i storage.
@@ -69,16 +75,16 @@ Skrypt nie zapisuje raportow ani plikow pomocniczych.
 
 Przed nowa edycja ustaw kolejny wolny numer REVISION w
 firmware/scripts/package-gpt-live-update.py oraz zaktualizuj nazwy i komendy
-w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r8; nastepna: r9.
+w tym pliku i numer rewizji w AGENTS.md. Biezaca rewizja: r9; nastepna: r10.
 Zachowuj poprzednie BIN-y. Skrypt odrzuca inna zawartosc pod istniejaca rewizja;
 ponowne pakowanie identycznych danych jest dozwolone.
 
 INSTALACJA (z katalogu projektu)
 Pelna instalacja / odtworzenie, zapis calego flash i wyczyszczenie danych:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r8-GPT-Live.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.0.1-r9-GPT-Live.bin
 
 Aktualizacja samej aplikacji, zachowuje pozostale partycje przy zgodnej mapie:
-  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r8-GPT-Live-app.bin
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r9-GPT-Live-app.bin
 Po wgraniu krotko nacisnij RST.
 Adres okresla miejsce zapisu w urzadzeniu, nie wybiera fragmentu pliku.
 Pelnego obrazu nie wolno wgrywac na 0x10000.

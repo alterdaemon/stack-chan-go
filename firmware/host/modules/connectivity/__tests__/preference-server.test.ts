@@ -98,6 +98,20 @@ test('read-only driver type publishes the platform value and rejects BLE overrid
   })
 })
 
+test('BLE voice interruption accepts explicit on/off and rejects malformed values', async () => {
+  const { PreferenceServer, preference } = await setup()
+  const server = new PreferenceServer({ keys: PREF_KEYS })
+  server.enableWrites(BLE_PREFERENCE_WRITE_WINDOW_MS)
+  for (const invalid of ['true', 'false', '', '2']) {
+    server.receiveAndSetPreference('openailive', 'bargeIn', invalid)
+    assert.equal(preference.default.get('openailive', 'bargeIn'), undefined)
+  }
+  for (const value of ['1', '0']) {
+    server.receiveAndSetPreference('openailive', 'bargeIn', value)
+    assert.equal(preference.default.get('openailive', 'bargeIn'), value)
+  }
+})
+
 test('unlocked driver type remains writable for other platforms', async () => {
   const { PreferenceServer, preference } = await setup()
   const server = new PreferenceServer({

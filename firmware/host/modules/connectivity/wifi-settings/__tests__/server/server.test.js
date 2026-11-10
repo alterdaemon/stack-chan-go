@@ -183,6 +183,12 @@ try {
     200,
   )
   equal(Preference.get('openailive', 'backendModel'), 'saved-model')
+  for (const value of ['1', '0']) {
+    equal((await save({ 'openailive.bargeIn': value }, authorization)).status, 200)
+    equal(Preference.get('openailive', 'bargeIn'), value)
+  }
+  equal((await save({ 'openailive.bargeIn': 'true', 'ai.token': 'bad' }, authorization)).status, 400)
+  equal(Preference.get('ai', 'token'), undefined, 'invalid interruption settings reject the entire batch')
   equal((await save({ 'ai.token': 'must-not-save', 'driver.type': 'none' }, authorization)).status, 403)
   equal(Preference.get('ai', 'token'), undefined, 'invalid batch must not be partially saved')
   equal((await save({ 'openailive.reasoningEffort': 'invalid' }, authorization)).status, 400)

@@ -1,4 +1,5 @@
 import { requests } from 'realtimeConversation/http'
+import { transports } from 'realtimeConversation/transport'
 import config from 'mc/config'
 import Modules from 'modules'
 import Preference from 'preference'
@@ -54,6 +55,7 @@ async function run() {
   button.callback()
   await waitFor('GPT-Live connected')
   equal(acquired, 1, 'host audio acquired')
+  equal(transports[0].options.bargeIn, false, 'missing saved preference keeps native interruption off')
   equal(requests.length, 1, 'one signaling request')
   const session = JSON.parse(requests[0].init.body).session
   equal(session.model, config.openaiLive.model, 'configured voice model reaches signaling')
@@ -69,10 +71,14 @@ async function run() {
   equal(globalThis.amp.sampleRate, 24000, 'host audio rate restored')
   Preference.set('openailive', 'backendModel', 'saved-backend')
   Preference.set('openailive', 'reasoningEffort', 'none')
+  Preference.set('openailive', 'bargeIn', '1')
   balloons.length = 0
   button.callback()
   await waitFor('GPT-Live connected')
   equal(requests.length, 2, 'new start creates a fresh signaling request')
+  equal(transports[1].options.bargeIn, true, 'saved opt-in reaches the native transport')
+  for (let i = 0; i < 50; i++) transports[1].callback({ type: 'bargeIn' })
+  equal(transports[1].sent.length, 0, 'unclassified speech must not inject stop instructions')
   const next = JSON.parse(requests[1].init.body).session
   equal(next.delegation.responses.model, 'saved-backend', 'saved backend reaches signaling on restart')
   equal(next.delegation.responses.reasoning.effort, 'none', 'none is an explicit effort, not a missing preference')

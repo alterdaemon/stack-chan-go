@@ -16,6 +16,7 @@ export const PREFERENCE_KEYS = [
   'ai.context',
   'openailive.backendModel',
   'openailive.reasoningEffort',
+  'openailive.bargeIn',
   'mcp.token',
   'www.password',
 ] as const
@@ -42,6 +43,7 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   // Populated by the device, including its firmware defaults.
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',
+  'openailive.bargeIn': '0',
   'mcp.token': '',
   'www.password': '',
 }

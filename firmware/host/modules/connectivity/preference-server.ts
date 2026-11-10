@@ -203,6 +203,7 @@ export class PreferenceServer extends UARTServer {
       return
     }
     const prop = `${domain}.${key}`
+    if (prop === 'openailive.bargeIn' && value !== '0' && value !== '1' && value !== 0 && value !== 1) return
     // WWW authentication applies only to HTTP. BLE can replace, but never read, its password.
     if (prop === 'www.password' && (typeof value !== 'string' || value.length === 0 || CONTROL_CHARACTERS.test(value)))
       return

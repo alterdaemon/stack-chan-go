@@ -242,3 +242,41 @@ describe('usePreferences', () => {
     expect(disconnect).toHaveBeenCalledOnce()
   })
 })
+
+describe('voice interruption preference', () => {
+  it('requires its own capability and saves explicit on/off values', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return {
+          connect: async () => {},
+          disconnect: async () => {},
+          isConnected: () => true,
+          send,
+        }
+      })
+    )
+    await act(() => result.current.connect())
+    act(() => notify({ prop: 'openailive.backendModel', value: 'r8-model' }))
+    expect(result.current.bargeInAvailable).toBe(false)
+    act(() => result.current.update('openailive.bargeIn', '1'))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    act(() => notify({ prop: 'openailive.bargeIn', value: 0 }))
+    expect(result.current.bargeInAvailable).toBe(true)
+    expect(result.current.values['openailive.bargeIn']).toBe('0')
+    for (const value of ['1', '0']) {
+      act(() => result.current.update('openailive.bargeIn', value))
+      await act(() => result.current.save())
+      expect(send).toHaveBeenLastCalledWith({
+        _batch: { 'openailive.bargeIn': value },
+      })
+    }
+    await act(() => result.current.disconnect())
+    await act(() => result.current.connect())
+    expect(result.current.bargeInAvailable).toBe(false)
+    expect(result.current.values['openailive.bargeIn']).toBe('0')
+  })
+})

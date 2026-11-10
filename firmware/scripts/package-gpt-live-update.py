@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 
-REVISION = 8
+REVISION = 9
 
 
 def require(condition, message):

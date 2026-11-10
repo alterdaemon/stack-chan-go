@@ -29,6 +29,11 @@
       },
       "dependency": [
         {
+          "name": "esp-sr",
+          "version": "==2.4.7",
+          "includes": ["include/esp32s3"]
+        },
+        {
           "idf": "esp_webrtc"
         },
         {
