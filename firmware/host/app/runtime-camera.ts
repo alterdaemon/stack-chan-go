@@ -34,6 +34,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
   #cameraActive = false
   #touchPanel: ManagedTouchPanel | undefined
   #touchPanelPaused = false
+  #activeCaptures = 0
 
   constructor(params: RuntimeCameraConstructorParam) {
     this.#camera = params.camera ?? NULL_CAMERA
@@ -61,7 +62,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
             this.#cameraActive = true
           },
           (error) => {
-            if (!wasActive) this.#resumeTouchPanel()
+            if (!wasActive && !this.#activeCaptures) this.#resumeTouchPanel()
             throw error
           },
         )
@@ -69,7 +70,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
       traceMessage('[runtime-camera] start done\n')
       this.#cameraActive = true
     } catch (error) {
-      if (!wasActive) this.#resumeTouchPanel()
+      if (!wasActive && !this.#activeCaptures) this.#resumeTouchPanel()
       throw error
     }
   }
@@ -79,7 +80,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
     const finish = () => {
       traceMessage('[runtime-camera] stop camera done\n')
       this.#cameraActive = false
-      if (wasActive) {
+      if (wasActive && !this.#activeCaptures) {
         traceMessage('[runtime-camera] touch panel resume begin\n')
         this.#resumeTouchPanel()
         traceMessage('[runtime-camera] touch panel resume done\n')
@@ -94,7 +95,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
           () => finish(),
           (error) => {
             this.#cameraActive = false
-            if (wasActive) this.#resumeTouchPanel()
+            if (wasActive && !this.#activeCaptures) this.#resumeTouchPanel()
             throw error
           },
         )
@@ -102,7 +103,7 @@ export class StackchanRuntimeCamera implements RobotCamera {
       finish()
     } catch (error) {
       this.#cameraActive = false
-      if (wasActive) this.#resumeTouchPanel()
+      if (wasActive && !this.#activeCaptures) this.#resumeTouchPanel()
       throw error
     }
   }
@@ -132,15 +133,16 @@ export class StackchanRuntimeCamera implements RobotCamera {
   }
 
   async capture(options?: Parameters<RobotCamera['capture']>[0]) {
-    const wasActive = this.#cameraActive
-    if (!wasActive) this.#pauseTouchPanel()
+    if (!this.#cameraActive) this.#pauseTouchPanel()
+    this.#activeCaptures++
     try {
       traceMessage('[runtime-camera] capture begin\n')
       const frame = await this.#camera.capture(options)
       traceMessage(`[runtime-camera] capture done frame=${frame ? 'yes' : 'no'}\n`)
       return frame
     } finally {
-      if (!wasActive) this.#resumeTouchPanel()
+      this.#activeCaptures--
+      if (!this.#activeCaptures && !this.#cameraActive) this.#resumeTouchPanel()
     }
   }
 

@@ -174,6 +174,11 @@ useful memory benefit, but requires a representative audio and live provider
 comparison before changing the hardware rate. The other tested alternatives
 either repeat existing behavior, save little, or change visible/audio behavior.
 
+The R15 follow-up fixed the P11 camera lifecycle. Both tasks exited after stop,
+the preview and eight reopen cycles passed, and both real API modes advanced
+their audio sample counters in the short post-camera test.
+[R15 device results](docs/release-notes/v2.0.1-r15.md)
+
 ### Reproduce the diagnostic build
 
 From `firmware/`, use the same activated toolchain as the normal release.

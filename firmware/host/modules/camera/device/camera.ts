@@ -6,6 +6,7 @@ import {
 } from 'camera-capture-options'
 import { waitForInitialCameraFrame } from 'camera-initial-frame'
 import Bitmap from 'commodetto/Bitmap'
+import config from 'mc/config'
 import type { CameraCaptureOptions, CameraFrame, CameraImageType, RobotCamera } from '../camera.js'
 
 export type { CameraCaptureOptions, CameraFrame, CameraImageType, RobotCamera } from '../camera.js'
@@ -16,6 +17,7 @@ const DEFAULT_IMAGE_TYPE: CameraImageType = 'rgb565le'
 const FORMAT_DISPOSABLE_BUFFER = 'buffer/disposable'
 const INITIAL_FRAME_TIMEOUT_MS = 500
 const INITIAL_FRAME_POLL_MS = 30
+const RELEASE_ON_STOP = (config as { cameraReleaseOnStop?: boolean }).cameraReleaseOnStop === true
 const DEFAULT_CAPTURE_REQUEST: CameraCaptureRequest = {
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
@@ -69,12 +71,19 @@ export default class Camera implements RobotCamera {
   #imageType: CameraImageType = DEFAULT_IMAGE_TYPE
   #request: CameraCaptureRequest = DEFAULT_CAPTURE_REQUEST
   #running = false
+  #explicitCapture = false
+  #singleCaptures = 0
 
   constructor(_options?: DeviceCameraConstructorOptions) {
     void _options
   }
 
   start(options: CameraCaptureOptions = {}): void {
+    this.#open(options)
+    this.#explicitCapture = this.#running
+  }
+
+  #open(options: CameraCaptureOptions): void {
     const request = normalizeCameraCaptureRequest(options, DEFAULT_CAPTURE_REQUEST)
     trace(`[camera] start request width=${request.width} height=${request.height} imageType=${request.imageType}\n`)
     const nativeImageType = toNativeImageType(request.imageType)
@@ -109,18 +118,40 @@ export default class Camera implements RobotCamera {
   }
 
   stop(): void {
-    this.#stopCamera()
+    this.#explicitCapture = false
+    if (RELEASE_ON_STOP) this.#closeCamera()
+    else this.#stopCamera()
   }
 
   close(): void {
+    this.#explicitCapture = false
     this.#closeCamera()
   }
 
   async capture(options: CameraCaptureOptions = {}): Promise<CameraFrame | undefined> {
+    if (!RELEASE_ON_STOP || this.#explicitCapture) return this.#captureFrame(options)
+
+    this.#singleCaptures++
+    try {
+      const frame = await this.#captureFrame(options)
+      if (!frame) return undefined
+      try {
+        const buffer = new Uint8Array(frame.buffer).slice().buffer
+        return { width: frame.width, height: frame.height, imageType: frame.imageType, buffer }
+      } finally {
+        frame.close?.()
+      }
+    } finally {
+      this.#singleCaptures--
+      if (this.#singleCaptures === 0 && !this.#explicitCapture) this.#closeCamera()
+    }
+  }
+
+  async #captureFrame(options: CameraCaptureOptions): Promise<CameraFrame | undefined> {
     const shouldRestart = this.#shouldRestart(options) || !this.#running
     trace(`[camera] capture begin restart=${shouldRestart}\n`)
     if (shouldRestart) {
-      this.start(options)
+      this.#open(options)
     }
 
     const camera = this.#camera
@@ -153,7 +184,10 @@ export default class Camera implements RobotCamera {
 
   #closeCamera(): void {
     if (this.#camera) trace('[camera] close\n')
-    this.#stopCamera()
+    if (RELEASE_ON_STOP) {
+      closeFrame(this.#frame)
+      this.#frame = undefined
+    } else this.#stopCamera()
     if (this.#camera) trace('[camera] native close begin\n')
     this.#camera?.close()
     if (this.#camera) trace('[camera] native close done\n')
@@ -166,7 +200,12 @@ export default class Camera implements RobotCamera {
     closeFrame(this.#frame)
     this.#frame = undefined
     trace('[camera] native start begin\n')
-    this.#camera.start()
+    try {
+      this.#camera.start()
+    } catch (error) {
+      if (RELEASE_ON_STOP) this.#closeCamera()
+      throw error
+    }
     this.#running = true
     trace('[camera] native start done\n')
   }

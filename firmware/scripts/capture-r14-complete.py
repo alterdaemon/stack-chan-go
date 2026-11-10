@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Bounded R14 diagnostic collection; opening the serial port does not reset it."""
 import argparse
+import errno
 import json
 import os
 import select
@@ -16,14 +17,17 @@ def main():
     parser.add_argument('--seconds', type=int, default=900)
     parser.add_argument('--startup', type=int, default=30)
     parser.add_argument('--quiet-limit', type=int, default=55)
+    parser.add_argument('--marker', default='r14-complete')
+    parser.add_argument('--camera-events', action='store_true')
     args = parser.parse_args()
+    probe_marker = f'[{args.marker}] '.encode()
     opening = time.monotonic()
     while True:
         try:
             fd = os.open(args.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
             break
-        except FileNotFoundError:
-            if time.monotonic() - opening >= 10:
+        except OSError as error:
+            if error.errno not in (errno.ENOENT, errno.ENODEV, errno.EIO) or time.monotonic() - opening >= 10:
                 raise
             time.sleep(0.1)
     try:
@@ -38,10 +42,10 @@ def main():
         while time.monotonic() - began < args.seconds and size < 2 * 1024 * 1024:
             now = time.monotonic()
             if not started and now - began > args.startup:
-                print('R14 probe did not start', file=sys.stderr)
+                print(f'{args.marker} probe did not start', file=sys.stderr)
                 return 1
             if started and now - last > args.quiet_limit:
-                print('R14 probe stopped progressing', file=sys.stderr)
+                print(f'{args.marker} probe stopped progressing', file=sys.stderr)
                 return 1
             if not select.select([fd], [], [], 0.25)[0]:
                 continue
@@ -51,10 +55,9 @@ def main():
                 continue
             while b'\n' in pending:
                 line, pending = pending.split(b'\n', 1)
-                marker = b'[r14-complete] '
-                offset = line.find(marker)
+                offset = line.find(probe_marker)
                 if offset >= 0:
-                    event = json.loads(line[offset + len(marker):])
+                    event = json.loads(line[offset + len(probe_marker):])
                     event['hostMonotonic'] = time.monotonic()
                     output = json.dumps(event, separators=(',', ':'))
                     print(output, flush=True)
@@ -78,7 +81,19 @@ def main():
                     detail = json.loads(line.split(b'[openai-live] diagnostic ', 1)[1])
                     fields = {key: detail[key] for key in ('code', 'stage', 'site', 'status', 'providerCode') if key in detail}
                     print(json.dumps({'phase': 'provider-diagnostic', **fields}), flush=True)
-        print('R14 probe exceeded its time/output bound', file=sys.stderr)
+                elif args.camera_events:
+                    for marker, phase in (
+                        (b'[CameraPreview] render mode=bitmap', 'preview-bitmap'),
+                        (b'[CameraPreview] render mode=mosaic', 'preview-mosaic'),
+                        (b'[CameraPreview] stop error', 'preview-stop-error'),
+                        (b'[CameraPreview] camera stop done', 'preview-stopped'),
+                        (b'[runtime-camera] touch panel resume done', 'touch-resumed'),
+                        (b'[runtime-camera] touch panel restart error', 'touch-resume-error'),
+                    ):
+                        if marker in line:
+                            print(json.dumps({'phase': phase, 'hostMonotonic': time.monotonic()}), flush=True)
+                            break
+        print(f'{args.marker} probe exceeded its time/output bound', file=sys.stderr)
         return 1
     finally:
         os.close(fd)

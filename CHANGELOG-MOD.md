@@ -6,7 +6,7 @@ at [v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit
 The upstream history, credits and licenses are retained. The changes below belong
 to this fork; upstream browser links still serve the upstream project.
 
-Current version: **2.0.1-r14**. R<N> corresponds to `2.0.1-r<N>` and Git tag
+Current version: **2.0.1-r15**. R<N> corresponds to `2.0.1-r<N>` and Git tag
 `v2.0.1-r<N>`. These are fork versions, not releases published by upstream.
 
 ## Revisions
@@ -27,6 +27,7 @@ Current version: **2.0.1-r14**. R<N> corresponds to `2.0.1-r<N>` and Git tag
 | **2.0.1-r12** | Give full-duplex LIVE native 8/12 ms UI windows per 20 ms with a touch deadline, shared I2S priority and a runnable SPI dependency; leave Off scheduling unchanged. Drive the mouth from post-Pitch, post-volume speaker PCM independently of capture DSP. Keep media clocks running silently during graceful close. Preserve standby RAM context when remote finalization is unconfirmed, while retaining cleanup errors. Preserve the R11 checkpoint and both images. See the R12 validation record for device measurements and verification limits. |
 | **2.0.1-r13** | Add GPT-Realtime 2.1 Mini alongside GPT-Live 1, with one mode selector, independent voice selections, server VAD and no Live standby timer in Mini mode. Share LIVE, credentials, instructions, volume and native audio. Bridge Realtime search calls directly to Responses with bounded cancellable HTTPS. Amend: frame the saved Mini persona as its dialogue task without changing preferences; verify the echoed system prompt before enabling Mini microphone input; reapply mismatched startup instructions and reject an incorrect acknowledgment. See the [R13 validation record](./docs/release-notes/v2.0.1-r13.md) for completed checks and remaining verification. |
 | **2.0.1-r14** | Replace both realtime CoreS3 SPI busy waits with completion/capacity events. Evaluate and reject AEC-plane SRAM placement after measuring its small gain and reduced internal-memory margin. Preserve WebRTC, 48 kHz hardware audio, codec policies, UI budgets and saved settings. Add paired device measurements and native concurrency/payload regressions. See the [R14 report](./R14-PERFORMANCE-REPORT.md) for measured scope and dispositions of all twelve proposals. |
+| **2.0.1-r15** | Stop CoreS3 camera capture after preview, release driver buffers, and reopen on demand. Cover preview rendering, repeated capture, held frame disposal, touch restoration and voice capture after camera use. See the [R15 validation record](./docs/release-notes/v2.0.1-r15.md). |
 
 R14 diagnostic follow-up: measure all twelve proposals and record device,
 provider, stability and data preservation results in the

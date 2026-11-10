@@ -356,17 +356,15 @@ foreign implementation alone. [Native buffers][audio], [Pitch storage][pitch],
 
 ## P11 Audit and suspend genuinely unused activity
 
-**Assessment:** audit first. LIVE already disables autonomous face motion while
-active. Camera construction is lazy, but `capture()` can start the native camera
-and does not itself stop it. Measure conversations both after a fresh boot and
-after camera/preview use; this source behavior does not prove current runtime
-camera load. [LIVE face policy][mod], [Camera implementation][camera],
-[Runtime camera wrapper][runtime-camera]
+R14 measured 11.825% of one core in camera tasks after `stop()`. The R15
+follow-up verified that the tasks exit, the preview remains available, and the
+camera reopens. The existing R14 tag and images are the baseline.
+[R15 device results](docs/release-notes/v2.0.1-r15.md)
 
 - [x] P11.1: Review existing face suspension and lazy camera lifecycle.
 - [ ] P11.2: Attribute actual CPU time, wakeups, I/O and retained buffers to optional activity in fresh-boot, post-camera, preview, idle and conversation scenarios.
-- [ ] P11.3: Identify user-required behavior and distinguish service presence from active work; avoid blanket service shutdown or launcher removal.
-- [ ] P11.4: If justified, suspend only measured unused activity through existing lifecycle mechanisms, with explicit ownership and restoration.
+- [x] P11.3: Identify user-required behavior and distinguish service presence from active work; avoid blanket service shutdown or launcher removal.
+- [x] P11.4: Release the idle CoreS3 camera through the existing camera lifecycle and reopen it on demand. [R15 patch and verification](docs/release-notes/v2.0.1-r15.md)
 - [ ] P11.5: Verify restoration on normal STOP, automatic standby, startup error, network failure and restart; preserve settings and requested camera/tool functions.
 - [ ] P11.6: Compare task CPU, cache/memory traffic, audio/touch quality and reactivation latency; close unused candidates with evidence when no activity is found.
 

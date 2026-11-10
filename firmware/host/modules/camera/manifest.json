@@ -19,7 +19,12 @@
     "esp32/m5stackchan_cores3": {
       "include": ["./manifest_device.json"],
       "modules": {
-        "camera": "./device/camera"
+        "camera": "./device/camera",
+        "*": "../../platforms/m5stackchan_cores3/camera/camera.c",
+        "~": "$(MODDABLE)/modules/io/imagein/camera/esp32/camera.c"
+      },
+      "config": {
+        "cameraReleaseOnStop": true
       }
     },
     "esp32/stackchan_rt": {

@@ -188,6 +188,38 @@ test('StackchanRuntimeCamera brackets direct capture calls with touchPanel pause
   assert.deepEqual(events, ['touch.stop', 'camera.capture', 'touch.start'])
 })
 
+test('StackchanRuntimeCamera resumes touch after both overlapping captures finish', async () => {
+  const events: string[] = []
+  const finish: (() => void)[] = []
+  const runtime = new StackchanRuntimeCamera({
+    camera: {
+      start() {},
+      stop() {},
+      async capture() {
+        await new Promise<void>((resolve) => finish.push(resolve))
+        return frame()
+      },
+    },
+    touchPanel: {
+      stop: () => {
+        events.push('touch.stop')
+      },
+      start: () => {
+        events.push('touch.start')
+      },
+    },
+  })
+  const first = runtime.capture()
+  const second = runtime.capture()
+  assert.deepEqual(events, ['touch.stop'])
+  finish[0]()
+  await first
+  assert.deepEqual(events, ['touch.stop'])
+  finish[1]()
+  await second
+  assert.deepEqual(events, ['touch.stop', 'touch.start'])
+})
+
 test('StackchanRuntimeCamera resumes touchPanel when camera start fails', async () => {
   const events: string[] = []
   const camera: RobotCamera = {

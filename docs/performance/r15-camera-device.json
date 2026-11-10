@@ -1,0 +1,502 @@
+{
+  "device": "M5StackChan CoreS3",
+  "diagnostic_image": {
+    "image_bytes": 8528384,
+    "sha256": "6657f319dc0bceab83aa39c71f978a040bba58308d6b5fd498ad9c412af03ee8",
+    "partition_table_matches_device": true
+  },
+  "r14_camera_task_cpu_percent_of_one_core": {
+    "before-camera": 0,
+    "camera-active": 11.7547,
+    "camera-stopped": 11.8251,
+    "camera-restarted": 11.8034,
+    "camera-closed": 0.5224
+  },
+  "r15_after_stop": {
+    "camera_tasks_present": false,
+    "camera_task_cpu_percent_of_one_core": 0,
+    "stop_us_min": 38064,
+    "stop_us_median": 56303.5,
+    "stop_us_max": 70495,
+    "internal_free_bytes_after_minus_active_min": 29972,
+    "internal_free_bytes_after_minus_active_max": 30604,
+    "psram_free_bytes_after_minus_active": [
+      115436,
+      115436,
+      115436,
+      115436,
+      115436,
+      115436,
+      115436,
+      115436
+    ]
+  },
+  "events": {
+    "boot": 1,
+    "baseline": 1,
+    "preview-bitmap": 1,
+    "touch-resumed": 10,
+    "preview-stopped": 1,
+    "preview-on-screen": 1,
+    "preview-dismissed": 1,
+    "cycle": 8,
+    "immediate-stop": 1,
+    "single-capture": 1,
+    "single-frames": 1,
+    "provider-start": 2,
+    "provider": 2,
+    "provider-diagnostic": 1,
+    "done": 1
+  },
+  "samples": [
+    {
+      "phase": "boot"
+    },
+    {
+      "phase": "baseline",
+      "atUs": 11400452,
+      "internalFree": 143811,
+      "internalLargest": 94208,
+      "psramFree": 6765996,
+      "worker": 0,
+      "hal": 0
+    },
+    {
+      "phase": "preview-bitmap"
+    },
+    {
+      "phase": "preview-stopped"
+    },
+    {
+      "phase": "preview-on-screen",
+      "atUs": 12828030,
+      "internalFree": 143451,
+      "internalLargest": 94208,
+      "psramFree": 6765996,
+      "worker": 0,
+      "hal": 0
+    },
+    {
+      "phase": "preview-dismissed",
+      "atUs": 17835007,
+      "internalFree": 142951,
+      "internalLargest": 94208,
+      "psramFree": 6765996,
+      "worker": 0,
+      "hal": 0
+    },
+    {
+      "phase": "cycle",
+      "cycle": 0,
+      "before": {
+        "atUs": 17838824,
+        "internalFree": 142951,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 18217267,
+        "internalFree": 113679,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 198,
+        "halUs": 2890
+      },
+      "stopped": {
+        "atUs": 18257452,
+        "internalFree": 144259,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 18508958,
+        "internalFree": 144259,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 38064
+    },
+    {
+      "phase": "cycle",
+      "cycle": 1,
+      "before": {
+        "atUs": 18547039,
+        "internalFree": 144259,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 18913079,
+        "internalFree": 113683,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 174,
+        "halUs": 1751
+      },
+      "stopped": {
+        "atUs": 18973580,
+        "internalFree": 144059,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 19224997,
+        "internalFree": 143655,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 59211
+    },
+    {
+      "phase": "cycle",
+      "cycle": 2,
+      "before": {
+        "atUs": 19263100,
+        "internalFree": 143655,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 19632388,
+        "internalFree": 112831,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 140,
+        "halUs": 1740
+      },
+      "stopped": {
+        "atUs": 19688102,
+        "internalFree": 143339,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 19938982,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 54493
+    },
+    {
+      "phase": "cycle",
+      "cycle": 3,
+      "before": {
+        "atUs": 19977191,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 20356387,
+        "internalFree": 112691,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 148,
+        "halUs": 2122
+      },
+      "stopped": {
+        "atUs": 20396580,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 20647988,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 38975
+    },
+    {
+      "phase": "cycle",
+      "cycle": 4,
+      "before": {
+        "atUs": 20686156,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 21049464,
+        "internalFree": 112691,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 158,
+        "halUs": 1741
+      },
+      "stopped": {
+        "atUs": 21108816,
+        "internalFree": 143219,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 21359986,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 58114
+    },
+    {
+      "phase": "cycle",
+      "cycle": 5,
+      "before": {
+        "atUs": 21398177,
+        "internalFree": 143295,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 21772679,
+        "internalFree": 112347,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 138,
+        "halUs": 2163
+      },
+      "stopped": {
+        "atUs": 21820632,
+        "internalFree": 142875,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 22087119,
+        "internalFree": 142951,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 46619
+    },
+    {
+      "phase": "cycle",
+      "cycle": 6,
+      "before": {
+        "atUs": 22125381,
+        "internalFree": 142951,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 22492045,
+        "internalFree": 112355,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 131,
+        "halUs": 1699
+      },
+      "stopped": {
+        "atUs": 22563811,
+        "internalFree": 142875,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 22815212,
+        "internalFree": 142875,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 70495
+    },
+    {
+      "phase": "cycle",
+      "cycle": 7,
+      "before": {
+        "atUs": 22853304,
+        "internalFree": 142875,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "active": {
+        "atUs": 23221085,
+        "internalFree": 112351,
+        "internalLargest": 94208,
+        "psramFree": 6650560,
+        "worker": 1,
+        "hal": 1,
+        "workerUs": 142,
+        "halUs": 1739
+      },
+      "stopped": {
+        "atUs": 23289075,
+        "internalFree": 142875,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "after": {
+        "atUs": 23539970,
+        "internalFree": 142951,
+        "internalLargest": 94208,
+        "psramFree": 6765996,
+        "worker": 0,
+        "hal": 0
+      },
+      "stopUs": 66671
+    },
+    {
+      "phase": "immediate-stop",
+      "atUs": 24206987,
+      "internalFree": 142951,
+      "internalLargest": 94208,
+      "psramFree": 6765996,
+      "worker": 0,
+      "hal": 0
+    },
+    {
+      "phase": "single-capture",
+      "atUs": 24931816,
+      "internalFree": 142951,
+      "internalLargest": 94208,
+      "psramFree": 6765996,
+      "worker": 0,
+      "hal": 0
+    },
+    {
+      "phase": "single-frames",
+      "bytes": [
+        38400,
+        38400
+      ]
+    },
+    {
+      "phase": "provider",
+      "mode": "live",
+      "sent": 50240,
+      "captured": 50176,
+      "overruns": 0,
+      "active": true,
+      "memory": {
+        "atUs": 35507423,
+        "internalFree": 31955,
+        "internalLargest": 22528,
+        "psramFree": 6356244,
+        "worker": 0,
+        "hal": 0
+      }
+    },
+    {
+      "phase": "provider",
+      "mode": "realtime",
+      "sent": 48640,
+      "captured": 48640,
+      "overruns": 0,
+      "active": true,
+      "memory": {
+        "atUs": 47390977,
+        "internalFree": 31967,
+        "internalLargest": 14848,
+        "psramFree": 6354124,
+        "worker": 0,
+        "hal": 0
+      }
+    },
+    {
+      "phase": "provider-diagnostic",
+      "code": "hangup_failed",
+      "stage": "close",
+      "site": "close_event"
+    },
+    {
+      "phase": "done"
+    }
+  ],
+  "release": {
+    "app": {
+      "file": "StackChan-Community-v2.0.1-r15-GPT-Live-app.bin",
+      "bytes": 8519648,
+      "sha256": "97007aacf77c6bee8075618e5640c4c45d8b511d5bcafa0edcb224114cd86c88",
+      "flash_offset": "0x10000"
+    },
+    "full": {
+      "file": "StackChan-Community-v2.0.1-r15-GPT-Live.bin",
+      "bytes": 16777216,
+      "sha256": "e9da48b39935734c5d829773f24b051f841b7777d2235bb9cef0c065592761ed"
+    },
+    "built_app_matches_both_packages": true,
+    "bootloader_and_table_match_build": true,
+    "partition_table_matches_device": true,
+    "probe_not_linked": true,
+    "esptool_write_verified": true,
+    "boot_marker": "[main] app behaviors ready"
+  },
+  "protected_flash": {
+    "compared_bytes": 458752,
+    "ranges": [
+      {
+        "offset": "0x0",
+        "bytes": 65536,
+        "equal": true
+      },
+      {
+        "offset": "0xfa0000",
+        "bytes": 393216,
+        "equal": true
+      }
+    ],
+    "temporary_copies_removed": 22
+  }
+}
