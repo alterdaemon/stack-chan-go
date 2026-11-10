@@ -13,6 +13,15 @@ manifests, release notes and GPT-Live package filenames when advancing a revisio
 
 Stack-chan is a JavaScript-driven M5Stack-embedded robot. The codebase is primarily TypeScript/JavaScript built on the Moddable SDK platform for ESP32 microcontrollers.
 
+## Working Principles
+
+- Keep changes surgical and proportional to the request. Reuse existing mechanisms; add abstractions, background work or persistence only when needed.
+- Preserve existing features, saved settings and performance fixes outside the requested scope.
+- Bound buffers, queues and retained history. Keep expensive or blocking work off UI and audio timing paths; explicitly stop session tasks and timers before releasing their resources.
+- Verify material claims against source code, generated artifacts, test logs or primary documentation. Distinguish inference from verified behavior; report unverified results as unknown.
+- Distinguish successful compilation, simulator execution, physical-device tests and live API tests. Record actual commands, outcomes and remaining verification in release notes; do not repeat passing checks unless changes or unresolved failures justify it.
+- Documentation-only changes do not advance the firmware revision or require rebuilding firmware.
+
 ## Core Architecture
 
 ### Modular Component System
@@ -88,6 +97,7 @@ All commands should be run from the `firmware/` directory:
 - Publish only the two validated BINs. Do not add generated reports, checksum files, ZIPs, or helper installation files. Verify that the application BIN matches the newly built `firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin` and the application bytes at `0x10000` in the full image. Verify the full image is exactly 16 MiB and its bootloader and partition table match the same build.
 - Give the user the direct `esptool` command from `GPT-LIVE.txt`, with the actual revision filename under `gpt-live-package/`: full installation writes the full BIN at `0x0` and resets data; application update writes the app BIN at `0x10000` and preserves other partitions on the supported layout. The address is the destination in device flash, not an offset into the input file: never write the full BIN at `0x10000`. The packager validates offsets against `firmware/host/app/gpt-live-layout.json` and the build's `flasher_args.json`. Build and packaging do not flash the device.
 - `gpt-live-package/` and `firmware/dist/` are generated output and stay outside Git.
+- Finish each firmware revision with relevant tests, lint/format checks, `npm run check:release -- v<version>`, and the release build and image validation described above. After validation, create a separate English commit and matching local version tag. Preserve earlier revision commits, tags and artifacts.
 
 ### Code Quality
 - `npm run lint` - Run Biome linter
