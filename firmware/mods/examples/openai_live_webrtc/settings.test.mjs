@@ -1,7 +1,32 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LiveSession } from './session.js'
 import { readLiveSettings } from './settings.js'
+
+test('OpenAI defaults come from the host manifest; saved overrides are read on every start', () => {
+  const defaults = JSON.parse(
+    readFileSync(new URL('../../../host/app/manifest_openai_live_settings.json', import.meta.url)),
+  ).config.openaiLive
+  const saved = new Map()
+  const read = () => readLiveSettings(defaults, (domain, key) => saved.get(`${domain}.${key}`))
+  assert.equal(read().backendModel, defaults.backendModel)
+  assert.equal(read().reasoningEffort, defaults.reasoningEffort)
+  saved.set('openailive.backendModel', '  saved-backend  ')
+  for (const effort of ['none', 'low', 'medium', 'high', 'xhigh', 'max']) {
+    saved.set('openailive.reasoningEffort', effort)
+    assert.equal(read().backendModel, 'saved-backend')
+    assert.equal(read().reasoningEffort, effort)
+    assert.equal(read().model, defaults.model)
+    assert.deepEqual(read().tools, defaults.tools)
+  }
+  for (const invalid of [undefined, '', '  ', 42, 'unsupported']) {
+    saved.set('openailive.backendModel', invalid === 'unsupported' ? '' : invalid)
+    saved.set('openailive.reasoningEffort', invalid)
+    assert.equal(read().backendModel, defaults.backendModel)
+    assert.equal(read().reasoningEffort, defaults.reasoningEffort)
+  }
+})
 
 test('nested read-only defaults become independent mutable session data', () => {
   const domains = Object.freeze(['example.com'])

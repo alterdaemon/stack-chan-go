@@ -2,9 +2,78 @@ import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { usePreferences } from '@/features/preferences/use-preferences'
+import { type PreferenceKey } from '@/features/preferences/preference-model'
 import { type PreferenceClient, type PreferenceValue } from '@/services/preferences/ble-preference-client'
 
 describe('usePreferences', () => {
+  it('receives OpenAI defaults and saves only changed provider fields', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    expect(result.current.openaiAvailable).toBe(false)
+    act(() => {
+      notify({ prop: 'openailive.backendModel', value: 'firmware-backend' })
+      notify({ prop: 'openailive.reasoningEffort', value: 'medium' })
+    })
+    expect(result.current.values['openailive.backendModel']).toBe('firmware-backend')
+    expect(result.current.openaiAvailable).toBe(true)
+    expect(result.current.values['openailive.reasoningEffort']).toBe('medium')
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    act(() => {
+      result.current.update('openailive.backendModel', 'saved-backend')
+      result.current.update('openailive.reasoningEffort', 'none')
+    })
+    await act(() => result.current.save())
+    expect(send).toHaveBeenCalledWith({
+      _batch: { 'openailive.backendModel': 'saved-backend', 'openailive.reasoningEffort': 'none' },
+    })
+    send.mockClear()
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it.each<[PreferenceKey, string]>([
+    ['openailive.backendModel', ''],
+    ['openailive.backendModel', '   '],
+    ['openailive.reasoningEffort', 'unsupported'],
+  ])('rejects invalid OpenAI preference %s=%j before sending', async (key, value) => {
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences(() => ({ connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }))
+    )
+    act(() => result.current.update(key, value))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    expect(result.current.operation.status).toBe('error')
+  })
+
+  it('does not carry OpenAI support or unsaved edits to a device that does not advertise it', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    await act(() => result.current.connect())
+    act(() => notify({ prop: 'openailive.backendModel', value: 'first-backend' }))
+    act(() => result.current.update('openailive.backendModel', 'unsaved-backend'))
+    expect(result.current.openaiAvailable).toBe(true)
+    await act(() => result.current.disconnect())
+    await act(() => result.current.connect())
+    expect(result.current.openaiAvailable).toBe(false)
+    expect(result.current.values['openailive.backendModel']).toBe('')
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('keeps remote values, dirty fields, and batched save in application state', async () => {
     let connected = false
     let notify: (value: PreferenceValue) => void = () => {}

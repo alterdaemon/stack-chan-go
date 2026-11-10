@@ -31,6 +31,7 @@ const PREFERENCE_DOMAINS: PreferenceDomain[] = [
   DOMAIN.ui,
   DOMAIN.tts,
   DOMAIN.ai,
+  DOMAIN.openailive,
   DOMAIN.led,
   DOMAIN.mcp,
   DOMAIN.time,
@@ -41,6 +42,12 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
   const modPreference = structuredClone((loadModConfig()[category.toLowerCase()] ?? {}) as ConfigRecord)
 
   const preference = { ...mcPreference, ...modPreference }
+  if (category === DOMAIN.openailive) {
+    // Match GPT-Live's whole-block MOD override and expose only its two editable fields.
+    const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}
+    preference.backendModel = live.backendModel
+    preference.reasoningEffort = live.reasoningEffort
+  }
   const lockedDriverType =
     category === DOMAIN.driver && mcPreference.typeLocked === true && typeof mcPreference.type === 'string'
       ? mcPreference.type

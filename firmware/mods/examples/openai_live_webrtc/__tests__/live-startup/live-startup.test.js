@@ -1,6 +1,7 @@
 import { requests } from 'realtimeConversation/http'
 import config from 'mc/config'
 import Modules from 'modules'
+import Preference from 'preference'
 import { assert, equal } from 'testing/assert'
 import Timer from 'timer'
 
@@ -66,6 +67,19 @@ async function run() {
   await waitFor('GPT-Live stopped')
   equal(released, 1, 'host audio released')
   equal(globalThis.amp.sampleRate, 24000, 'host audio rate restored')
+  Preference.set('openailive', 'backendModel', 'saved-backend')
+  Preference.set('openailive', 'reasoningEffort', 'none')
+  balloons.length = 0
+  button.callback()
+  await waitFor('GPT-Live connected')
+  equal(requests.length, 2, 'new start creates a fresh signaling request')
+  const next = JSON.parse(requests[1].init.body).session
+  equal(next.delegation.responses.model, 'saved-backend', 'saved backend reaches signaling on restart')
+  equal(next.delegation.responses.reasoning.effort, 'none', 'none is an explicit effort, not a missing preference')
+  equal(next.model, session.model, 'voice model is unchanged')
+  button.callback()
+  await waitFor('GPT-Live stopped')
+  equal(released, 2, 'restarted session releases host audio')
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }
 run().catch((error) => {

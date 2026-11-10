@@ -184,6 +184,35 @@ function liveServer(context: Awaited<ReturnType<typeof setup>>) {
   >
 }
 
+test('Settings advertises OpenAI defaults and keeps saved overrides across setup sessions', async () => {
+  const context = await setup()
+  const config = await import('../../modules/testing/fakes/mc-config.js')
+  const defaults = { backendModel: 'firmware-backend', reasoningEffort: 'medium' }
+  config.resetConfig({ tts: { volume: 0.2 }, openaiLive: defaults })
+  const changes = { 'openailive.backendModel': 'saved-backend', 'openailive.reasoningEffort': 'none' }
+  for (const expected of [
+    { 'openailive.backendModel': defaults.backendModel, 'openailive.reasoningEffort': defaults.reasoningEffort },
+    changes,
+  ]) {
+    const result = context.startSetupMode(context.application)
+    const server = liveServer(context)
+    wire('')
+    server.onCharacteristicNotifyEnabled({ name: 'tx' })
+    const values = Object.fromEntries(
+      server.notifications.map(({ value }) => {
+        const entry = JSON.parse(new TextDecoder().decode(value))
+        return [entry.prop, entry.value]
+      }),
+    )
+    for (const [key, value] of Object.entries(expected)) assert.equal(values[key], value)
+    server.onRX(wire({ _batch: changes }))
+    assert.equal(context.preference.get('openailive', 'backendModel'), changes['openailive.backendModel'])
+    assert.equal(context.preference.get('openailive', 'reasoningEffort'), changes['openailive.reasoningEffort'])
+    context.view.lastContext?.actions.boot()
+    assert.equal(await result, 'boot')
+  }
+})
+
 for (const action of ['exit', 'boot'] as const) {
   test(`normal Settings ${action} closes a live window, drops fragments and permits a fresh session`, async () => {
     const context = await setup()

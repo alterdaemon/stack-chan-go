@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_PREFERENCES,
   isPreferenceKey,
+  OPENAI_REASONING_EFFORTS,
   type PreferenceKey,
   type PreferenceValues,
 } from '@/features/preferences/preference-model'
 import { type OperationState } from '@/features/operations/operation-state'
-import { toAppError } from '@/lib/errors/app-error'
+import { AppError, toAppError } from '@/lib/errors/app-error'
 import {
   BlePreferenceClient,
   type PreferenceClient,
@@ -71,6 +72,12 @@ export function usePreferences(
   const connect = useCallback(async () => {
     const activeClient = client.current
     if (!activeClient) return
+    // A new device must advertise these fields before they become editable.
+    for (const key of ['openailive.backendModel', 'openailive.reasoningEffort'] as const) {
+      delete currentValues.current[key]
+      dirty.current.delete(key)
+    }
+    setValues((current) => ({ ...current, 'openailive.backendModel': '', 'openailive.reasoningEffort': '' }))
     setConnection('connecting')
     setOperation({ status: 'pending', message: 'BLEデバイスを検索しています' })
     try {
@@ -108,6 +115,18 @@ export function usePreferences(
     const activeClient = client.current
     if (!activeClient?.isConnected()) return
     const entries = Object.entries(payload).filter(([key]) => !readOnlyRef.current.has(key as PreferenceKey))
+    const model = payload['openailive.backendModel']
+    const effort = payload['openailive.reasoningEffort']
+    if (
+      (model !== undefined && !model.trim()) ||
+      (effort !== undefined && !(OPENAI_REASONING_EFFORTS as readonly string[]).includes(effort))
+    ) {
+      setOperation({
+        status: 'error',
+        error: new AppError('invalid-openai-settings', 'OpenAIのモデルと推論の強度を確認してください。'),
+      })
+      return
+    }
     if (entries.length === 0) {
       setOperation({ status: 'cancelled', message: '変更する項目がありません。' })
       return
@@ -153,6 +172,7 @@ export function usePreferences(
     busy: connection === 'connecting' || connection === 'disconnecting' || operation.status === 'pending',
     values,
     readOnly,
+    openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
     operation,
     connect,
     disconnect,

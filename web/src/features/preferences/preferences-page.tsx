@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { type PreferenceKey } from '@/features/preferences/preference-model'
+import { OPENAI_REASONING_EFFORTS, type PreferenceKey } from '@/features/preferences/preference-model'
 import { usePreferences } from '@/features/preferences/use-preferences'
 
 type FieldProps = Omit<ComponentProps<'input'>, 'id' | 'name' | 'value' | 'disabled' | 'onChange'> & {
@@ -33,6 +33,10 @@ export function PreferencesPage() {
   const { t } = useI18n()
   const preferences = usePreferences()
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const isDisabled = (name: PreferenceKey) =>
+    !preferences.connected ||
+    preferences.readOnly.has(name) ||
+    (name.startsWith('openailive.') && !preferences.openaiAvailable)
 
   const inputField = ({ name, label, type = 'text', wide, ...props }: FieldProps) => (
     <div className={wide ? 'grid gap-2 sm:col-span-2' : 'grid gap-2'}>
@@ -42,7 +46,7 @@ export function PreferencesPage() {
         name={name}
         type={type}
         value={preferences.values[name]}
-        disabled={!preferences.connected || preferences.readOnly.has(name)}
+        disabled={isDisabled(name)}
         onChange={(event) => preferences.update(name, event.target.value)}
         {...props}
       />
@@ -60,7 +64,7 @@ export function PreferencesPage() {
       <Label htmlFor={name}>{t(label)}</Label>
       <Select
         value={preferences.values[name]}
-        disabled={!preferences.connected || preferences.readOnly.has(name)}
+        disabled={isDisabled(name)}
         onValueChange={(value) => value && preferences.update(name, value)}
       >
         <SelectTrigger id={name} className="w-full">
@@ -237,6 +241,17 @@ export function PreferencesPage() {
                   onChange={(event) => preferences.update('ai.context', event.target.value)}
                 />
               </div>
+            </>
+          )}
+          {section(
+            'OpenAI',
+            <>
+              {inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
+              {selectField(
+                'openailive.reasoningEffort',
+                '推論の強度',
+                OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
+              )}
             </>
           )}
           {section(
