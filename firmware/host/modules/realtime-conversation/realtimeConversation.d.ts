@@ -90,8 +90,6 @@ declare module 'realtimeConversation' {
     cleanLevel: number
     referenceLevel: number
     outputIdleMs: number
-    /** Cumulative energetic, unmuted input frames; not a semantic VAD result. */
-    inputActivity: number
     audibleMs: number
     silenceMs: number
     maxSilenceMs: number

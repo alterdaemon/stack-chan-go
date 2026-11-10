@@ -28,6 +28,7 @@ export function readLiveSettings(defaults, getPreference) {
     ['voice', 'marin'],
     ['pitch', 0],
     ['style', 'default'],
+    ['standbySeconds', 60],
   ]) {
     const prop = `openailive.${key}`
     const saved = getPreference('openailive', key)
@@ -36,7 +37,7 @@ export function readLiveSettings(defaults, getPreference) {
       : isLiveVoicePreference(prop, defaults[key])
         ? defaults[key]
         : fallback
-    voiceSettings[key] = key === 'pitch' ? Number(value) : value
+    voiceSettings[key] = key === 'pitch' || key === 'standbySeconds' ? Number(value) : value
   }
   return {
     ...copyConfig(defaults),

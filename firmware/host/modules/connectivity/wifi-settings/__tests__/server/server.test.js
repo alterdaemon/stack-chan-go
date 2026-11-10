@@ -198,10 +198,13 @@ try {
     200,
   )
   equal(Preference.get('openailive', 'pitch'), '-4')
+  equal((await save({ 'openailive.standbySeconds': '45' }, authorization)).status, 200)
+  equal(Preference.get('openailive', 'standbySeconds'), '45')
   for (const [prop, invalid] of [
     ['openailive.voice', 'unknown'],
     ['openailive.pitch', '6.5'],
     ['openailive.style', 'unknown'],
+    ['openailive.standbySeconds', '0'],
   ]) {
     equal((await save({ 'openailive.voice': 'coral', [prop]: invalid }, authorization)).status, 400)
     equal(Preference.get('openailive', 'voice'), 'cedar', 'invalid batch changes nothing')

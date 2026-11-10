@@ -2,7 +2,6 @@ import Modules from 'modules'
 import { diagnostic, formatLiveError, LiveSession } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
-import Time from 'time'
 import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
@@ -153,7 +152,6 @@ export function onContextCreated(robot) {
   }
   const session = new LiveSession({
     Timer,
-    now: () => Time.ticks,
     Conversation,
     audio: robot.audio,
     networkReady: robot.connectivity.network?.ready,

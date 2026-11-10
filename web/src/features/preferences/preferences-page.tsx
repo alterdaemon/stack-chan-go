@@ -25,6 +25,8 @@ import {
   OPENAI_LIVE_VOICES,
   OPENAI_LIVE_PITCH_MIN,
   OPENAI_LIVE_PITCH_MAX,
+  OPENAI_LIVE_STANDBY_MIN,
+  OPENAI_LIVE_STANDBY_MAX,
   type PreferenceKey,
 } from '@/features/preferences/preference-model'
 import { usePreferences } from '@/features/preferences/use-preferences'
@@ -47,6 +49,7 @@ export function PreferencesPage() {
     (name === 'openailive.voice' && !preferences.voiceAvailable) ||
     (name === 'openailive.pitch' && !preferences.pitchAvailable) ||
     (name === 'openailive.style' && !preferences.styleAvailable) ||
+    (name === 'openailive.standbySeconds' && !preferences.standbyAvailable) ||
     (name === 'www.password' && !preferences.wwwAvailable)
 
   const inputField = ({ name, label, type = 'text', wide, ...props }: FieldProps) => (
@@ -322,6 +325,20 @@ export function PreferencesPage() {
                 '発話中も音声を聞き取り、GPT-Liveが割り込みに対応します。初期設定は無効です。次回のGPT-Live開始時に適用されます。',
                 true
               )}
+              {inputField({
+                name: 'openailive.standbySeconds',
+                label: '自動切断までの秒数',
+                type: 'number',
+                min: OPENAI_LIVE_STANDBY_MIN,
+                max: OPENAI_LIVE_STANDBY_MAX,
+                step: 1,
+                required: true,
+              })}
+              <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                {t(
+                  'ロボットが話さないと自動切断します。別モデルへの応答待ち中は停止します。初期値は60秒。次回のGPT-Live開始時に適用されます。'
+                )}
+              </p>
             </>
           )}
           {section(

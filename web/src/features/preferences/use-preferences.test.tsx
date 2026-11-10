@@ -6,6 +6,39 @@ import { type PreferenceKey } from '@/features/preferences/preference-model'
 import { type PreferenceClient, type PreferenceValue } from '@/services/preferences/ble-preference-client'
 
 describe('usePreferences', () => {
+  it('edits the advertised standby timeout, validates it and forgets capability on reconnect', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    expect(result.current.standbyAvailable).toBe(false)
+    act(() => result.current.update('openailive.standbySeconds', '45'))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    act(() => {
+      notify({ prop: 'openailive.standbySeconds', value: 60 })
+      result.current.update('openailive.standbySeconds', '45')
+    })
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({ _batch: { 'openailive.standbySeconds': '45' } })
+    send.mockClear()
+    for (const value of ['', '0', '-1', '1.5', '3601']) {
+      act(() => result.current.update('openailive.standbySeconds', value))
+      await act(() => result.current.save())
+      expect(result.current.operation.status).toBe('error')
+      expect(send).not.toHaveBeenCalled()
+    }
+    await act(() => result.current.connect())
+    expect(result.current.standbyAvailable).toBe(false)
+    expect(result.current.values['openailive.standbySeconds']).toBe('60')
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('changes WWW password over BLE without HTTP authentication and clears the field after saving', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})

@@ -69,16 +69,15 @@ function fixture(overrides = {}) {
       if (detail) diagnostics.push(detail)
     },
     Timer: {
-      repeat(callback, interval) {
+      set(callback, delay) {
         const id = {}
-        timers.set(id, { callback, interval })
+        timers.set(id, { callback: () => callback(id), delay, deadline: ticks + delay })
         return id
       },
       clear(id) {
         timers.delete(id)
       },
     },
-    now: () => ticks,
     ...overrides,
   })
   return {
@@ -89,9 +88,13 @@ function fixture(overrides = {}) {
     instances,
     timers,
     tick(milliseconds = 1000, capture = true) {
-      ticks = (ticks + milliseconds) >>> 0
+      ticks += milliseconds
       if (capture) for (const instance of instances) instance.activity.capturedSamples += 16000
-      for (const { callback } of [...timers.values()]) callback()
+      for (const [id, timer] of [...timers]) {
+        if (ticks < timer.deadline) continue
+        timers.delete(id)
+        timer.callback()
+      }
     },
     connectPending() {
       connecting = deferred()
@@ -365,10 +368,10 @@ test('chosen voice, local pitch and composed style reach each new conversation',
   await f.session.stop()
 })
 
-test('60 seconds of idle closes once, releases ownership, stops polling and exposes standby only after cleanup', async () => {
+test('one 60-second deadline closes once and exposes standby only after cleanup', async () => {
   const f = fixture()
   await f.session.start()
-  assert.equal([...f.timers.values()][0].interval, 1000)
+  assert.equal([...f.timers.values()][0].delay, 60000)
   const staleTick = [...f.timers.values()][0].callback
   f.tick(59000)
   assert.equal(f.states.at(-1), 'connected')
@@ -391,33 +394,65 @@ test('60 seconds of idle closes once, releases ownership, stops polling and expo
   assert.equal(f.timers.size, 0)
 })
 
-test('brief capture and playback between polls each restart the whole idle interval', async () => {
-  for (const counter of ['inputActivity', 'audibleMs']) {
-    const f = fixture()
-    await f.session.start()
-    f.tick(59000)
-    f.instances[0].activity[counter]++
-    f.tick()
-    f.tick(59000)
-    assert.equal(f.states.at(-1), 'connected')
-    f.tick()
-    await f.session.stop()
-    assert.equal(f.states.at(-1), 'standby')
+test('only nonblank robot words restart the whole interval; incoming words and raw audio do not', async () => {
+  const f = fixture()
+  await f.session.start()
+  f.tick(59000)
+  const { options, activity } = f.instances[0]
+  options.onTranscript({ role: 'assistant', delta: 'Hello.' })
+  f.tick(59000)
+  options.onTranscript({ role: 'user', delta: 'Microphone hears me.' })
+  options.onTranscript({ role: 'assistant', delta: ' \n ' })
+  options.onEvent({ type: 'session.usage.updated', usage: { seconds: 120 } })
+  activity.inputActivity++
+  activity.audibleMs++
+  assert.equal(f.states.at(-1), 'connected')
+  f.tick(999)
+  assert.equal(f.states.at(-1), 'connected')
+  f.tick(1)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+  assert.equal(f.timers.size, 0)
+})
+
+test('standby deadline is identical for every Pitch/Interruption combination and never reads media stats', async () => {
+  for (const bargeIn of [false, true]) {
+    for (let pitch = -6; pitch <= 6; pitch++) {
+      const f = fixture({ settings: { apiKey: 'test-only', pitch, bargeIn } })
+      await f.session.start()
+      Object.defineProperty(f.instances[0], 'stats', {
+        get() {
+          throw new Error('Standby must not poll PCM')
+        },
+      })
+      assert.equal(f.instances[0].options.pitch, pitch)
+      assert.equal(f.instances[0].options.bargeIn, bargeIn)
+      f.tick(59999)
+      assert.equal(f.states.at(-1), 'connected')
+      f.tick(1)
+      await f.session.stop()
+      assert.equal(f.states.at(-1), 'standby')
+      assert.ok(f.events.includes('audio released'))
+    }
   }
 })
 
-test('missing or stalled audio statistics cannot establish inactivity', async () => {
+test('saved timeout applies on the next start, including resume', async () => {
   const f = fixture()
+  f.session.settings.standbySeconds = 7
   await f.session.start()
-  f.tick(120000, false)
+  f.session.settings.standbySeconds = 12
+  f.tick(6999)
   assert.equal(f.states.at(-1), 'connected')
-  f.instances[0].activity.inputActivity = undefined
-  f.tick(120000)
-  assert.equal(f.states.at(-1), 'connected')
-  f.instances[0].activity.inputActivity = 0
-  f.tick(59000)
-  assert.equal(f.states.at(-1), 'connected')
+  f.tick(1)
   await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
+  await f.session.start()
+  f.tick(11999)
+  assert.equal(f.states.at(-1), 'connected')
+  f.tick(1)
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'standby')
 })
 
 test('overlapping backend tasks block standby through quiet reasoning and every terminal outcome releases them', async () => {
@@ -473,15 +508,13 @@ test('a terminal response without delegation_id still releases a correlated dele
   assert.equal(f.states.at(-1), 'standby')
 })
 
-test('usage heartbeats do not keep an idle session open; transcript activity does', async () => {
+test('an open connection, user transcripts and usage heartbeats cannot extend the deadline', async () => {
   const f = fixture()
   await f.session.start()
   f.tick(59000)
   f.instances[0].options.onTranscript({ role: 'user', delta: 'hello' })
-  f.tick()
-  assert.equal(f.states.at(-1), 'connected')
   f.instances[0].options.onEvent({ type: 'session.usage.updated', usage: { seconds: 90 } })
-  f.tick(59000)
+  f.tick()
   await f.session.stop()
   assert.equal(f.states.at(-1), 'standby')
 })
@@ -545,9 +578,8 @@ test('many short turns evict old fragments without merging distinct speakers', a
   await f.session.stop()
 })
 
-test('idle timing survives monotonic tick wrap and a failed close reports error instead of standby', async () => {
+test('a failed close reports error instead of claiming successful standby', async () => {
   const f = fixture()
-  f.tick(0xfffffff0)
   await f.session.start()
   f.tick(59000)
   assert.equal(f.states.at(-1), 'connected')

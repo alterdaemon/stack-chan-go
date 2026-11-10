@@ -1,6 +1,5 @@
 // Conversation owns the protocol, native media and HTTP worker. This adapter
 // only coordinates host ownership, standby and a small RAM transcript tail.
-const IDLE_MS = 60000
 const HISTORY_CHARS = 2048
 const HISTORY_MESSAGES = 6
 function identifier(value, fallback) {
@@ -51,14 +50,14 @@ export function formatLiveError(detail) {
 }
 
 export class LiveSession {
-  constructor({ Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer, now }) {
-    Object.assign(this, { Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer, now })
+  constructor({ Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer }) {
+    Object.assign(this, { Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer })
     this.history = []
   }
 
   start() {
     if (this.active) return this.active.starting
-    const entry = { cancelled: false, backend: new Map() }
+    const entry = { cancelled: false, backend: new Map(), idleMs: (this.settings.standbySeconds ?? 60) * 1000 }
     this.active = entry
     this.onState('connecting')
     entry.starting = this.connect(entry)
@@ -128,7 +127,9 @@ export class LiveSession {
         },
         onTranscript: (fragment) => {
           if (this.active !== entry || entry.cancelled) return
-          entry.lastActivity = this.now()
+          // Only the robot's words renew standby. Microphone noise, incoming
+          // speech, silent RTP and usage heartbeats cannot keep LIVE open.
+          if (fragment.role === 'assistant' && fragment.delta?.trim()) this.armStandby(entry)
           this.remember(fragment)
         },
         onEvent: (event) => this.receive(entry, event),
@@ -143,9 +144,8 @@ export class LiveSession {
       site = 'connect_wait'
       await conversation.connect()
       if (entry.cancelled || this.active !== entry) return false
-      entry.lastActivity = this.now()
-      entry.stats = conversation.stats
-      entry.idleTimer = this.Timer.repeat(() => this.checkIdle(entry), 1000)
+      entry.connected = true
+      this.armStandby(entry)
       this.onState('connected')
       return true
     } catch (error) {
@@ -180,9 +180,9 @@ export class LiveSession {
 
   receive(entry, message) {
     if (this.active !== entry || entry.cancelled) return
+    const wasPending = entry.backend.size > 0
     if (message.type === 'session.delegation.created') {
       entry.backend.set(message.delegation.id, message.delegation.response_id)
-      entry.lastActivity = this.now()
     } else if (message.type === 'response.event') {
       const event = message.event
       const response = event.response?.id ?? event.response_id
@@ -196,39 +196,21 @@ export class LiveSession {
         for (const [key, value] of entry.backend)
           if (key === id || (response !== undefined && value === response)) entry.backend.delete(key)
       }
-      entry.lastActivity = this.now()
     }
     // Match the protocol's bounded concurrent work; never grow a task ledger forever.
     if (entry.backend.size > 8) throw new Error('Too many pending Live delegations')
+    if (wasPending !== entry.backend.size > 0) this.armStandby(entry)
   }
 
-  checkIdle(entry) {
-    if (this.active !== entry || entry.cancelled) return
-    try {
-      const stats = entry.conversation.stats
-      const previous = entry.stats
-      const now = this.now()
-      // Cumulative native counters catch short speech/playback between JS polls.
-      // Missing or stalled capture is not evidence of silence. Usage heartbeats
-      // are deliberately ignored, and pending backend work blocks standby.
-      if (
-        !stats ||
-        !previous ||
-        !Number.isFinite(stats.inputActivity) ||
-        !Number.isFinite(stats.audibleMs) ||
-        stats.capturedSamples === previous.capturedSamples ||
-        stats.inputActivity !== previous.inputActivity ||
-        stats.audibleMs !== previous.audibleMs ||
-        entry.backend.size
-      )
-        entry.lastActivity = now
-      entry.stats = stats
-      if ((now - entry.lastActivity) >>> 0 >= IDLE_MS) void this.stop('standby')
-    } catch (error) {
-      entry.failure = 'error'
-      entry.diagnostic ??= diagnostic(error, 'events', 'idle_check')
-      void this.stop()
-    }
+  armStandby(entry) {
+    if (entry.idleTimer !== undefined) this.Timer.clear(entry.idleTimer)
+    entry.idleTimer = undefined
+    if (this.active !== entry || entry.cancelled || !entry.connected || entry.backend.size) return
+    // One deadline. Pause only for a pending Responses request; start a full
+    // interval when the last request ends. No audio statistics or VAD polling.
+    entry.idleTimer = this.Timer.set(() => {
+      if (this.active === entry && !entry.cancelled) void this.stop('standby')
+    }, entry.idleMs)
   }
 
   stop(state = 'idle') {

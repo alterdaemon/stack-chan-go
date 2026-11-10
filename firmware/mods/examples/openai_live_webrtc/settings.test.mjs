@@ -18,6 +18,19 @@ test('voice interruption is opt-in and invalid or missing saved values stay off'
   for (saved of ['0', 0, undefined]) assert.equal(read().bargeIn, false)
 })
 
+test('standby seconds reload on each start and invalid storage falls back to firmware or 60 seconds', () => {
+  let saved
+  const read = (defaults = {}) =>
+    readLiveSettings(defaults, (_domain, key) => (key === 'standbySeconds' ? saved : undefined))
+  assert.equal(read().standbySeconds, 60)
+  for (saved of ['1', '45', '3600', 90]) assert.equal(read().standbySeconds, Number(saved))
+  for (saved of [undefined, '', '0', '-1', '3601', '2.5', 'NaN', false, null]) {
+    assert.equal(read().standbySeconds, 60)
+    assert.equal(read({ standbySeconds: 30 }).standbySeconds, 30)
+    assert.equal(read({ standbySeconds: 0 }).standbySeconds, 60)
+  }
+})
+
 test('OpenAI defaults come from the host manifest; saved overrides are read on every start', () => {
   const defaults = JSON.parse(
     readFileSync(new URL('../../../host/app/manifest_openai_live_settings.json', import.meta.url)),
@@ -72,6 +85,7 @@ test('saved credentials and context are read afresh; deleting the key disables s
     voice: 'marin',
     pitch: 0,
     style: 'default',
+    standbySeconds: 60,
   })
   values.set('ai.token', '')
   values.set('ai.context', '')
@@ -114,8 +128,7 @@ test('backend settings and hosted search are forwarded without adding instructio
     networkReady: Promise.resolve({ status: 'connected' }),
     acquireLowLatency: () => ({ close() {} }),
     amp: {},
-    Timer: { repeat() {}, clear() {} },
-    now: () => 0,
+    Timer: { set() {}, clear() {} },
     settings: readLiveSettings(
       {
         backendModel: 'gpt-6.1-terra',

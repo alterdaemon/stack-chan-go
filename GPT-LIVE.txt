@@ -1,14 +1,36 @@
 Fork Community v2.0.1: 2.0.1-r11 + zintegrowany GPT-Live (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.0.1).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
-R11: po 60 s bez aktywnosci wejscia, odtwarzania i backendu GPT-Live
-przechodzi do STANDBY. Sesja OpenAI oraz WebRTC, audio, AEC i Pitch sa zamykane.
-LIVE wznawia nowa sesje z ogonem transkrypcji w RAM: do 6 fragmentow i 2048 znakow.
-Jawne STOP i restart urzadzenia usuwaja historie. Brak zapisu historii do NVS.
-Aktywnosc audio jest liczona natywnie; kontrola bezczynnosci raz na sekunde.
-Prog energii wejscia wymaga sprawdzenia w warunkach akustycznych CoreS3.
-Poprawka R10: AEC przy Voice interruption On dziala w osobnym zadaniu
-o priorytecie nizszym od interfejsu. Obsluga I2S nie czeka na AEC.
+R11 (amend): jeden timer STANDBY. Po polaczeniu odlicza domyslnie 60 s.
+Niepusta transkrypcja wypowiedzi robota odnawia caly czas. Mikrofon, szum,
+PCM/RTP i komunikaty usage nie odnawiaja timera. Nie ma lokalnego VAD.
+Wyslane zadanie Responses do drugiego modelu wstrzymuje timer; po odpowiedzi,
+bledzie lub anulowaniu ostatniego zadania zaczyna sie pelny ustawiony okres.
+Samo otwarte polaczenie z OpenAI nie jest praca backendu.
+OpenAI / Auto disconnect (seconds): 1-3600 s, domyslnie 60 s. Ustawienie
+jest zapisywane przez wspolny formularz Wi-Fi/BLE i czytane przy starcie LIVE.
+Ta sama regula obowiazuje dla wszystkich Pitch i Voice interruption On/Off.
+Po czasie sesja OpenAI oraz WebRTC, audio, AEC i Pitch sa zamykane.
+LIVE pokazuje STANDBY po zamknieciu i wznawia nowa sesje z ogonem transkrypcji
+w RAM: do 6 fragmentow i 2048 znakow. STOP i restart usuwaja historie.
+Poprawka tylko Voice interruption On: zadanie I2S/Pitch pozostaje na rdzeniu 1
+z priorytetem 20 i nie wykonuje juz AEC. Sparowane ramki mikrofonu/referencji
+przekazuje istniejacym FIFO do istniejacego zadania AUD_SRC na rdzeniu 0.
+AEC jest przetwarzane kolejno w sourceRead, z priorytetem 6 jak UI, po czym
+wraca poprzedni priorytet przechwytywania. Dopiero wynik AEC trafia do kodera.
+Ta sama para mikrofon/referencja i stan filtra sa zachowane dla kolejnych ramek.
+FIFO On przenosi dwa kanaly zamiast jednego: 12800 B, nadal nominalnie 200 ms.
+Dodatkowe dwa bufory ramki sa przydzielane raz na sesje; nie ma nowych zadan,
+licznikow aktywnosci, timerow ani osobnej kolejki AEC. AUD_SRC On ma stos 8 KiB
+w SRAM. Przy Off zachowane sa dotychczasowe rozmiary, stos i priorytety.
+UI nie zmienia rdzenia ani priorytetu. Parametry AEC, mikrofon podczas mowy
+robota, Pitch, Voice, Style, auto disconnect i pamiec sa zachowane.
+Historia poprzednich prob zostala sprawdzona: nie przywracamy workera o
+priorytecie 3 ani jego malej kolejki odrzucajacej ramki po zapelnieniu.
+Test skompilowanego toru audio zatrzymuje AEC na 100 ms czasu symulowanego;
+glosnik kontynuuje prace, a wszystkie probki mikrofonu dochodza w kolejnosci.
+Obejmuje wszystkie Pitch z On/Off i mute. RTOS, I2S, AEC i Sonic sa zastepnikami;
+test akustyczny, plynnosc UI i jakosc audio wymagaja potwierdzenia na robocie.
 
 Model: gpt-live-1. Backend: gpt-6.1-terra, reasoning medium, web_search (auto).
 Glos: marin. Instrukcja domyslna pusta. Glosnosc domyslna 1.

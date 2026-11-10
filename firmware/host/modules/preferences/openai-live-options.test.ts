@@ -27,6 +27,13 @@ test('pitch accepts whole semitones over both preference transports', () => {
     assert.equal(isLivePitch(value), false)
 })
 
+test('standby accepts integer seconds and rejects missing, zero, fractional and unbounded values', () => {
+  for (const value of [1, '1', 60, '60', 3600, '3600'])
+    assert.ok(isLiveVoicePreference('openailive.standbySeconds', value))
+  for (const value of [undefined, null, '', ' ', false, true, 0, '0', -1, 1.5, '1.5', 3601, Infinity, 'NaN'])
+    assert.equal(isLiveVoicePreference('openailive.standbySeconds', value), false)
+})
+
 test('default style preserves context exactly; selected styles add delivery without mutating it', () => {
   const context = 'Mów po polsku. Give one step at a time.'
   assert.equal(liveStyleInstructions(context, 'default'), context)

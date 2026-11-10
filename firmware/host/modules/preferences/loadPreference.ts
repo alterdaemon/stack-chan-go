@@ -54,6 +54,9 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
     preference.voice = isLiveVoicePreference('openailive.voice', live.voice) ? live.voice : 'marin'
     preference.pitch = isLiveVoicePreference('openailive.pitch', live.pitch) ? Number(live.pitch) : 0
     preference.style = isLiveVoicePreference('openailive.style', live.style) ? live.style : 'default'
+    preference.standbySeconds = isLiveVoicePreference('openailive.standbySeconds', live.standbySeconds)
+      ? Number(live.standbySeconds)
+      : 60
   }
   const lockedDriverType =
     category === DOMAIN.driver && mcPreference.typeLocked === true && typeof mcPreference.type === 'string'

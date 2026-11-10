@@ -36,6 +36,8 @@ export const OPENAI_LIVE_VOICES: readonly string[] = Object.freeze([
 export const OPENAI_LIVE_STYLES: readonly string[] = Object.freeze(['default', 'calm', 'expressive'])
 export const OPENAI_LIVE_PITCH_MIN = -6
 export const OPENAI_LIVE_PITCH_MAX = 6
+export const OPENAI_LIVE_STANDBY_MIN = 1
+export const OPENAI_LIVE_STANDBY_MAX = 3600
 
 export function isLivePitch(value: unknown): boolean {
   if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return false
@@ -44,6 +46,11 @@ export function isLivePitch(value: unknown): boolean {
 }
 
 export function isLiveVoicePreference(prop: string, value: unknown): boolean {
+  if (prop === 'openailive.standbySeconds') {
+    if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return false
+    const seconds = Number(value)
+    return Number.isInteger(seconds) && seconds >= OPENAI_LIVE_STANDBY_MIN && seconds <= OPENAI_LIVE_STANDBY_MAX
+  }
   if (prop === 'openailive.voice') return typeof value === 'string' && OPENAI_LIVE_VOICES.includes(value)
   if (prop === 'openailive.pitch') return isLivePitch(value)
   if (prop === 'openailive.style') return typeof value === 'string' && OPENAI_LIVE_STYLES.includes(value)

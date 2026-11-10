@@ -83,6 +83,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       'openailive.voice',
       'openailive.pitch',
       'openailive.style',
+      'openailive.standbySeconds',
       'www.password',
     ] as const) {
       delete currentValues.current[key]
@@ -96,6 +97,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       'openailive.voice': 'marin',
       'openailive.pitch': '0',
       'openailive.style': 'default',
+      'openailive.standbySeconds': '60',
       'www.password': '',
     }))
     setConnection('connecting')
@@ -131,7 +133,13 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
   const update = useCallback((key: PreferenceKey, value: string) => {
     if (
       readOnlyRef.current.has(key) ||
-      (['openailive.bargeIn', 'openailive.voice', 'openailive.pitch', 'openailive.style'].includes(key) &&
+      ([
+        'openailive.bargeIn',
+        'openailive.voice',
+        'openailive.pitch',
+        'openailive.style',
+        'openailive.standbySeconds',
+      ].includes(key) &&
         currentValues.current[key] === undefined)
     )
       return
@@ -225,6 +233,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     voiceAvailable: currentValues.current['openailive.voice'] !== undefined,
     pitchAvailable: currentValues.current['openailive.pitch'] !== undefined,
     styleAvailable: currentValues.current['openailive.style'] !== undefined,
+    standbyAvailable: currentValues.current['openailive.standbySeconds'] !== undefined,
     wwwAvailable: currentValues.current['www.password'] !== undefined,
     http,
     operation,

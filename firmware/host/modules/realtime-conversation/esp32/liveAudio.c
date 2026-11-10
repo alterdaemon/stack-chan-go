@@ -8,7 +8,6 @@
 #include "esp_webrtc.h"
 #include "liveAudio.h"
 #include "livePitch.h"
-#include "liveAecWorker.h"
 #include "driver/i2s_std.h"
 #include "esp_heap_caps.h"
 #include "esp_ae_rate_cvt.h"
@@ -85,7 +84,6 @@ struct LiveAudio {
 	esp_ae_rate_cvt_handle_t resampler;
 	aec_handle_t *aec;
     LivePitch *pitch;
-    LiveAecWorker *aecWorker;
 	bool bargeIn;
 	atomic_bool stopping, done, reading, muted;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
@@ -93,14 +91,34 @@ struct LiveAudio {
 	atomic_uint micLevel, cleanLevel, referenceLevel;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
-    atomic_uint inputActivity;
 	atomic_int error;
 	bool taskStarted, txEnabled, rxEnabled;
 	uint32_t pts;
 	int chunk;
+	int16_t *aecFrame;
+	size_t cleanOffset;
 	_Atomic(const char *) stage;
 	int16_t *buffers;
 };
+
+static void captureStats(LiveAudio *a, const int16_t *mic, const int16_t *ref, int16_t *clean)
+{
+	unsigned m = 0, r = 0, c = 0;
+	for (int j = 0; j < a->chunk; j++) { m += abs(mic[j]); r += abs(ref[j]); c += abs(clean[j]); }
+	atomic_store(&a->micLevel, m / a->chunk);
+	atomic_store(&a->referenceLevel, r / a->chunk);
+	atomic_store(&a->cleanLevel, c / a->chunk);
+	if (atomic_load(&a->muted)) memset(clean, 0, a->chunk * 2);
+	atomic_fetch_add(&a->captured, a->chunk);
+}
+
+static size_t readInput(LiveAudio *a, uint8_t *data, size_t size)
+{
+	size_t offset = 0;
+	while (offset < size && atomic_load(&a->reading) && !atomic_load(&a->stopping))
+		offset += xStreamBufferReceive(a->input, data + offset, size - offset, pdMS_TO_TICKS(50));
+	return offset;
+}
 
 static esp_capture_err_t sourceOpen(esp_capture_audio_src_if_t *s) { return ESP_CAPTURE_ERR_OK; }
 static esp_capture_err_t sourceCodecs(esp_capture_audio_src_if_t *s, const esp_capture_format_id_t **codecs, uint8_t *count)
@@ -121,6 +139,7 @@ static esp_capture_err_t sourceStart(esp_capture_audio_src_if_t *s)
 {
 	LiveAudio *a = (LiveAudio *)s;
 	a->pts = 0;
+	a->cleanOffset = a->chunk * 2;
 	atomic_store(&a->reading, true);
 	return ESP_CAPTURE_ERR_OK;
 }
@@ -132,12 +151,31 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 	LiveAudio *a = (LiveAudio *)s;
 	int offset = 0;
 	atomic_store(&a->sourceFrameBytes, frame->size);
-	while (offset < frame->size && atomic_load(&a->reading) && !atomic_load(&a->stopping))
-		offset += xStreamBufferReceive(a->input, frame->data + offset, frame->size - offset, pdMS_TO_TICKS(50));
+	if (a->aec) {
+		int16_t *mic = a->aecFrame, *ref = mic + a->chunk, *clean = ref + a->chunk;
+		while (offset < frame->size && atomic_load(&a->reading) && !atomic_load(&a->stopping)) {
+			if (a->cleanOffset == a->chunk * 2) {
+				// Paired, planar frames arrive through the existing input FIFO.
+				if (readInput(a, (uint8_t *)mic, a->chunk * 4) != a->chunk * 4)
+					return ESP_CAPTURE_ERR_NOT_SUPPORTED;
+				// Only capture DSP shares XS/UI priority. I2S never waits for it.
+				UBaseType_t priority = uxTaskPriorityGet(NULL);
+				vTaskPrioritySet(NULL, 6);
+				aec_process(a->aec, mic, ref, clean);
+				vTaskPrioritySet(NULL, priority);
+				captureStats(a, mic, ref, clean);
+				a->cleanOffset = 0;
+			}
+			size_t count = a->chunk * 2 - a->cleanOffset;
+			if (count > frame->size - offset) count = frame->size - offset;
+			memcpy(frame->data + offset, (uint8_t *)clean + a->cleanOffset, count);
+			a->cleanOffset += count;
+			offset += count;
+		}
+	} else offset = readInput(a, frame->data, frame->size);
 	if (offset != frame->size) return ESP_CAPTURE_ERR_NOT_SUPPORTED;
-	if (atomic_load(&a->muted)
-		|| (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500)
-	) memset(frame->data, 0, frame->size);
+    bool gated = atomic_load(&a->muted) || (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500);
+    if (gated) memset(frame->data, 0, frame->size);
 	else liveAudioTransformCapture((int16_t *)frame->data, frame->size / 2);
 	atomic_fetch_add(&a->sourceSamples, frame->size / 2);
 	frame->pts = a->pts / 16;
@@ -180,27 +218,6 @@ static size_t pitchRead(void *context, int16_t *samples, size_t count)
 {
     LiveAudio *a = context;
     return xStreamBufferReceive(a->output, samples, count * sizeof(int16_t), 0) / sizeof(int16_t);
-}
-
-static void captureFrame(void *context, const int16_t *mic, const int16_t *ref, int16_t *clean, size_t count)
-{
-    LiveAudio *a = context;
-    unsigned m = 0, r = 0, c = 0;
-    for (size_t j = 0; j < count; j++) { m += abs(mic[j]); r += abs(ref[j]); c += abs(clean[j]); }
-    atomic_store(&a->micLevel, m / count);
-    atomic_store(&a->referenceLevel, r / count);
-    atomic_store(&a->cleanLevel, c / count);
-    // Reuse the existing mean PCM level, after AEC/input gating. A conservative
-    // energy gate (200/32768) can keep a noisy room awake; it is not semantic VAD.
-    // Count frames so brief input between 1 Hz JS polls cannot disappear.
-    if (!atomic_load(&a->muted) && c / count >= 200) atomic_fetch_add(&a->inputActivity, 1);
-    if (atomic_load(&a->muted)) memset(clean, 0, count * sizeof(int16_t));
-    if (atomic_load(&a->reading)) {
-        if (xStreamBufferSpacesAvailable(a->input) >= count * sizeof(int16_t))
-            xStreamBufferSend(a->input, clean, count * sizeof(int16_t), 0);
-        else atomic_fetch_add(&a->overruns, 1);
-    }
-    atomic_fetch_add(&a->captured, count);
 }
 
 static void audioTask(void *ctx)
@@ -270,14 +287,23 @@ static void audioTask(void *ctx)
 			ref[accumulated++] = converted[i * 2 + 1];
 			if (accumulated != a->chunk) continue;
 			if (a->aec) {
-				// Residual echo can still look like speech. Keep playback independent
-				// of capture activity; GPT-Live decides when to yield.
-                if (!liveAecWorkerSubmit(a->aecWorker, mic, ref)) atomic_fetch_add(&a->overruns, 1);
+				// Hand the paired frame to AUD_SRC. Keep the speaker clock running
+				// even while capture DSP yields CPU time to the interface.
+				if (atomic_load(&a->reading)) {
+					if (xStreamBufferSpacesAvailable(a->input) >= a->chunk * 4)
+						xStreamBufferSend(a->input, mic, a->chunk * 4, 0);
+					else atomic_fetch_add(&a->overruns, 1);
+				}
 			} else {
 				memcpy(clean, mic, a->chunk * 2);
 				// Default mode preserves the existing half-duplex input gate.
 				if (idle < 500) memset(clean, 0, a->chunk * 2);
-                captureFrame(a, mic, ref, clean, a->chunk);
+				captureStats(a, mic, ref, clean);
+				if (atomic_load(&a->reading)) {
+					if (xStreamBufferSpacesAvailable(a->input) >= a->chunk * 2)
+						xStreamBufferSend(a->input, clean, a->chunk * 2, 0);
+					else atomic_fetch_add(&a->overruns, 1);
+				}
 			}
 			accumulated = 0;
 		}
@@ -303,7 +329,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 		.negotiate_caps = sourceNegotiate, .start = sourceStart, .read_frame = sourceRead,
 		.abort = sourceStop, .stop = sourceStop, .close = sourceStop};
 	a->stage = "audio_buffers";
-	a->input = audioStreamCreate(CAPTURE_BYTES, 1);
+	// On carries mic + reference rather than clean mono: retain the same 200 ms.
+	a->input = audioStreamCreate(CAPTURE_BYTES * (bargeIn ? 2 : 1), 1);
 	a->output = audioStreamCreate(PLAYBACK_BYTES, 1);
 	if (!a->input || !a->output) return ESP_ERR_NO_MEM;
 	a->bargeIn = bargeIn;
@@ -321,8 +348,10 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 		if (a->chunk <= 0 || a->chunk > 2048) return ESP_ERR_INVALID_SIZE;
 	}
 	atomic_store(&a->outputIdleMs, 1000);
-	a->buffers = heap_caps_aligned_calloc(16, BLOCK * (8 + DMA_BLOCKS) + a->chunk * 3, sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+	// On: I2S owns two planes, AUD_SRC owns three. Off retains its three planes.
+	a->buffers = heap_caps_aligned_calloc(16, BLOCK * (8 + DMA_BLOCKS) + a->chunk * (bargeIn ? 5 : 3), sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 	if (!a->buffers) return ESP_ERR_NO_MEM;
+	if (bargeIn) a->aecFrame = a->buffers + BLOCK * (8 + DMA_BLOCKS) + a->chunk * 2;
 	esp_ae_rate_cvt_cfg_t rate = {.src_rate = 48000, .dest_rate = 16000, .channel = 2,
 		.bits_per_sample = 16, .complexity = 2, .perf_type = ESP_AE_RATE_CVT_PERF_TYPE_SPEED};
 	a->stage = "resampler_open";
@@ -352,12 +381,10 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->stage = "i2s_enable_tx";
 	if ((err = i2s_channel_enable(a->tx))) return err;
 	a->txEnabled = true;
-    if (a->aec) {
-        a->stage = "aec_worker";
-        if ((err = liveAecWorkerOpen(&a->aecWorker, a->aec, a->chunk, captureFrame, a))) return err;
-    }
 	a->stage = "audio_task";
-	if (xTaskCreatePinnedToCore(audioTask, "live_audio", 8192, a, 20, NULL, 0) != pdPASS) return ESP_ERR_NO_MEM;
+	// I2S and Pitch run here; On's AEC runs synchronously in the capture reader.
+	// Full-duplex audio stays on core 1; Off retains its prior core placement.
+	if (xTaskCreatePinnedToCore(audioTask, "live_audio", 8192, a, 20, NULL, bargeIn ? 1 : 0) != pdPASS) return ESP_ERR_NO_MEM;
 	a->taskStarted = true;
 	esp_capture_cfg_t capture = {.sync_mode = ESP_CAPTURE_SYNC_MODE_AUDIO, .audio_src = &a->source};
 	a->stage = "capture_open";
@@ -405,7 +432,6 @@ void liveAudioClose(LiveAudio *a)
 	if (a->player) av_render_close(a->player);
 	if (a->render) audio_render_free_handle(a->render);
 	while (a->taskStarted && !atomic_load(&a->done)) vTaskDelay(pdMS_TO_TICKS(10));
-    liveAecWorkerClose(a->aecWorker);
     livePitchClose(a->pitch);
 	if (a->rxEnabled) i2s_channel_disable(a->rx);
 	if (a->txEnabled) i2s_channel_disable(a->tx);
@@ -435,7 +461,6 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
 	*s = (LiveAudioStats){atomic_load(&a->captured), atomic_load(&a->rendered), atomic_load(&a->underruns),
 		atomic_load(&a->overruns), atomic_load(&a->micLevel), atomic_load(&a->cleanLevel), atomic_load(&a->referenceLevel), atomic_load(&a->outputIdleMs), atomic_load(&a->silenceMs), atomic_load(&a->maxSilenceMs), atomic_load(&a->sourceSamples), atomic_load(&a->requestedRate), atomic_load(&a->requestedChannels), atomic_load(&a->sourceFrameBytes)};
 	s->audibleMs = atomic_load(&a->audibleMs);
-    s->inputActivity = atomic_load(&a->inputActivity);
 }
 
 void xs_io_audio_levels(xsMachine *the) {

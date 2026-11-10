@@ -545,7 +545,7 @@ for (const failure of ['throw', 'NaN', 'negative'] as const) {
   })
 }
 
-test('BLE validates the three voice preferences before storing or notifying changes', async () => {
+test('BLE validates OpenAI voice and standby preferences before storing or notifying changes', async () => {
   const { PreferenceServer, preference } = await setup()
   const changes: unknown[] = []
   const server = new PreferenceServer({ keys: PREF_KEYS, onPreferenceChanged: (...args) => changes.push(args) })
@@ -554,6 +554,7 @@ test('BLE validates the three voice preferences before storing or notifying chan
     ['voice', 'cedar', 'unknown'],
     ['pitch', '-4', '6.5'],
     ['style', 'calm', 'unknown'],
+    ['standbySeconds', '45', '0'],
   ]) {
     server.receiveAndSetPreference('openailive', key, valid)
     assert.equal(preference.default.get('openailive', key), valid)

@@ -633,5 +633,7 @@
   "穏やか": "Calm",
   "表情豊か": "Expressive",
   "声・ピッチ・話し方は次回のGPT-Live開始時に適用されます。": "Voice, pitch and style apply on the next GPT-Live start.",
-  "OpenAIの設定値を確認してください。": "Check the OpenAI settings."
+  "OpenAIの設定値を確認してください。": "Check the OpenAI settings.",
+  "自動切断までの秒数": "Auto disconnect (seconds)",
+  "ロボットが話さないと自動切断します。別モデルへの応答待ち中は停止します。初期値は60秒。次回のGPT-Live開始時に適用されます。": "Disconnect when the robot stops speaking. Pause while waiting for another model. Default: 60 seconds. Applies on the next GPT-Live start."
 }

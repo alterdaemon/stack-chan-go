@@ -17,6 +17,7 @@ Stack-chan is a JavaScript-driven M5Stack-embedded robot. The codebase is primar
 
 - Keep changes surgical and proportional to the request. Reuse existing mechanisms; add abstractions, background work or persistence only when needed.
 - Preserve existing features, saved settings and performance fixes outside the requested scope.
+- Review earlier attempts and their recorded outcomes before retrying an approach. For concurrency changes, verify progress and data continuity while work is delayed; compilation and configuration checks alone are insufficient.
 - Bound buffers, queues and retained history. Keep expensive or blocking work off UI and audio timing paths; explicitly stop session tasks and timers before releasing their resources.
 - Verify material claims against source code, generated artifacts, test logs or primary documentation. Distinguish inference from verified behavior; report unverified results as unknown.
 - Distinguish successful compilation, simulator execution, physical-device tests and live API tests. Record actual commands, outcomes and remaining verification in release notes; do not repeat passing checks unless changes or unresolved failures justify it.

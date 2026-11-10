@@ -20,6 +20,7 @@ export const PREFERENCE_KEYS = [
   'openailive.voice',
   'openailive.pitch',
   'openailive.style',
+  'openailive.standbySeconds',
   'mcp.token',
   'www.password',
 ] as const
@@ -50,6 +51,7 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   'openailive.voice': 'marin',
   'openailive.pitch': '0',
   'openailive.style': 'default',
+  'openailive.standbySeconds': '60',
   'mcp.token': '',
   'www.password': '',
 }
@@ -63,5 +65,7 @@ export {
   OPENAI_LIVE_STYLES,
   OPENAI_LIVE_PITCH_MIN,
   OPENAI_LIVE_PITCH_MAX,
+  OPENAI_LIVE_STANDBY_MIN,
+  OPENAI_LIVE_STANDBY_MAX,
   isLiveVoicePreference,
 } from '../../../../firmware/host/modules/preferences/openai-live-options'

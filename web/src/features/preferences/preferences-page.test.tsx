@@ -22,6 +22,7 @@ describe('PreferencesPage', () => {
       voiceAvailable: true,
       pitchAvailable: true,
       styleAvailable: true,
+      standbyAvailable: true,
       wwwAvailable: true,
       http: false,
       values: DEFAULT_PREFERENCES,
@@ -49,6 +50,22 @@ describe('PreferencesPage', () => {
     const token = screen.getByLabelText('Bearerトークン')
     expect(token).toHaveAttribute('name', 'mcp.token')
     expect(token).toHaveAttribute('type', 'password')
+  })
+
+  it('edits standby seconds under OpenAI and disables it on older firmware', () => {
+    const { state, unmount } = renderPreferences()
+    const field = screen.getByRole('spinbutton', { name: '自動切断までの秒数' })
+    expect(field).toHaveValue(60)
+    fireEvent.change(field, { target: { value: '45' } })
+    expect(state.update).toHaveBeenLastCalledWith('openailive.standbySeconds', '45')
+    unmount()
+    const invalid = renderPreferences({ values: { ...DEFAULT_PREFERENCES, 'openailive.standbySeconds': '0' } })
+    expect((screen.getByRole('spinbutton', { name: '自動切断までの秒数' }) as HTMLInputElement).checkValidity()).toBe(
+      false
+    )
+    invalid.unmount()
+    renderPreferences({ standbyAvailable: false })
+    expect(screen.getByRole('spinbutton', { name: '自動切断までの秒数' })).toBeDisabled()
   })
 
   it.each([false, true])('shares every form field with WWW last over HTTP=%s', (http) => {

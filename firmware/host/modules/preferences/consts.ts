@@ -36,6 +36,7 @@ export const PREF_KEYS: readonly [keyof typeof DOMAIN, string, StringConstructor
     [DOMAIN.openailive, 'voice', String],
     [DOMAIN.openailive, 'pitch', Number],
     [DOMAIN.openailive, 'style', String],
+    [DOMAIN.openailive, 'standbySeconds', Number],
     [DOMAIN.mcp, 'token', String],
     [DOMAIN.time, 'timezone', String],
     [DOMAIN.www, 'password', String],

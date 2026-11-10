@@ -87,30 +87,26 @@ async function run() {
   button.callback()
   await waitFor('GPT-Live stopped')
   equal(released, 2, 'restarted session releases host audio')
-  // Exercise the real XS Timer, protocol and host ownership together. Advance
-  // only the injected monotonic clock; no minute-long test or API call is needed.
-  let ticks = 0
+  // Exercise the real one-shot XS Timer, protocol and ownership with a short
+  // configured interval; Node tests cover the exact default 60-second boundary.
   const states = []
   const live = new LiveSession({
     Conversation: Modules.importNow('realtimeConversation'),
     Timer,
-    now: () => ticks,
     audio: robot.audio,
     networkReady: robot.connectivity.network.ready,
     acquireLowLatency: () => ({ close() {} }),
     amp: globalThis.amp,
-    settings: { apiKey: 'test-only', voice: 'marin' },
+    settings: { apiKey: 'test-only', voice: 'marin', pitch: 3, bargeIn: false, standbySeconds: 1 },
     onState: (state) => states.push(state),
   })
   await live.start()
   const transport = transports[2]
   transport.message({ type: 'session.input_transcript.delta', delta: 'Order 42.', start_ms: 0, end_ms: 100 })
   transport.message({ type: 'session.delegation.created', delegation: { id: 'del_test' } })
-  ticks = 120000
   await new Promise((resolve) => Timer.set(resolve, 1100))
   equal(states[states.length - 1], 'connected', 'quiet backend work prevents standby')
   transport.message({ type: 'response.event', delegation_id: 'del_test', event: { type: 'response.completed' } })
-  ticks += 60000
   await new Promise((resolve) => Timer.set(resolve, 1100))
   equal(states[states.length - 1], 'standby', 'idle timer closes through the protocol')
   equal(released, 3, 'standby releases host audio')

@@ -131,7 +131,12 @@ static void captureScheduler(const char *name, esp_capture_thread_schedule_cfg_t
 	cfg->stack_in_ext = true;
 	/* esp_capture defaults AUD_SRC to priority 5, which competes with XS/TLS
 	 * while the decoder is active. Match Espressif's capture sample priority. */
-	if (!strcmp(name, "AUD_SRC")) { cfg->priority = 15; cfg->core_id = 0; }
+    if (!strcmp(name, "AUD_SRC")) {
+        cfg->priority = 15; cfg->core_id = 0;
+        // On now runs AEC in this existing reader, with the former DSP stack
+        // budget in SRAM. Off retains the SDK's stack configuration.
+        if (gOwner && gOwner->bargeIn) { cfg->stack_size = 8192; cfg->stack_in_ext = false; }
+    }
 	if (!strcmp(name, "aenc_0")) {
 		/* Opus/SILK exceeds esp_capture's 4 KB default on ESP32-P4.
 		 * Match the Opus scheduler in esp_capture's audio example. */
@@ -383,7 +388,6 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("dataMessages", atomic_load(&t->dataMessages));
 	STAT("renderedSamples", stats.rendered);
 	STAT("audibleMs", stats.audibleMs);
-    STAT("inputActivity", stats.inputActivity);
 	STAT("underruns", stats.underruns);
 	STAT("overruns", stats.overruns);
 	STAT("micLevel", stats.micLevel);

@@ -25,8 +25,7 @@
         "*": [
           "./esp32/transport.c",
           "./esp32/liveAudio.c",
-          "./esp32/livePitch.c",
-          "./esp32/liveAecWorker.c"
+          "./esp32/livePitch.c"
         ]
       },
       "build": {

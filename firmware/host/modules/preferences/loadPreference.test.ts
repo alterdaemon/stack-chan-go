@@ -160,6 +160,7 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     voice: 'marin',
     pitch: 0,
     style: 'default',
+    standbySeconds: 60,
   }
   config.resetConfig({ openaiLive: { ...defaults, model: 'voice-model', apiKey: 'host-only' } })
   assert.deepEqual(loadPreferences(DOMAIN.openailive), defaults)
@@ -176,6 +177,7 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     voice: 'marin',
     pitch: 0,
     style: 'default',
+    standbySeconds: 60,
   })
   assert.deepEqual(loadPreferences(DOMAIN.ai), { token: 'shared-token', context: 'shared-context' })
 })
@@ -187,6 +189,15 @@ test('voice interruption defaults off and survives saved settings reloads', asyn
   for (const value of ['1', 1, '0', 0, 'invalid', 2]) {
     preference.resetPreference({ 'openailive.bargeIn': value })
     assert.equal(loadPreferences(DOMAIN.openailive).bargeIn, value === '1' || value === 1 ? 1 : 0)
+  }
+})
+
+test('standby preference exposes the same default and validated saved timeout used by GPT-Live', async () => {
+  const { loadPreferences, config, preference } = await setup()
+  config.resetConfig({ openaiLive: { standbySeconds: 30 } })
+  for (const value of [undefined, '0', '3601', '2.5', '', '45', 120]) {
+    preference.resetPreference(value === undefined ? {} : { 'openailive.standbySeconds': value })
+    assert.equal(loadPreferences(DOMAIN.openailive).standbySeconds, value === '45' ? 45 : value === 120 ? 120 : 30)
   }
 })
 
@@ -202,6 +213,7 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
     voice: 'marin',
     pitch: 0,
     style: 'default',
+    standbySeconds: 60,
   })
 })
 
