@@ -3,6 +3,20 @@ import test from 'node:test'
 import { LiveSession } from './session.js'
 import { readLiveSettings } from './settings.js'
 
+test('nested read-only defaults become independent mutable session data', () => {
+  const domains = Object.freeze(['example.com'])
+  const filters = Object.freeze({ allowed_domains: domains })
+  const tools = Object.freeze([Object.freeze({ type: 'web_search', filters })])
+  const defaults = Object.freeze({ tools, instructions: '' })
+  const first = readLiveSettings(defaults, () => undefined)
+  const second = readLiveSettings(defaults, () => undefined)
+  assert.deepEqual(first.tools, defaults.tools)
+  first.tools[0].filters.allowed_domains.push('other.example')
+  assert.deepEqual(second.tools, defaults.tools)
+  assert.equal(defaults.tools[0].filters.allowed_domains.length, 1)
+  assert.doesNotThrow(() => JSON.stringify(first))
+})
+
 test('saved credentials and context are read afresh; deleting the key disables starting', () => {
   const values = new Map([
     ['ai.token', '  saved-key  '],

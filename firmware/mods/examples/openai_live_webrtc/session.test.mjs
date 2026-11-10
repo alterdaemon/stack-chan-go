@@ -235,6 +235,7 @@ test('startup failures expose status and safe identifiers without exception mess
   assert.deepEqual(f.diagnostics.at(-1), {
     code: 'http_error',
     stage: 'signaling',
+    site: 'connect_wait',
     status: 403,
     providerCode: 'model_not_found',
     param: 'session.delegation.responses.model',
@@ -271,7 +272,7 @@ test('local audio failures identify the failed operation and still release resou
     },
   })
   assert.equal(await f.session.start(), false)
-  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'audio' })
+  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'audio', site: 'audio_acquire' })
   assert.equal(f.instances.length, 0)
 })
 
@@ -286,8 +287,29 @@ test('unsafe diagnostic fields are rejected and a new start discards old diagnos
     param: 'sk_proj_secret',
   })
   await f.session.stop()
-  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'events' })
+  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'events', site: 'event_on_error' })
   await f.session.start()
   await f.session.stop()
   assert.equal(f.states.at(-1), 'idle')
+})
+
+test('constructor failure reports an exact site, exception type and safe reason', async () => {
+  const f = fixture({
+    Conversation: class {
+      constructor() {
+        throw Object.assign(new TypeError('read only value (in stringify)'), { site: 'core_delegation' })
+      }
+    },
+  })
+  assert.equal(await f.session.start(), false)
+  const detail = f.diagnostics.at(-1)
+  assert.deepEqual(detail, {
+    stage: 'configuration',
+    code: 'readonly_json',
+    site: 'core_delegation',
+    kind: 'TypeError',
+  })
+  const display = formatLiveError(detail)
+  for (const value of ['R4', 'readonly_json', 'core_delegation', 'TypeError']) assert.ok(display.includes(value))
+  assert.equal(f.events.at(-1), 'audio released')
 })

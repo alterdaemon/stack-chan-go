@@ -19,6 +19,7 @@ declare module 'realtimeConversation' {
     end_ms: number
   }
   export interface ConversationError extends Error {
+    site?: string
     code: string
     stage: string
     status?: number

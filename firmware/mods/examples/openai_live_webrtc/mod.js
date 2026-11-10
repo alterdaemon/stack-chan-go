@@ -1,5 +1,5 @@
 import Modules from 'modules'
-import { formatLiveError, LiveSession } from 'openai-live-session'
+import { diagnostic, formatLiveError, LiveSession } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
 import Timer from 'timer'
@@ -85,8 +85,12 @@ export function onContextCreated(robot) {
     callback: () => {
       if (session.active) void session.stop()
       else {
-        session.settings = readSettings()
-        void session.start()
+        try {
+          session.settings = readSettings()
+          void session.start()
+        } catch (error) {
+          session.onState('error', diagnostic(error, 'configuration', 'settings_read'))
+        }
       }
     },
   })

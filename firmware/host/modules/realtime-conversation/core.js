@@ -37,6 +37,15 @@ function deferred() {
   return { promise, resolve, reject }
 }
 
+function copyDelegation(value) {
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch (error) {
+    error.site = 'core_delegation'
+    throw error
+  }
+}
+
 export default class Conversation {
   #platform
   #options
@@ -87,7 +96,7 @@ export default class Conversation {
       model: options.model ?? 'gpt-live-1',
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
-      delegation: options.delegation === undefined ? undefined : JSON.parse(JSON.stringify(options.delegation)),
+      delegation: options.delegation === undefined ? undefined : copyDelegation(options.delegation),
       onStateChanged: options.onStateChanged,
       onTranscript: options.onTranscript,
       onEvent: options.onEvent,

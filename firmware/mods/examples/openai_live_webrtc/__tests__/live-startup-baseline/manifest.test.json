@@ -1,0 +1,13 @@
+{
+  "include": ["../live-startup/manifest.test.json"],
+  "config": {
+    "openaiLive": {
+      "backendModel": "gpt-6-luna",
+      "reasoningEffort": "low",
+      "tools": null
+    }
+  },
+  "modules": {
+    "main": "../live-startup/live-startup.test"
+  }
+}

@@ -1,20 +1,23 @@
-Wlasna integracja GPT-Live, Community v2.0.1, rewizja 2.
+Community v2.0.1 + GPT-Live, rewizja 4.
 
-Parametry: gpt-live-1 + gpt-6.1-terra, reasoning medium, glos marin,
-instrukcja domyslna pusta, glosnosc domyslna 1, web_search (auto).
+Parametry: gpt-live-1 + gpt-6.1-terra, reasoning medium, marin.
+Instrukcja domyslna pusta; glosnosc domyslna 1; web_search (auto).
+AI / Token, AI / Context i zapisana glosnosc sa odczytywane przy kazdym starcie.
 
-Konfiguracja kompilacji: firmware/host/app/manifest_openai_live_integrated.json
-Klucz API: AI / Token. Wlasna instrukcja: AI / Context. Zapisane tts.volume ma pierwszenstwo.
+Wszystkie wersje BIN i najnowsza instrukcja: gpt-live-package/.
+Aktualizacja aplikacji R4 na 0x10000 omija NVS z ustawieniami.
+Dokladne polecenie: gpt-live-package/INSTRUKCJA.txt.
 
-Budowanie w obecnym srodowisku: bash build-gpt-live.sh
-Narzedzia SDK pozostaja poza repozytorium, w lokalizacji podanej w tym skrypcie.
-Inna lokalizacja: STACKCHAN_TOOLCHAINS=/sciezka/do/toolchains bash build-gpt-live.sh
-Kazde srodowisko musi miec natywne zaleznosci Moddable/ESP-IDF.
-Skrypt zweryfikowano w obecnym srodowisku; uruchomienia wewnatrz distrobox nie testowano.
+Naprawiono odtworzony blad configuration/operation_failed:
+ROM-backed tablica narzedzi powodowala TypeError: read only value (in stringify).
+Ustawienia sa teraz kopiowane rekurencyjnie do RAM przed serializacja.
+Test XS: stary sposob kopiowania FAIL, poprawiony PASS.
+Dodatkowo sprawdzany wariant bazowy Luna/low bez narzedzi.
+Ekran bledu: R4, etap/kod, konkretna operacja, typ wyjatku, HTTP/kod/parametr API.
+Brak fizycznego testu i testu rzeczywistego API.
 
-Wyniki: firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host
-Paczka i raporty wlasnej kompilacji: gpt-live-package/
-
-Rewizja 3: diagnostyka bledow na ekranie; ustawienia modelu pozostaja jak w R2.
-Aktualizacja zachowujaca NVS: gpt-live-update-r3/ (aplikacja na 0x10000).
-Pakowanie aktualizacji: python3 firmware/scripts/package-gpt-live-update.py --toolchains /sciezka/do/toolchains
+Konfiguracja: firmware/host/app/manifest_openai_live_settings.json.
+Budowanie: bash build-gpt-live.sh
+SDK: sciezka w skrypcie; nadpisanie STACKCHAN_TOOLCHAINS=/sciezka/do/toolchains.
+Pakowanie: python3 firmware/scripts/package-gpt-live-update.py --toolchains /sciezka/do/toolchains
+Wyniki kompilacji: firmware/dist/. Paczka stale: gpt-live-package/.

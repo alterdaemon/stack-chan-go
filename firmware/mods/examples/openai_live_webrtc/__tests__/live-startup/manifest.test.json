@@ -1,0 +1,21 @@
+{
+  "include": [
+    "$(MODDABLE)/examples/manifest_base.json",
+    "$(MODDABLE)/modules/base/modules/manifest.json",
+    "../../../../../host/modules/testing/manifest.json",
+    "../../../../../host/app/manifest_openai_live_settings.json"
+  ],
+  "modules": {
+    "main": "./live-startup.test",
+    "openai-live-integrated": "../../mod",
+    "openai-live-session": "../../session",
+    "openai-live-settings": "../../settings",
+    "realtimeConversation": "../../../../../host/modules/realtime-conversation/realtimeConversation",
+    "realtimeConversation/core": "../../../../../host/modules/realtime-conversation/core",
+    "realtimeConversation/tools": "../../../../../host/modules/realtime-conversation/tools",
+    "realtimeConversation/transport": "./transport",
+    "realtimeConversation/http": "./http",
+    "network-power": "./network-power",
+    "preference": "./preference"
+  }
+}

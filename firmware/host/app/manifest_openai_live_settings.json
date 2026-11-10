@@ -1,0 +1,23 @@
+{
+  "config": {
+    "ui": {
+      "language": "en"
+    },
+    "tts": {
+      "volume": 1
+    },
+    "openaiLive": {
+      "model": "gpt-live-1",
+      "backendModel": "gpt-6.1-terra",
+      "reasoningEffort": "medium",
+      "voice": "marin",
+      "instructions": "",
+      "volume": 1,
+      "tools": [
+        {
+          "type": "web_search"
+        }
+      ]
+    }
+  }
+}
