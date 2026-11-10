@@ -197,6 +197,8 @@ export default class Conversation {
       this.#closing.resolve(this.#result)
       return this.#closing.promise
     }
+    // Silence locally before signaling/finalization, including during startup.
+    this.#transport?.quiesce?.()
     this.#cancelTimer(this.#connectTimer)
     this.#tools?.close()
     this.#connection?.reject(new ConversationError('Connection cancelled', 'cancelled', 'connect'))
@@ -204,7 +206,7 @@ export default class Conversation {
     if (!this.#signaled) {
       void this.#finish({ finalized: true, reason: 'not_started' })
     } else {
-      this.#after(15000, () => {
+      this.#after(3000, () => {
         const error = new ConversationError('No session.closed event received', 'close_timeout', 'close')
         this.#notify('onError', error)
         void this.#finish({ finalized: false, reason: 'close_timeout', usage: this.#usage })

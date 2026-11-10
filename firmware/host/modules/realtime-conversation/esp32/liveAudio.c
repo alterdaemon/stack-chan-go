@@ -471,8 +471,12 @@ void liveAudioMute(LiveAudio *a, bool mute) {
   if (a && atomic_exchange(&quiesceAudio, false)) atomic_store(&a->quiesced, true);
 }
 void xs_live_audio_quiesce(xsMachine *the) {
-  // The peer task owns the audio pointer and applies this on its next update.
+  // Do not wait for the peer task, which can be blocked in signaling. The
+  // lifetime lock protects this pointer; only an atomic flag changes here.
   atomic_store(&quiesceAudio, true);
+  portENTER_CRITICAL(&audioLock);
+  if (activeAudio) atomic_store(&activeAudio->quiesced, true);
+  portEXIT_CRITICAL(&audioLock);
 }
 void liveAudioVolume(LiveAudio *a, unsigned volume) { if (a) atomic_store(&a->volume, volume); }
 int liveAudioError(LiveAudio *a) { return a ? atomic_load(&a->error) : 0; }

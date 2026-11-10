@@ -159,6 +159,7 @@ static void worker(void *ctx)
 	esp_capture_sink_handle_t probeSink = NULL;
 	int err = liveAudioOpen(&audio, &provider, t->bargeIn, t->pitch);
 	if (err) { t->failureStage = liveAudioStage(audio); goto done; }
+	if (atomic_load(&t->stopping)) goto done;
 	if (t->captureOnly) {
 		/* Match the RTP drain priority when comparing capture throughput. */
 		vTaskPrioritySet(NULL, 15);

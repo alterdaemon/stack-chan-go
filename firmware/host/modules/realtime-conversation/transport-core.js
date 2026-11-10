@@ -54,8 +54,11 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
       // Stop local audio promptly on an explicit close, while DTLS/DataChannel
       // remain alive to receive final usage and session.closed.
       if (data.includes('"session.close"') && JSON.parse(data).type === 'session.close')
-        binding('xs_live_audio_quiesce').call(this)
+        this.quiesce()
       this.#flush()
+    }
+    quiesce() {
+      if (!this.#released) binding('xs_live_audio_quiesce').call(this)
     }
     #flush() {
       while (this.#outgoing.length) {

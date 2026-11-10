@@ -297,7 +297,7 @@ await test('late HTTP answer after timeout triggers bodyless hangup', async () =
   await h.signal()
   const closing = h.c.close()
   await p
-  h.timeout(15000)
+  h.timeout(3000)
   check(!(await closing).finalized)
   equal(h.disposed, 1)
   h.reply(async () => ({ ok: true, text: async () => '' }))
@@ -771,7 +771,7 @@ await test('late injected session creation is finalized through its signaling ad
   await h.signal()
   const closing = h.c.close()
   await connection
-  h.timeout(15000)
+  h.timeout(3000)
   check(!(await closing).finalized)
   resume(brokerReply())
   await flush()

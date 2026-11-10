@@ -1,7 +1,23 @@
 Fork Community v2.0.1: 2.0.1-r12 + zintegrowany GPT-Live (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.0.1).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
-R12: tylko Interruption On: okno UI 8 ms co 20 ms, 12 ms podczas dotyku.
+R12 follow-up (amend): okno UI 4 ms co 20 ms, 8 ms podczas dotyku.
+Kolejne 2 ms mniej niz w poprzednim kandydacie 6/10 ms; priorytety bez zmian.
+LIVE STOP wycisza lokalnie bez czekania na zadanie WebRTC. Limit czekania na
+potwierdzenie zamkniecia: 3 zamiast 15 s, potem dotychczasowe zwalnianie zasobow.
+Brak potwierdzenia jest logowany; po lokalnym STOP nie oznacza sam w sobie ERROR.
+Nowy start nadal wymaga polaczenia z OpenAI i zakonczenia poprzedniego cleanup.
+STANDBY/historia, AEC i mikrofon podczas trwania rozmowy zachowuja swoje reguly.
+Bez testow i bez wgrywania na urzadzenie, zgodnie z poleceniem uzytkownika.
+Jakosc mowy, reaktywnosc przerywania i czas start/stop nie zostaly zmierzone.
+Szczegoly: docs/release-notes/v2.0.1-r12-ui-4-8ms.md.
+Stabilny punkt odniesienia wskazany przez uzytkownika: commit 82eb5d45,
+tag v2.0.1-r12 (bez zmian). Oryginalne BIN-y zachowane pod nazwami:
+  StackChan-Community-v2.0.1-r12-GPT-Live-stable.bin
+  StackChan-Community-v2.0.1-r12-GPT-Live-stable-app.bin
+Standardowe nazwy BIN-ow i komendy ponizej dotycza nowego wariantu 4/8 ms.
+
+Bazowy R12: tylko Interruption On: okno UI 8 ms co 20 ms, 12 ms podczas dotyku.
 UI i I2S maja priorytet 20; zaleznosc wyswietlacza SPI ma 21.
 Po zamknieciu wracaja poprzednie priorytety. Off zachowuje swoj harmonogram.
 Wskaznik ust pochodzi z PCM glosnika po Pitch i glosnosci, niezaleznie od AEC.

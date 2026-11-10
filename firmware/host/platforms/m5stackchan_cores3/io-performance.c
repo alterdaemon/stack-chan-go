@@ -13,8 +13,8 @@
 // Only full-duplex LIVE enables these windows. The timer runs outside XS, so
 // touch detection can recover and the boost expires even while JS is delayed.
 #define UI_PERIOD_US 20000
-#define UI_IDLE_US 8000
-#define UI_TOUCH_US 12000
+#define UI_IDLE_US 4000
+#define UI_TOUCH_US 8000
 // modSPIFlush busy-yields while spiLoop drains the display. Boosting XS above
 // that dependency can stop rendering progress. SPI normally waits for DMA.
 // XS shares I2S priority, allowing the clock to run on every scheduler tick;
