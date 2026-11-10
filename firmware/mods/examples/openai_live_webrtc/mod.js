@@ -13,11 +13,20 @@ const messages = {
   closing: 'Stopping GPT-Live',
   configuration: 'Set AI token in Preferences',
 }
+const notices = { idle: 'STOPPED', connected: 'STARTED', configuration: 'SET KEY', error: 'ERROR' }
 
 function createLiveButton(toggle) {
-  const { Behavior, Container, Label } = Modules.importNow('piu/MC')
+  const { Behavior, Container, Label, Skin } = Modules.importNow('piu/MC')
   const { UI, uiStyles } = Modules.importNow('ui-theme')
   const styles = uiStyles()
+  // 75% transparent background; keep the label fully readable.
+  const translucent = (color) => new Skin({ fill: `${color}40` })
+  const skins = {
+    surface: translucent(UI.colors.surface),
+    pressed: translucent(UI.colors.surfacePressed),
+    accent: translucent(UI.colors.accent),
+    success: translucent(UI.colors.success),
+  }
   return new Container(null, {
     name: 'openai-live-control',
     left: 4,
@@ -25,22 +34,22 @@ function createLiveButton(toggle) {
     width: 88,
     height: UI.touchTarget,
     active: true,
-    skin: styles.surface,
     contents: [
       new Label(null, {
         left: 0,
         right: 0,
         top: 0,
         bottom: 0,
+        skin: skins.surface,
         string: 'LIVE OFF',
         style: styles.button,
       }),
     ],
     Behavior: class extends Behavior {
-      skin = styles.surface
+      skin = skins.surface
       onLiveState(content, state) {
         content.active = state !== 'closing'
-        this.skin = state === 'connected' ? styles.success : state === 'connecting' ? styles.accent : styles.surface
+        this.skin = state === 'connected' ? skins.success : state === 'connecting' ? skins.accent : skins.surface
         content.first.string =
           state === 'connected'
             ? 'LIVE ON'
@@ -49,7 +58,10 @@ function createLiveButton(toggle) {
               : state === 'closing'
                 ? 'STOP...'
                 : 'LIVE OFF'
-        content.skin = this.skin
+        content.first.skin = this.skin
+      }
+      onLiveNotice(content, notice) {
+        content.first.string = notice
       }
       onTouchBegan(content, id, x, y, ticks) {
         if (!content.active || this.touchId !== undefined) return
@@ -57,7 +69,7 @@ function createLiveButton(toggle) {
         this.startX = x
         this.startY = y
         this.maxX = this.maxY = 0
-        content.skin = styles.pressed
+        content.first.skin = skins.pressed
         content.captureTouch(id, x, y, ticks)
       }
       onTouchMoved(_content, id, x, y, _ticks, samples) {
@@ -73,16 +85,14 @@ function createLiveButton(toggle) {
       }
       onTouchCancelled(content) {
         this.touchId = undefined
-        content.skin = this.skin
+        content.first.skin = this.skin
       }
       onTouchEnded(content, id, x, y, ticks, samples) {
         if (id !== this.touchId) return
         this.onTouchMoved(content, id, x, y, ticks, samples)
         this.touchId = undefined
-        content.skin = this.skin
-        const tap = this.maxX <= 8 && this.maxY <= 8
-        const swipeUp = this.maxX <= 20 && y <= this.startY - 32
-        if (content.active && (tap || swipeUp)) toggle()
+        content.first.skin = this.skin
+        if (content.active && this.maxX <= 8 && this.maxY <= 8) toggle()
       }
     },
   })
@@ -103,9 +113,31 @@ export function onContextCreated(robot) {
     {}
   const readSettings = () => readLiveSettings(defaults, (domain, key) => Preference.get(domain, key))
   let changingMute = false,
-    liveButton
+    liveButton,
+    statusTimer
   let mouthTimer,
     lastMouth = 0
+  function showStatus(state, detail) {
+    if (statusTimer !== undefined) Timer.clear(statusTimer)
+    statusTimer = undefined
+    if (liveButton) {
+      if (notices[state]) liveButton.delegate('onLiveNotice', notices[state])
+    } else {
+      robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state])
+    }
+    statusTimer = Timer.set(
+      () => {
+        statusTimer = undefined
+        try {
+          if (liveButton) liveButton.delegate('onLiveState', state)
+          else robot.ui.hideBalloon()
+        } catch {
+          // A display failure must not affect the conversation.
+        }
+      },
+      state === 'error' || state === 'configuration' ? 5000 : 1200,
+    )
+  }
   function updateMouth(value) {
     if (value === lastMouth) return
     lastMouth = value
@@ -143,7 +175,7 @@ export function onContextCreated(robot) {
         liveButton?.delegate('onLiveState', state)
         drawer.setDrawerButtonState(SESSION, active)
         drawer.setDrawerButtonState(MUTE, false)
-        robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state], { bottom: 56 })
+        showStatus(state, detail)
       } catch {
         // Display failures must not prevent native audio/radio cleanup.
       }

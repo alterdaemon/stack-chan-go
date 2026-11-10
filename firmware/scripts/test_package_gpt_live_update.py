@@ -29,6 +29,35 @@ class UpdateTests(unittest.TestCase):
         self.app = bytearray(4097)
         self.app[0] = 0xE9
         struct.pack_into('<H', self.app, 12, self.layout['chip_id'])
+        self.bootloader = bytearray(b'bootloader fixture' * 3)
+        self.bootloader[0] = 0xE9
+        struct.pack_into('<H', self.bootloader, 12, self.layout['chip_id'])
+
+    def test_full_image_contains_the_same_app_and_boot_files_and_erases_all_remaining_bytes(self):
+        full = package.build_full_image(self.bootloader, self.table, self.app, self.layout)
+        factory = next(p for p in self.layout['partitions'] if p['type'] == 0)
+        self.assertEqual(len(full), self.layout['flash_bytes'])
+        self.assertEqual(full[:len(self.bootloader)], self.bootloader)
+        self.assertEqual(full[0x8000:0x8000 + len(self.table)], self.table)
+        self.assertEqual(full[factory['offset']:factory['offset'] + len(self.app)], self.app)
+        used = sum(len(data) - data.count(255) for data in (self.bootloader, self.table, self.app))
+        self.assertEqual(full.count(255), len(full) - used)
+        for partition in self.layout['partitions']:
+            if partition != factory:
+                data = full[partition['offset']:partition['offset'] + partition['size']]
+                self.assertEqual(data, b'\xff' * partition['size'])
+
+    def test_invalid_or_overlapping_boot_files_are_rejected(self):
+        wrong_chip = bytearray(self.bootloader)
+        struct.pack_into('<H', wrong_chip, 12, self.layout['chip_id'] + 1)
+        for bootloader, table in (
+            (b'', self.table),
+            (wrong_chip, self.table),
+            (self.bootloader + b'\xff' * 0x8000, self.table),
+            (self.bootloader, self.table + b'\xff' * 0x1000),
+        ):
+            with self.assertRaises(ValueError):
+                package.build_full_image(bootloader, table, self.app, self.layout)
 
     def test_write_range_rounds_to_sectors_and_protects_other_partitions(self):
         result = package.validate_update(self.app, self.table, self.layout)
@@ -63,7 +92,7 @@ class UpdateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 package.validate_update(self.app, table, self.layout)
 
-    def test_publication_produces_only_a_bin_and_failed_validation_keeps_the_previous_bin(self):
+    def test_publication_produces_a_matching_pair_and_preserves_published_revisions(self):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             project = 'firmware/dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host'
@@ -77,7 +106,15 @@ class UpdateTests(unittest.TestCase):
                 'firmware/package.json': b'{"version":"0.0.0"}',
                 project + '/manifest_flat.json': json.dumps({'config': settings, 'modules': modules}).encode(),
                 build + '/sdkconfig': b'',
-                build + '/build/flasher_args.json': json.dumps({'flash_settings': self.layout['flash_settings']}).encode(),
+                build + '/build/flasher_args.json': json.dumps({
+                    'flash_settings': self.layout['flash_settings'],
+                    'flash_files': {
+                        '0x0': 'bootloader/bootloader.bin',
+                        '0x8000': 'partition_table/partition-table.bin',
+                        '0x10000': 'xs_esp32.bin',
+                    },
+                }).encode(),
+                build + '/build/bootloader/bootloader.bin': bytes(self.bootloader),
                 build + '/build/partition_table/partition-table.bin': self.table,
                 build + '/build/xs_esp32.bin': bytes(self.app),
                 build + '/build/xs_esp32.elf': b'fixture',
@@ -94,19 +131,49 @@ class UpdateTests(unittest.TestCase):
                   patch.object(package.subprocess, 'run') as inspect_image,
                   redirect_stdout(io.StringIO())):
                 package.package_update(root, output)
-                files = list(output.iterdir())
-                self.assertEqual(len(files), 1)
-                self.assertEqual(files[0].suffix, '.bin')
-                self.assertEqual(files[0].read_bytes(), bytes(self.app))
+                files = sorted(output.iterdir())
+                self.assertEqual(len(files), 2)
+                self.assertTrue(all(p.suffix == '.bin' for p in files))
+                app_file = next(p for p in files if p.name.endswith('-app.bin'))
+                full_file = output / app_file.name.replace('-app.bin', '.bin')
+                self.assertEqual(app_file.read_bytes(), bytes(self.app))
+                full = full_file.read_bytes()
+                self.assertEqual(len(full), self.layout['flash_bytes'])
+                self.assertEqual(full[0x10000:0x10000 + len(self.app)], app_file.read_bytes())
+                self.assertEqual(full[:len(self.bootloader)], bytes(self.bootloader))
+                self.assertEqual(full[0x8000:0x8000 + len(self.table)], self.table)
+                self.assertEqual(inspect_image.call_count, 2)
                 self.assertTrue(inspect_image.call_args.kwargs['check'])
+                package.package_update(root, output)
+                self.assertEqual(sorted(output.iterdir()), files)
                 changed_app = bytearray(self.app)
                 changed_app[-1] = 1
                 (root / build / 'build/xs_esp32.bin').write_bytes(changed_app)
                 inspect_image.side_effect = subprocess.CalledProcessError(1, ['esptool'])
                 with self.assertRaises(subprocess.CalledProcessError):
                     package.package_update(root, output)
-                self.assertEqual(list(output.iterdir()), files)
-                self.assertEqual(files[0].read_bytes(), bytes(self.app))
+                self.assertEqual(sorted(output.iterdir()), files)
+                self.assertEqual(app_file.read_bytes(), bytes(self.app))
+                self.assertEqual(full_file.read_bytes(), full)
+                inspect_image.side_effect = None
+                # Check both destinations before creating either half of a new pair.
+                full_file.unlink()
+                with self.assertRaisesRegex(ValueError, 'use a new revision'):
+                    package.package_update(root, output)
+                self.assertFalse(full_file.exists())
+                self.assertEqual(app_file.read_bytes(), bytes(self.app))
+                (root / build / 'build/xs_esp32.bin').write_bytes(self.app)
+                package.package_update(root, output)
+                self.assertEqual(full_file.read_bytes(), full)
+                # Unexpected flash offsets must fail before any publication.
+                flash_path = root / build / 'build/flasher_args.json'
+                flash = json.loads(flash_path.read_text())
+                flash['flash_files']['0x20000'] = flash['flash_files'].pop('0x10000')
+                flash_path.write_text(json.dumps(flash))
+                with self.assertRaisesRegex(ValueError, 'Flash file offsets'):
+                    package.package_update(root, output)
+                self.assertEqual(full_file.read_bytes(), full)
+                self.assertEqual(app_file.read_bytes(), bytes(self.app))
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 # Stack-chan
 
-Fork: [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`. Fork version: **2.0.1-r6**. [Fork release notes](./docs/release-notes/v2.0.1-r6.md).
+Fork: [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1), commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`. Fork version: **2.0.1-r7**. [Fork release notes](./docs/release-notes/v2.0.1-r7.md).
 
 [![Build Stack-chan Firmware](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml/badge.svg)](https://github.com/stack-chan/stack-chan/actions/workflows/build.yml)
 [![Discord server invitation](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/eGhd9adnBm)

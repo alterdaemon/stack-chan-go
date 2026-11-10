@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the current CoreS3 app against the source-controlled update layout."""
+"""Publish matching full-flash and application-only CoreS3 GPT-Live images."""
 import argparse
 import hashlib
 import json
@@ -8,6 +8,9 @@ import shutil
 import struct
 import subprocess
 import sys
+
+
+REVISION = 7
 
 
 def require(condition, message):
@@ -45,6 +48,21 @@ def validate_update(app, table, layout):
                 application_bytes=len(app), protected_partitions=protected)
 
 
+def build_full_image(bootloader, table, app, layout):
+    update = validate_update(app, table, layout)
+    require(len(bootloader) >= 24 and bootloader[0] == 0xE9, 'Invalid ESP bootloader image')
+    require(struct.unpack_from('<H', bootloader, 12)[0] == layout['chip_id'], 'Wrong bootloader chip')
+    require(len(bootloader) <= 0x8000, 'Bootloader overlaps partition table')
+    first_partition = min(p['offset'] for p in layout['partitions'])
+    require(0x8000 + len(table) <= first_partition, 'Partition table overlaps data partitions')
+    # A full installation intentionally resets data, including NVS, xs and storage.
+    # Keep every gap and the unused tail erased, like a RAW merge padded to flash size.
+    image = bytearray(b'\xff') * layout['flash_bytes']
+    for offset, data in ((0, bootloader), (0x8000, table), (int(update['write_address'], 16), app)):
+        image[offset:offset + len(data)] = data
+    return bytes(image)
+
+
 def package_update(root, output):
     project = root / 'firmware/dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host'
     build = project / 'xsProj-esp32s3/build'
@@ -56,15 +74,24 @@ def package_update(root, output):
     require({'openai-live-integrated', 'openai-live-session', 'openai-live-settings', 'realtimeConversation'}
             <= flat['modules'].keys(), 'Build does not contain integrated GPT-Live')
     require(all(flat['config']['tts'][key] == value for key, value in requested['tts'].items()), 'Wrong TTS settings')
-    flash = json.loads((build / 'flasher_args.json').read_text())['flash_settings']
-    require(flash == layout['flash_settings'], 'Flash settings differ from the supported update layout')
+    flash = json.loads((build / 'flasher_args.json').read_text())
+    require(flash['flash_settings'] == layout['flash_settings'],
+            'Flash settings differ from the supported update layout')
     sdkconfig = (build.parent / 'sdkconfig').read_text().splitlines()
     for key in ('CONFIG_SECURE_BOOT', 'CONFIG_SECURE_FLASH_ENC_ENABLED',
                 'CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE', 'CONFIG_SECURE_DISABLE_ROM_DL_MODE'):
         require(key + '=y' not in sdkconfig, 'Unsupported security setting: ' + key)
     app_path = build / 'xs_esp32.bin'
     app = app_path.read_bytes()
-    validate_update(app, (build / 'partition_table/partition-table.bin').read_bytes(), layout)
+    table = (build / 'partition_table/partition-table.bin').read_bytes()
+    update = validate_update(app, table, layout)
+    require({int(offset, 0): name for offset, name in flash['flash_files'].items()} == {
+        0: 'bootloader/bootloader.bin',
+        0x8000: 'partition_table/partition-table.bin',
+        int(update['write_address'], 16): 'xs_esp32.bin',
+    }, 'Flash file offsets differ from the supported full-image layout')
+    bootloader_path = build / 'bootloader/bootloader.bin'
+    full = build_full_image(bootloader_path.read_bytes(), table, app, layout)
     nm = shutil.which('xtensa-esp-elf-nm')
     require(nm, 'Activate the ESP-IDF environment: xtensa-esp-elf-nm is missing')
     symbols = subprocess.check_output([nm, str(build / 'xs_esp32.elf')], text=True)
@@ -74,13 +101,20 @@ def package_update(root, output):
                                      'esp_secure_boot_enable_secure_features')), 'ROM download lock code is linked')
     require({'xs_live_transport_constructor', 'xs_live_transport_start', 'xs_live_transport_close'} <= symbols,
             'Native GPT-Live transport is missing')
-    subprocess.run([sys.executable, '-m', 'esptool', '--chip', 'esp32s3',
-                    'image_info', str(app_path)], check=True)
+    for image in (bootloader_path, app_path):
+        subprocess.run([sys.executable, '-m', 'esptool', '--chip', 'esp32s3',
+                        'image_info', str(image)], check=True)
     version = json.loads((root / 'firmware/package.json').read_text())['version']
-    name = f'StackChan-Community-v{version}-GPT-Live-app.bin'
+    name = f'StackChan-Community-v{version}-GPT-Live-r{REVISION}'
+    images = {output / (name + '.bin'): full, output / (name + '-app.bin'): app}
+    for target, data in images.items():
+        require(not target.exists() or target.read_bytes() == data,
+                f'Published image differs: {target.name}; use a new revision')
     output.mkdir(parents=True, exist_ok=True)
-    (output / name).write_bytes(app)
-    print(output / name)
+    for target, data in images.items():
+        if not target.exists():
+            target.write_bytes(data)
+        print(target)
 
 
 if __name__ == '__main__':

@@ -72,17 +72,33 @@ test('default CoreS3 build includes GPT-Live and prepares native dependencies wi
       STACKCHAN_TEST_COMMAND_LOG: fixture.commandLog,
       npm_config_target: '',
     }
+    const fakePython = path.join(fixture.fakeBin, 'python3')
+    writeFileSync(
+      fakePython,
+      `#!/usr/bin/env node
+const { appendFileSync } = require('node:fs')
+appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['python3', ...process.argv.slice(2)]) + '\\n')
+process.exit(Number(process.env.STACKCHAN_TEST_PACKAGE_STATUS ?? 0))
+`,
+    )
+    chmodSync(fakePython, 0o755)
     delete env.STACKCHAN_REALTIME_WEBRTC
     delete env.STACKCHAN_MANIFEST
     delete env.STACKCHAN_DEVICE
-    const result = spawnSync(process.execPath, ['scripts/firmware.mjs', 'build'], {
-      cwd: fixture.firmware,
-      encoding: 'utf8',
-      env,
-    })
-    assert.equal(result.status, 0, result.stderr)
-    const last = readInvocations(fixture.commandLog).at(-1)
-    assert.equal(last.at(-1), path.join(fixture.firmware, selected))
+    for (const status of [0, 19]) {
+      const result = spawnSync(process.execPath, ['scripts/firmware.mjs', 'build'], {
+        cwd: fixture.firmware,
+        encoding: 'utf8',
+        env: { ...env, STACKCHAN_TEST_PACKAGE_STATUS: String(status) },
+      })
+      assert.equal(result.status, status, result.stderr)
+      const invocations = readInvocations(fixture.commandLog)
+      assert.equal(invocations.at(-2).at(-1), path.join(fixture.firmware, selected))
+      assert.deepEqual(invocations.at(-1), [
+        'python3',
+        path.join(fixture.firmware, 'scripts/package-gpt-live-update.py'),
+      ])
+    }
     const project = path.join(
       fixture.firmware,
       'dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host/xsProj-esp32s3',
@@ -94,6 +110,19 @@ test('default CoreS3 build includes GPT-Live and prepares native dependencies wi
       )
   } finally {
     rmSync(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test('only the integrated CoreS3 release build publishes GPT-Live images', () => {
+  assert.match(dryRunCommand('build'), /python3 .*package-gpt-live-update\.py/)
+  for (const args of [
+    ['--mode=debug'],
+    ['--mode=instrument'],
+    ['--manifest', 'host/app/manifest_m5stackchan_cores3.json'],
+    ['stackchan_rt'],
+    ['takao_core2_sg90'],
+  ]) {
+    assert.doesNotMatch(dryRunCommand('build', ...args), /package-gpt-live-update\.py/)
   }
 })
 

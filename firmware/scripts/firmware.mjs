@@ -197,6 +197,13 @@ switch (command) {
         expectedDescriptorVersion,
       )
     }
+    if (
+      deviceName === 'm5stackchan_cores3' &&
+      buildMode === 'release' &&
+      path.resolve(manifest) === path.resolve(device.manifest)
+    ) {
+      run('python3', [path.resolve('scripts/package-gpt-live-update.py')])
+    }
     break
   case 'flash':
     run('mcconfig', [...buildModeArgs, '-m', '-p', platform, ...outputArgs, path.resolve(toolManifest), ...args])
