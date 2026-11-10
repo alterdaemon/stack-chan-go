@@ -17,6 +17,17 @@ export class ConversationError extends Error {
   }
 }
 
+function attachErrorMetadata(error, source) {
+  if (typeof source?.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/i.test(source.code) && !/^sk_/i.test(source.code))
+    error.providerCode = source.code
+  if (
+    typeof source?.param === 'string' &&
+    /^(?:session|delegation|model|audio|tools|reasoning)(?:[.[\]a-z0-9_]){0,96}$/i.test(source.param)
+  )
+    error.param = source.param
+  return error
+}
+
 function deferred() {
   let resolve, reject
   const promise = new Promise((a, b) => {
@@ -252,13 +263,22 @@ export default class Conversation {
         })
       }
       const text = await response.text()
-      if (response.status !== 201)
-        throw new ConversationError(
+      if (response.status !== 201) {
+        const error = new ConversationError(
           `Live session creation failed (HTTP ${response.status})`,
           'http_error',
           'signaling',
           response.status,
         )
+        if (typeof text === 'string' && text.length <= 131072) {
+          try {
+            attachErrorMetadata(error, JSON.parse(text)?.error)
+          } catch {
+            // Keep status-only diagnostics for non-JSON error responses.
+          }
+        }
+        throw error
+      }
       if (typeof text !== 'string' || text.length > 131072)
         throw new ConversationError('Session response exceeds limit', 'response_limit', 'signaling')
       let result
@@ -360,10 +380,13 @@ export default class Conversation {
           break
         }
         case 'error': {
-          const error = new ConversationError(
-            message.error?.message ?? 'Live command rejected',
-            message.error?.code ?? 'server_error',
-            'events',
+          const error = attachErrorMetadata(
+            new ConversationError(
+              message.error?.message ?? 'Live command rejected',
+              message.error?.code ?? 'server_error',
+              'events',
+            ),
+            message.error,
           )
           if (message.error?.client_event_id && this.#mute?.id === message.error.client_event_id)
             this.#rejectMute(error)

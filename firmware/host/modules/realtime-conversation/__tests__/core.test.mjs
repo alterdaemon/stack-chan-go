@@ -291,6 +291,41 @@ await test('HTTP rejection preserves status and cleans up', async () => {
   equal(h.disposed, 1)
   equal(h.c.state, 'error')
 })
+await test('HTTP rejection preserves safe API identifiers without storing the response body', async () => {
+  const h = harness()
+  h.reply(async () => ({
+    status: 403,
+    text: async () =>
+      JSON.stringify({
+        error: {
+          code: 'model_not_found',
+          param: 'session.delegation.responses.model',
+          message: 'private sk-proj-secret',
+        },
+      }),
+  }))
+  const p = rejected(h.c.connect(), 'http_error')
+  await h.signal()
+  await p
+  await flush()
+  equal(h.errors[0].providerCode, 'model_not_found')
+  equal(h.errors[0].param, 'session.delegation.responses.model')
+  check(!JSON.stringify(h.errors[0]).includes('private'))
+  check(!JSON.stringify(h.errors[0]).includes('sk-proj-secret'))
+})
+await test('untrusted API metadata cannot become diagnostic identifiers', async () => {
+  const h = harness()
+  h.reply(async () => ({
+    status: 401,
+    text: async () => JSON.stringify({ error: { code: 'sk_proj_secret', param: 'sk_proj_secret' } }),
+  }))
+  const p = rejected(h.c.connect(), 'http_error')
+  await h.signal()
+  await p
+  await flush()
+  equal(h.errors[0].providerCode, undefined)
+  equal(h.errors[0].param, undefined)
+})
 await test('invalid JSON and mismatched sessions cannot start', async () => {
   const h = harness()
   const p = rejected(h.c.connect(), 'session_mismatch')

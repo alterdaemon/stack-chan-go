@@ -22,6 +22,8 @@ declare module 'realtimeConversation' {
     code: string
     stage: string
     status?: number
+    providerCode?: string
+    param?: string
   }
   export interface ToolContext {
     callId: string

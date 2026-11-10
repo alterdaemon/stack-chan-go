@@ -14,3 +14,7 @@ Skrypt zweryfikowano w obecnym srodowisku; uruchomienia wewnatrz distrobox nie t
 
 Wyniki: firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host
 Paczka i raporty wlasnej kompilacji: gpt-live-package/
+
+Rewizja 3: diagnostyka bledow na ekranie; ustawienia modelu pozostaja jak w R2.
+Aktualizacja zachowujaca NVS: gpt-live-update-r3/ (aplikacja na 0x10000).
+Pakowanie aktualizacji: python3 firmware/scripts/package-gpt-live-update.py --toolchains /sciezka/do/toolchains

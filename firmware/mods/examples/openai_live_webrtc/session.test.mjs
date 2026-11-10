@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { LiveSession } from './session.js'
+import { formatLiveError, LiveSession } from './session.js'
 
 function deferred() {
   let resolve, reject
@@ -12,6 +12,7 @@ function deferred() {
 }
 function fixture(overrides = {}) {
   const states = [],
+    diagnostics = [],
     events = [],
     instances = []
   let connecting, closing, mute
@@ -57,12 +58,16 @@ function fixture(overrides = {}) {
       },
     },
     settings: { apiKey: 'unit-test-only', volume: 0.1, model: 'gpt-live-1', voice: 'marin' },
-    onState: (state) => states.push(state),
+    onState: (state, detail) => {
+      states.push(state)
+      if (detail) diagnostics.push(detail)
+    },
     ...overrides,
   })
   return {
     session,
     states,
+    diagnostics,
     events,
     instances,
     connectPending() {
@@ -210,4 +215,79 @@ test('late error/closed callbacks from an old session cannot stop its replacemen
   assert.equal(f.session.active.conversation, f.instances[1])
   assert.equal(f.states.at(-1), 'connected')
   await f.session.stop()
+})
+
+test('startup failures expose status and safe identifiers without exception messages', async () => {
+  const f = fixture(),
+    pending = f.connectPending()
+  const starting = f.session.start()
+  await Promise.resolve()
+  pending.reject(
+    Object.assign(new Error('private body with sk-proj-secret'), {
+      code: 'http_error',
+      stage: 'signaling',
+      status: 403,
+      providerCode: 'model_not_found',
+      param: 'session.delegation.responses.model',
+    }),
+  )
+  assert.equal(await starting, false)
+  assert.deepEqual(f.diagnostics.at(-1), {
+    code: 'http_error',
+    stage: 'signaling',
+    status: 403,
+    providerCode: 'model_not_found',
+    param: 'session.delegation.responses.model',
+  })
+  const display = formatLiveError(f.diagnostics.at(-1))
+  assert.ok(display.includes('HTTP 403'))
+  assert.ok(display.includes('model_not_found'))
+  assert.ok(!display.includes('private'))
+  assert.ok(!display.includes('sk-proj-secret'))
+  assert.equal(f.session.active, undefined)
+})
+
+test('the first provider failure survives subsequent close errors', async () => {
+  const f = fixture()
+  await f.session.start()
+  const closing = f.closePending()
+  f.instances[0].options.onError(
+    Object.assign(new Error('private first error'), {
+      code: 'responses_validation_failed',
+      stage: 'events',
+    }),
+  )
+  closing.reject(new Error('private later error'))
+  await f.session.stop()
+  assert.equal(f.diagnostics.at(-1).code, 'responses_validation_failed')
+})
+
+test('local audio failures identify the failed operation and still release resources', async () => {
+  const f = fixture({
+    audio: {
+      acquireExclusive() {
+        throw new Error('private audio failure')
+      },
+    },
+  })
+  assert.equal(await f.session.start(), false)
+  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'audio' })
+  assert.equal(f.instances.length, 0)
+})
+
+test('unsafe diagnostic fields are rejected and a new start discards old diagnostics', async () => {
+  const f = fixture()
+  await f.session.start()
+  f.instances[0].options.onError({
+    code: 'sk_proj_secret',
+    stage: 'sk-proj-secret',
+    status: Infinity,
+    providerCode: 'sk-proj-secret',
+    param: 'sk_proj_secret',
+  })
+  await f.session.stop()
+  assert.deepEqual(f.diagnostics.at(-1), { code: 'operation_failed', stage: 'events' })
+  await f.session.start()
+  await f.session.stop()
+  assert.equal(f.states.at(-1), 'idle')
 })

@@ -1,5 +1,5 @@
 import Modules from 'modules'
-import { LiveSession } from 'openai-live-session'
+import { formatLiveError, LiveSession } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
 import Timer from 'timer'
@@ -48,7 +48,7 @@ export function onContextCreated(robot) {
     acquireLowLatency: () => power.acquireLowLatency(),
     amp: globalThis.amp,
     settings: readSettings(),
-    onState(state) {
+    onState(state, detail) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
       if (state === 'connected' && mouthTimer === undefined && levels && robot.setMouthOpen) {
         mouthTimer = Timer.repeat(() => {
@@ -68,12 +68,13 @@ export function onContextCreated(robot) {
       try {
         drawer.setDrawerButtonState(SESSION, active)
         drawer.setDrawerButtonState(MUTE, false)
-        robot.ui.showBalloon(messages[state])
+        robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state])
       } catch {
         // Display failures must not prevent native audio/radio cleanup.
       }
-      // Never log credentials, server error bodies, SDP or transcripts.
+      // Only machine-readable diagnostics; never raw exception messages or bodies.
       trace(`[openai-live] ${state}\n`)
+      if (state === 'error' && detail) trace(`[openai-live] diagnostic ${JSON.stringify(detail)}\n`)
     },
   })
   drawer.addDrawerButton({
