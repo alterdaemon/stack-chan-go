@@ -71,6 +71,9 @@ const device = devices[deviceName]
 const args = positionalArgs(rawArgs).filter((arg) => !isDeviceName(arg) && !isBuildModeFlag(arg))
 const platform = `esp32:${device.platform}`
 const manifest = readOption(rawArgs, 'manifest') ?? process.env.STACKCHAN_MANIFEST ?? device.manifest
+const realtime =
+  process.env.STACKCHAN_REALTIME_WEBRTC === '1' ||
+  (device.realtime === true && path.resolve(manifest) === path.resolve(device.manifest))
 let toolManifest = manifest
 let expectedDescriptorVersion
 const dryRun = process.env.STACKCHAN_DRY_RUN === '1'
@@ -103,7 +106,7 @@ if (
       platformName: deviceName,
       applicationName: hostApplicationName,
       mode: buildMode,
-      realtime: process.env.STACKCHAN_REALTIME_WEBRTC === '1',
+      realtime,
       solutionDirectory: process.env.ESP_WEBRTC_SOLUTION,
     })
   } catch (error) {
@@ -114,7 +117,7 @@ if (
 
 if (!dryRun && deviceName === 'm5stackchan_cores3' && command !== 'mod' && command !== 'mod:build') {
   try {
-    const versionSdkconfig = prepareCoreS3VersionSdkconfig({ realtime: process.env.STACKCHAN_REALTIME_WEBRTC === '1' })
+    const versionSdkconfig = prepareCoreS3VersionSdkconfig({ realtime })
     subprocessEnvironment = { ...subprocessEnvironment, SDKCONFIGPATH: versionSdkconfig.directory }
   } catch (error) {
     console.error(`[stack-chan] CoreS3 firmware version could not be prepared: ${error.message}`)
@@ -166,7 +169,7 @@ if (buildVariantChanged && ['m5stackchan_cores3', 'stackchan_rt'].includes(devic
       platformName: deviceName,
       applicationName: hostApplicationName,
       mode: buildMode,
-      realtime: process.env.STACKCHAN_REALTIME_WEBRTC === '1',
+      realtime,
       solutionDirectory: process.env.ESP_WEBRTC_SOLUTION,
     })
   } catch (error) {
@@ -329,7 +332,7 @@ function prepareBuildVariant() {
   const selectedVariant = resolveBuildVariant(manifest, {
     sdk: realpathSync(process.env.MODDABLE),
     idf: process.env.IDF_PATH,
-    realtime: process.env.STACKCHAN_REALTIME_WEBRTC,
+    realtime,
     measured: process.env.STACKCHAN_REALTIME_PERFORMANCE_PROBE,
     systemTrace: process.env.STACKCHAN_REALTIME_SYSTEM_TRACE,
     solution: process.env.ESP_WEBRTC_SOLUTION,

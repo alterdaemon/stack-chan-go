@@ -1,0 +1,51 @@
+{
+  "chip_id": 9,
+  "flash_bytes": 16777216,
+  "flash_settings": {
+    "flash_mode": "dio",
+    "flash_size": "16MB",
+    "flash_freq": "80m"
+  },
+  "partitions": [
+    {
+      "name": "nvs",
+      "type": 1,
+      "subtype": 2,
+      "offset": 36864,
+      "size": 24576,
+      "flags": 0
+    },
+    {
+      "name": "phy_init",
+      "type": 1,
+      "subtype": 1,
+      "offset": 61440,
+      "size": 4096,
+      "flags": 0
+    },
+    {
+      "name": "factory",
+      "type": 0,
+      "subtype": 0,
+      "offset": 65536,
+      "size": 16318464,
+      "flags": 0
+    },
+    {
+      "name": "xs",
+      "type": 64,
+      "subtype": 1,
+      "offset": 16384000,
+      "size": 262144,
+      "flags": 0
+    },
+    {
+      "name": "storage",
+      "type": 1,
+      "subtype": 130,
+      "offset": 16646144,
+      "size": 65536,
+      "flags": 0
+    }
+  ]
+}

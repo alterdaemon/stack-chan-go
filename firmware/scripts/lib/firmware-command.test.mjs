@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { devices } from './devices.mjs'
 
 const firmwareDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const manifest = 'mods/examples/look_around/manifest.json'
@@ -41,6 +42,58 @@ test('host build, flash, and deploy commands default to release mode', () => {
     const output = dryRunCommand(command)
     assert.match(output, /mcconfig -m /)
     assert.doesNotMatch(output, /mcconfig -(?:d[nxl]?|i) /)
+  }
+})
+
+test('default CoreS3 build includes GPT-Live and prepares native dependencies without an environment flag', () => {
+  const fixture = createFirmwareWrapperFixture('m5stackchan_cores3', 'release')
+  try {
+    const selected = devices.m5stackchan_cores3.manifest
+    const source = path.join(firmwareDirectory, selected)
+    const manifest = JSON.parse(readFileSync(source, 'utf8'))
+    assert.ok(manifest.modules['openai-live-integrated'], 'default application must include the Live MOD')
+    cpSync(source, path.join(fixture.firmware, selected))
+    const conversation = 'host/modules/realtime-conversation/manifest.json'
+    mkdirSync(path.dirname(path.join(fixture.firmware, conversation)), { recursive: true })
+    cpSync(path.join(firmwareDirectory, conversation), path.join(fixture.firmware, conversation))
+    const solution = path.join(fixture.root, 'webrtc')
+    const names = ['esp_webrtc', 'esp_peer', 'media_lib_utils', 'webrtc_utils', 'av_render']
+    for (const name of names) {
+      const component = path.join(solution, 'components', name)
+      mkdirSync(component, { recursive: true })
+      writeFileSync(path.join(component, 'CMakeLists.txt'), '# test component\n')
+    }
+    const env = {
+      ...process.env,
+      MODDABLE: fixture.fakeModdable,
+      ESP_WEBRTC_SOLUTION: solution,
+      PATH: `${fixture.fakeBin}${path.delimiter}${process.env.PATH}`,
+      STACKCHAN_DRY_RUN: '',
+      STACKCHAN_TEST_COMMAND_LOG: fixture.commandLog,
+      npm_config_target: '',
+    }
+    delete env.STACKCHAN_REALTIME_WEBRTC
+    delete env.STACKCHAN_MANIFEST
+    delete env.STACKCHAN_DEVICE
+    const result = spawnSync(process.execPath, ['scripts/firmware.mjs', 'build'], {
+      cwd: fixture.firmware,
+      encoding: 'utf8',
+      env,
+    })
+    assert.equal(result.status, 0, result.stderr)
+    const last = readInvocations(fixture.commandLog).at(-1)
+    assert.equal(last.at(-1), path.join(fixture.firmware, selected))
+    const project = path.join(
+      fixture.firmware,
+      'dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host/xsProj-esp32s3',
+    )
+    for (const name of names)
+      assert.equal(
+        realpathSync(path.join(project, 'components', name)),
+        realpathSync(path.join(solution, 'components', name)),
+      )
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true })
   }
 })
 

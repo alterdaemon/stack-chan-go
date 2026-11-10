@@ -1,0 +1,40 @@
+{
+  "include": [
+    "$(MODDABLE)/modules/base/modules/manifest.json",
+    "../../../../../host/modules/testing/manifest.json",
+    "../../../../../host/app/manifest_openai_live_settings.json",
+    "../../../../../host/modules/ui/manifest.json"
+  ],
+  "modules": {
+    "main": "./live-control.test",
+    "openai-live-integrated": "../../mod",
+    "openai-live-session": "../../session",
+    "openai-live-settings": "../../settings",
+    "realtimeConversation": "../../../../../host/modules/realtime-conversation/realtimeConversation",
+    "realtimeConversation/core": "../../../../../host/modules/realtime-conversation/core",
+    "realtimeConversation/tools": "../../../../../host/modules/realtime-conversation/tools",
+    "realtimeConversation/transport": "../live-startup/transport",
+    "realtimeConversation/http": "../live-startup/http",
+    "network-power": "../live-startup/network-power",
+    "preference": "../live-startup/preference"
+  },
+  "resources": {
+    "*-alpha": [
+      {
+        "source": "../../../../../host/modules/ui/assets/fonts/k8x12",
+        "size": 12,
+        "characterFiles": "../../../../../host/modules/ui/assets/fonts/k8x12-chars.txt",
+        "monochrome": true
+      },
+      {
+        "source": "../../../../../host/modules/ui/assets/fonts/k8x12",
+        "size": 24,
+        "characters": "0123456789:-",
+        "monochrome": true
+      }
+    ]
+  },
+  "creation": {
+    "stack": 1536
+  }
+}

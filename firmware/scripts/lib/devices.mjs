@@ -1,7 +1,8 @@
 export const devices = {
   m5stackchan_cores3: {
     platform: './host/platforms/m5stackchan_cores3',
-    manifest: './host/app/manifest_m5stackchan_cores3.json',
+    manifest: './host/app/manifest_openai_live_integrated.json',
+    realtime: true,
     label: 'M5StackChan CoreS3',
     esptoolChip: 'esp32s3',
     firmwareVersionSource: 'moddable',

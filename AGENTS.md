@@ -53,6 +53,34 @@ All commands should be run from the `firmware/` directory:
 - The named `npm run build:release:<target>` scripts and `npm run bundle:package` are the CI building blocks for parallel target builds and final artifact assembly.
 - `npm run mod` uses `mcrun -t build` to create an archive, then discovers and writes the live device's `xs` partition with `esptool`.
 
+### GPT-Live Builds and Published Updates
+
+- The default M5StackChan CoreS3 target includes GPT-Live through `firmware/host/app/manifest_openai_live_integrated.json`. Read `GPT-LIVE.txt` for the current build, package name, and installation command.
+- Build a release from `firmware/` in the activated Moddable / ESP-IDF environment with `ESP_WEBRTC_SOLUTION` set:
+
+  ```sh
+  npm run build -- --mode=release
+  ```
+
+- Alternatively, from the repository root, use the existing toolchain wrapper:
+
+  ```sh
+  STACKCHAN_TOOLCHAINS=/path/to/toolchains bash build-gpt-live.sh --mode=release
+  ```
+
+  The toolchain directory contains `moddable`, `esp-idf`, `idf-tools`, `esp-webrtc-solution`, and `fontbm`. Use the existing installation; keep machine-specific paths out of tracked files.
+- After a successful release build, package the update from the repository root, with `esptool` available to Python and `xtensa-esp-elf-nm` on `PATH`:
+
+  ```sh
+  python3 firmware/scripts/package-gpt-live-update.py
+  ```
+
+- Keep all installable GPT-Live builds in the single repository-root directory `gpt-live-package/`. Use the packager's default output directory. Do not create revision-specific directories such as `gpt-live-update-r3/`, publish installation files under `/tmp`, or create ad hoc installer scripts.
+- Name each published update `StackChan-Community-v<version>-GPT-Live-r<N>-app.bin`. Use the next unused revision for a new firmware update; the current update is `r5`, so the next update starts at `r6`. Before publishing, update the filename in `firmware/scripts/package-gpt-live-update.py` and the filename and installation command in `GPT-LIVE.txt`; keep this revision reference current too. Preserve earlier revision BINs.
+- Publish only the validated application BIN. Do not add generated reports, checksum files, ZIPs, or helper installation files. Verify that the published BIN matches the newly built `firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin`.
+- Give the user the direct `esptool` command from `GPT-LIVE.txt`, with the actual revision filename under `gpt-live-package/`. For the supported Community partition layout, the app-only update writes at `0x10000`; the packager validates this against `firmware/host/app/gpt-live-layout.json`. Build and packaging do not flash the device.
+- `gpt-live-package/` and `firmware/dist/` are generated output and stay outside Git.
+
 ### Code Quality
 - `npm run lint` - Run Biome linter
 - `npm run lint:fix` - Auto-fix linting issues

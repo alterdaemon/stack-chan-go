@@ -2,7 +2,7 @@
 
 CoreS3からOpenAI GPT-Liveへ直接接続して、内蔵マイクとスピーカーで会話する最小例です。stack-chan-aiや追加サーバーは使いません。#707の`RealtimeConversation`、SDKのHTTPS・TLS・Worker、およびホストのWi-Fi省電力制御を再利用します。従来のRealtime APIではなく、`POST /v1/live/sessions`を使います。
 
-設定例のAPIキーは空です。自動接続しません。ドロワーの「OpenAI 会話」で開始／終了、「マイクミュート」でミュート／解除します。接続失敗後は同じ会話ボタンで新しいセッションを開始できます。課金セッション作成を自動再試行しません。
+設定例のAPIキーは空です。自動接続しません。顔画面の左下にある「LIVE」ボタンをタップするか、ボタンから上へスワイプすると会話を開始／終了します。接続中は同じ操作でキャンセルでき、終了処理中は追加操作を受け付けません。ドロワーの「GPT-Live」でも開始／終了、「Mute mic」でミュート／解除します。接続失敗後は同じ会話ボタンで新しいセッションを開始できます。課金セッション作成を自動再試行しません。
 
 ## 設定
 
@@ -66,6 +66,7 @@ Wi-Fi接続後、ドロワーから会話を開始します。開始要求から
 
 ```sh
 npm run test:openai-live
+npm run test:moddable -- mods/examples/openai_live_webrtc/__tests__/live-control/manifest.test.json
 npm run test:unit
 npm run format
 npm run lint

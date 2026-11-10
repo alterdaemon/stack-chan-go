@@ -1,23 +1,42 @@
-Community v2.0.1 + GPT-Live, rewizja 4.
+Community v2.0.1 + domyslnie zintegrowany GPT-Live (M5StackChan CoreS3).
 
-Parametry: gpt-live-1 + gpt-6.1-terra, reasoning medium, marin.
-Instrukcja domyslna pusta; glosnosc domyslna 1; web_search (auto).
+Model: gpt-live-1. Backend: gpt-6.1-terra, reasoning medium, web_search (auto).
+Glos: marin. Instrukcja domyslna pusta. Glosnosc domyslna 1.
 AI / Token, AI / Context i zapisana glosnosc sa odczytywane przy kazdym starcie.
-
-Wszystkie wersje BIN i najnowsza instrukcja: gpt-live-package/.
-Aktualizacja aplikacji R4 na 0x10000 omija NVS z ustawieniami.
-Dokladne polecenie: gpt-live-package/INSTRUKCJA.txt.
-
-Naprawiono odtworzony blad configuration/operation_failed:
-ROM-backed tablica narzedzi powodowala TypeError: read only value (in stringify).
-Ustawienia sa teraz kopiowane rekurencyjnie do RAM przed serializacja.
-Test XS: stary sposob kopiowania FAIL, poprawiony PASS.
-Dodatkowo sprawdzany wariant bazowy Luna/low bez narzedzi.
-Ekran bledu: R4, etap/kod, konkretna operacja, typ wyjatku, HTTP/kod/parametr API.
-Brak fizycznego testu i testu rzeczywistego API.
-
 Konfiguracja: firmware/host/app/manifest_openai_live_settings.json.
-Budowanie: bash build-gpt-live.sh
-SDK: sciezka w skrypcie; nadpisanie STACKCHAN_TOOLCHAINS=/sciezka/do/toolchains.
-Pakowanie: python3 firmware/scripts/package-gpt-live-update.py --toolchains /sciezka/do/toolchains
-Wyniki kompilacji: firmware/dist/. Paczka stale: gpt-live-package/.
+
+BUDOWANIE
+W aktywnym srodowisku Moddable / ESP-IDF, z ESP_WEBRTC_SOLUTION:
+  cd firmware
+  npm run build
+Domyslny cel CoreS3 wybiera zintegrowany manifest i przygotowuje zaleznosci WebRTC.
+Inne warianty nadal wybiera sie nazwanymi skryptami lub opcja --manifest.
+
+Opcjonalny skrot z katalogu projektu:
+  STACKCHAN_TOOLCHAINS=/sciezka/do/toolchains bash build-gpt-live.sh
+Ten katalog ma zawierac moddable, esp-idf, idf-tools, esp-webrtc-solution i fontbm.
+Skrypt nie zawiera sciezek konkretnego komputera. Przekazuje argumenty do npm run build.
+
+PAKOWANIE AKTUALIZACJI
+W aktywnym srodowisku ESP-IDF, z esptool i xtensa-esp-elf-nm:
+  python3 firmware/scripts/package-gpt-live-update.py
+Wynik trafia do gpt-live-package/: tylko gotowy plik BIN z biezacej kompilacji.
+Stare paczki nie sa wymagane. Kontrole sa warunkiem zapisania BIN-a; wyniki
+sa wypisywane w terminalu. Skrypt nie zapisuje raportow ani plikow pomocniczych.
+Nazwa BIN: StackChan-Community-v2.0.1-r5-GPT-Live-app.bin.
+Skrypt nie tworzy pelnego obrazu na 0x0.
+
+INSTALACJA (z katalogu projektu)
+  esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.0.1-r5-GPT-Live-app.bin
+Po wgraniu krotko nacisnij RST.
+
+Zgodna mapa dotychczasowych paczek Community R1-R4 z tego projektu jest zapisana
+w firmware/host/app/gpt-live-layout.json. Zmiana mapy, parametrow flash, przekroczenie
+partycji lub kolizja z NVS powoduja odrzucenie paczki. Zapis aplikacji na 0x10000
+zachowuje ustawienia tylko na urzadzeniu z ta mapa partycji.
+
+Poprawka ROM -> RAM i szczegolowa diagnostyka pozostaja w module GPT-Live.
+Testy: npm run test:unit, npm run test:gpt-live-package oraz testy Moddable
+mods/examples/openai_live_webrtc/__tests__.
+Gotowe BIN-y, wyniki kompilacji i katalog work/ sa poza Git.
+Test rzeczywistego API i fizycznego urzadzenia nie zostal wykonany.

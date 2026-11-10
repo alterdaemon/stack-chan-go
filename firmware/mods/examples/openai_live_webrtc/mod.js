@@ -12,7 +12,80 @@ const messages = {
   connected: 'GPT-Live connected',
   closing: 'Stopping GPT-Live',
   configuration: 'Set AI token in Preferences',
-  error: 'GPT-Live error. Start again.',
+}
+
+function createLiveButton(toggle) {
+  const { Behavior, Container, Label } = Modules.importNow('piu/MC')
+  const { UI, uiStyles } = Modules.importNow('ui-theme')
+  const styles = uiStyles()
+  return new Container(null, {
+    name: 'openai-live-control',
+    left: 4,
+    bottom: 4,
+    width: 88,
+    height: UI.touchTarget,
+    active: true,
+    skin: styles.surface,
+    contents: [
+      new Label(null, {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        string: 'LIVE OFF',
+        style: styles.button,
+      }),
+    ],
+    Behavior: class extends Behavior {
+      skin = styles.surface
+      onLiveState(content, state) {
+        content.active = state !== 'closing'
+        this.skin = state === 'connected' ? styles.success : state === 'connecting' ? styles.accent : styles.surface
+        content.first.string =
+          state === 'connected'
+            ? 'LIVE ON'
+            : state === 'connecting'
+              ? 'LIVE...'
+              : state === 'closing'
+                ? 'STOP...'
+                : 'LIVE OFF'
+        content.skin = this.skin
+      }
+      onTouchBegan(content, id, x, y, ticks) {
+        if (!content.active || this.touchId !== undefined) return
+        this.touchId = id
+        this.startX = x
+        this.startY = y
+        this.maxX = this.maxY = 0
+        content.skin = styles.pressed
+        content.captureTouch(id, x, y, ticks)
+      }
+      onTouchMoved(_content, id, x, y, _ticks, samples) {
+        if (id !== this.touchId) return
+        // Piu batches moves until idle; release may arrive before onTouchMoved.
+        for (let i = 0; i < (samples?.length ?? 0); i++) {
+          const sample = samples.peek(i)
+          this.maxX = Math.max(this.maxX, Math.abs(sample.x - this.startX))
+          this.maxY = Math.max(this.maxY, Math.abs(sample.y - this.startY))
+        }
+        this.maxX = Math.max(this.maxX, Math.abs(x - this.startX))
+        this.maxY = Math.max(this.maxY, Math.abs(y - this.startY))
+      }
+      onTouchCancelled(content) {
+        this.touchId = undefined
+        content.skin = this.skin
+      }
+      onTouchEnded(content, id, x, y, ticks, samples) {
+        if (id !== this.touchId) return
+        this.onTouchMoved(content, id, x, y, ticks, samples)
+        this.touchId = undefined
+        content.skin = this.skin
+        const tap = this.maxX <= 8 && this.maxY <= 8
+        const swipeUp = this.maxX <= 20 && y <= this.startY - 32
+        if (content.active && (tap || swipeUp)) toggle()
+      }
+    },
+  })
 }
 
 export function onContextCreated(robot) {
@@ -29,7 +102,8 @@ export function onContextCreated(robot) {
     Modules.importNow('mc/config').openaiLive ??
     {}
   const readSettings = () => readLiveSettings(defaults, (domain, key) => Preference.get(domain, key))
-  let changingMute = false
+  let changingMute = false,
+    liveButton
   let mouthTimer,
     lastMouth = 0
   function updateMouth(value) {
@@ -66,9 +140,10 @@ export function onContextCreated(robot) {
         // Optional face controls must not prevent session cleanup.
       }
       try {
+        liveButton?.delegate('onLiveState', state)
         drawer.setDrawerButtonState(SESSION, active)
         drawer.setDrawerButtonState(MUTE, false)
-        robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state])
+        robot.ui.showBalloon(state === 'error' ? formatLiveError(detail) : messages[state], { bottom: 56 })
       } catch {
         // Display failures must not prevent native audio/radio cleanup.
       }
@@ -77,22 +152,29 @@ export function onContextCreated(robot) {
       if (state === 'error' && detail) trace(`[openai-live] diagnostic ${JSON.stringify(detail)}\n`)
     },
   })
+  function toggleLive() {
+    if (session.active?.closing) return
+    if (session.active) void session.stop()
+    else {
+      try {
+        session.settings = readSettings()
+        void session.start()
+      } catch (error) {
+        session.onState('error', diagnostic(error, 'configuration', 'settings_read'))
+      }
+    }
+  }
+  // Keep headless hosts usable; the control belongs to the face's effects layer.
+  if (Modules.has('piu/MC')) {
+    liveButton = createLiveButton(toggleLive)
+    robot.ui.addEffect(liveButton, SESSION)
+  }
   drawer.addDrawerButton({
     key: SESSION,
     label: 'GPT-Live',
     kind: 'toggle',
     initialState: false,
-    callback: () => {
-      if (session.active) void session.stop()
-      else {
-        try {
-          session.settings = readSettings()
-          void session.start()
-        } catch (error) {
-          session.onState('error', diagnostic(error, 'configuration', 'settings_read'))
-        }
-      }
-    },
+    callback: toggleLive,
   })
   drawer.addDrawerButton({
     key: MUTE,
