@@ -123,6 +123,39 @@ async function measureDisplay(robot) {
   for (const row of rows) report(row)
 }
 
+async function exerciseVoiceUI(robot, conversation, mode, bargeIn, record) {
+  const before = conversation.stats
+  const beforeIO = Performance.stats()
+  const began = Performance.now()
+  try {
+    for (let step = 0; step < 20; step++) {
+      Performance.touch(true)
+      if (step === 0) robot.ui.openDrawer()
+      if (step === 10) robot.ui.closeDrawer()
+      await wait(50)
+    }
+  } finally {
+    Performance.touch(false)
+    robot.ui.closeDrawer()
+  }
+  const after = conversation.stats
+  const io = Performance.stats()
+  const event = {
+    phase: 'voice-ui',
+    mode,
+    bargeIn,
+    elapsedMs: Performance.now() - began,
+    spiRequests: io.spiRequests - beforeIO.spiRequests,
+    captured: after.capturedSamples - before.capturedSamples,
+    sent: after.sourceSamples - before.sourceSamples,
+    overruns: after.overruns - before.overruns,
+    audibleMs: after.audibleMs - before.audibleMs,
+  }
+  record(event)
+  if (!(event.spiRequests > 0)) throw new Error('provider_ui')
+  if (!(event.captured > 0 && event.sent > 0) || event.overruns) throw new Error('provider_capture')
+}
+
 async function verifyConversation(robot) {
   const session = installConversation(robot)
   if (!session) throw new Error('conversation_unavailable')
@@ -166,8 +199,56 @@ async function verifyConversation(robot) {
         {
           createTransport: (callback) => (this.transport = new Transport(callback)),
           fetch(url, options) {
-            if (url.endsWith('/v1/responses')) observed.deviceSearchRequests++
-            return fetch(url, options)
+            if (url.endsWith('/v1/responses')) {
+              observed.deviceSearchRequests++
+              const began = Performance.now()
+              const request = fetch(url, options)
+              const result = request.then(
+                (response) => {
+                  observed.searchRequestMs = Performance.now() - began
+                  observed.searchStatus = response.status
+                  return response
+                },
+                (error) => {
+                  observed.searchRequestMs = Performance.now() - began
+                  const message = error.message.replace(/^(Error|TypeError|RangeError|SyntaxError): /, '')
+                  const errors = [
+                    'HTTPS request timed out',
+                    'HTTPS connection failed',
+                    'HTTPS response exceeds limit',
+                    'HTTPS response exceeds limit or read failed',
+                    'HTTPS request failed',
+                    'HTTPS request cancelled',
+                    'HTTPS write failed',
+                    'HTTPS request capacity',
+                    'not enough memory',
+                    'stack overflow',
+                  ]
+                  observed.searchRequestError = errors.includes(message) ? message : 'unclassified'
+                  observed.searchRequestErrorType = error.name
+                  throw error
+                },
+              )
+              result.cancel = () => request.cancel?.()
+              return result
+            }
+            if (!url.endsWith('/hangup')) return fetch(url, options)
+            const began = Performance.now()
+            const request = fetch(url, options)
+            const result = request.then(
+              (response) => {
+                observed.hangupMs = Performance.now() - began
+                observed.hangupStatus = response.status
+                return response
+              },
+              (error) => {
+                observed.hangupMs = Performance.now() - began
+                observed.hangupError = error.message === 'HTTPS request timed out' ? 'https_timeout' : 'request_failed'
+                throw error
+              },
+            )
+            result.cancel = () => request.cancel?.()
+            return result
           },
           setTimeout: (fn, ms) => Timer.set(fn, ms),
           clearTimeout: (timer) => Timer.clear(timer),
@@ -220,13 +301,16 @@ async function verifyConversation(robot) {
   syntheticMic(true)
   let failures = 0
   try {
-    const cases = ['live', 'realtime'].flatMap((mode) => [true, false].map((bargeIn) => ({ mode, bargeIn })))
+    const cases = ['live', 'realtime']
+      .filter((mode) => !config.cameraProbeMode || mode === config.cameraProbeMode)
+      .flatMap((mode) => [true, false].map((bargeIn) => ({ mode, bargeIn })))
     for (const { mode, bargeIn } of cases) {
       session.settings = {
         ...saved,
         mode,
         model: mode === 'live' ? 'gpt-live-1' : 'gpt-realtime-2.1-mini',
         voice: 'marin',
+        volume: config.cameraProbeVolume ?? saved.volume,
         bargeIn,
         standbySeconds: 3600,
       }
@@ -234,7 +318,7 @@ async function verifyConversation(robot) {
       report({ phase: 'provider-start', mode, bargeIn })
       const records = []
       const record = (event) => {
-        if (records.length === 128) throw new Error('provider_record_limit')
+        if (records.length === 132) throw new Error('provider_record_limit')
         records.push(event)
       }
       try {
@@ -244,6 +328,7 @@ async function verifyConversation(robot) {
           mode,
           bargeIn,
           pitch: session.settings.pitch ?? 0,
+          volume: session.settings.volume,
           startMs: Performance.now() - startedAt,
           stats: conversation.stats,
         })
@@ -273,6 +358,7 @@ async function verifyConversation(robot) {
         if (playbackMs >= 20000) throw new Error('provider_playback')
         record({ phase: 'playback', mode, bargeIn, playbackMs })
         report({ phase: 'provider-playing', mode, bargeIn })
+        if (config.cameraProbeVoiceUI) await exerciseVoiceUI(robot, conversation, mode, bargeIn, record)
         // Capture is intentionally suspended during output when barge-in is off.
         while (!bargeIn && conversation.stats.outputIdleMs < 500) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
@@ -302,6 +388,7 @@ async function verifyConversation(robot) {
           // The injected turn may still be answering. Use the existing
           // stop/start lifecycle so the forced search begins on a fresh turn.
           await session.stop()
+          record({ phase: 'input-session-close', mode, bargeIn, observed: { ...conversation.observed } })
           report({ phase: 'search-start', mode, bargeIn })
           if (!(await session.start())) throw new Error('provider_startup')
           measure()
@@ -309,6 +396,16 @@ async function verifyConversation(robot) {
           const before = conversation.stats
           const searchAt = Performance.now()
           conversation.requestSearch(mode)
+          if (config.cameraProbeVoiceUI) {
+            while (mode === 'realtime' && !(conversation.observed.deviceSearchRequests > 0)) {
+              if (!session.active || conversation.observed.searchError || Performance.now() - searchAt >= 45000)
+                throw new Error('provider_search')
+              await wait(100)
+            }
+            await exerciseVoiceUI(robot, conversation, mode, bargeIn, (event) =>
+              record({ ...event, context: 'search' }),
+            )
+          }
           while (!(conversation.observed.search > 0 && conversation.observed.sources > 0)) {
             if (!session.active || conversation.observed.searchError || Performance.now() - searchAt >= 45000)
               throw new Error('provider_search')
@@ -342,10 +439,14 @@ async function verifyConversation(robot) {
             conversation.requestPlayback(mode)
           }
           await wait(Math.min(10000, duration - elapsed))
-          const after = conversation.stats
+          let after = conversation.stats
           if (playbackRequest) {
             if (after.audibleMs - playbackRequest.audibleMs >= 250) {
               record({ phase: 'repeated-playback', mode, bargeIn, elapsedMs: Performance.now() - began })
+              if (config.cameraProbeVoiceUI) {
+                await exerciseVoiceUI(robot, conversation, mode, bargeIn, record)
+                after = conversation.stats
+              }
               playbackRequest = undefined
             } else if (Performance.now() - playbackRequest.at >= 20000) throw new Error('provider_playback')
           }
@@ -381,7 +482,9 @@ async function verifyConversation(robot) {
           phase: 'provider-failure',
           mode,
           bargeIn,
-          code: ['provider_capture', 'provider_playback', 'provider_input', 'provider_search'].includes(error.message)
+          code: ['provider_capture', 'provider_playback', 'provider_input', 'provider_search', 'provider_ui'].includes(
+            error.message,
+          )
             ? error.message
             : 'provider_startup',
           stats: conversation?.stats,
@@ -400,7 +503,16 @@ async function verifyConversation(robot) {
         const closeIoWrites = afterClose.ioWrites - beforeClose.ioWrites
         const memory = sample()
         for (const event of records) report(event)
-        report({ phase: 'stopped', mode, bargeIn, stopMs, closeAecCalls, closeIoWrites, memory })
+        report({
+          phase: 'stopped',
+          mode,
+          bargeIn,
+          stopMs,
+          closeAecCalls,
+          closeIoWrites,
+          memory,
+          observed: conversation && { ...conversation.observed },
+        })
       }
     }
   } finally {
@@ -423,10 +535,12 @@ export function onContextCreated(robot) {
     if (!blocked || Preference.blockedWrites !== 1) throw new Error('preference_guard')
     await wait(1500)
     assertIdle('baseline')
-    await measureDisplay(robot)
-    await verifyPreview()
-    await captureCycles(robot)
-    await singleCapture(robot)
+    if (!config.cameraProbeProvidersOnly) {
+      await measureDisplay(robot)
+      await verifyPreview()
+      await captureCycles(robot)
+      await singleCapture(robot)
+    }
     await verifyConversation(robot)
     if (Preference.blockedWrites !== 1) throw new Error('unexpected_preference_write')
     report({ phase: 'done' })
