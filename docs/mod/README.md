@@ -33,9 +33,10 @@ remain in their existing modules with tests and driver provenance.
 
 ## Local artifacts
 
-Keep fork-owned generated/private files under the ignored root `internal/`:
+Keep ad hoc working artifacts and fork-specific packages/assets under the ignored
+root `internal/`:
 
-- `work/`: scratch work and logs.
+- `work/`: scratch scripts, logs, reports and screenshots.
 - `diagnostics/`: generated R14 variants and input fixtures.
 - `firmware/wifi-settings/`: generated embedded Settings assets.
 - `gpt-live-package/`: installable fork images.
@@ -46,6 +47,11 @@ The directory is private and is never committed or uploaded as a whole.
 Release publication selects only the two validated BINs. Standard upstream
 build outputs and `node_modules` retain their existing paths. Source files,
 tests and the sanitized evidence in this guide are not relocated.
+Standard outputs include the three `firmware/dist*` folders and upstream Avatar DSL
+`.test-output` files. Do not reconfigure standard build/test outputs to move them
+under `internal/`. For temporary jobs, set `TMPDIR` to the absolute
+`internal/tmp/` path after creating it; direct Python bytecode to
+`internal/python-cache/` with `PYTHONPYCACHEPREFIX`.
 
 ## Build
 

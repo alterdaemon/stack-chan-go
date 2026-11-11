@@ -18,6 +18,8 @@ Firmware behavior, product versions, release images and release tags are unchang
 Store fork-only packages, diagnostics, embedded Settings output, scratch work
 and private archives under ignored `internal/`. Preserve upstream source and
 standard build/dependency layouts.
+Clarify agent artifact rules: keep existing build/test output paths, place ad hoc
+working files under `internal/`, and retain reusable tests and validation evidence.
 
 ## 2.1.0
 

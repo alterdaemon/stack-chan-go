@@ -324,3 +324,11 @@ six targets after activating the existing SDK paths; the earlier attempts
 failed on missing mcconfig or IDF/FONTBM environment settings. No toolchain files
 were changed. This relocation did not rebuild or flash firmware or run device/API
 tests. Future generated inputs, logs and backups follow the rules in `AGENTS.md`.
+
+A follow-up artifact audit on 2026-11-11 found no untracked, nonignored files and
+no additional ad hoc fork artifacts requiring relocation. The remaining ignored
+directories are `internal/`, standard build/test outputs and installed dependencies.
+Upstream already defines `web/avatar-dsl/.test-output/` and its output-producing
+acceptance test. The 17 retained fork measurement JSON files total 213,408 bytes
+and remain published validation evidence. Agent instructions now explicitly
+distinguish ad hoc artifacts from tool-managed outputs and reusable source/tests.
