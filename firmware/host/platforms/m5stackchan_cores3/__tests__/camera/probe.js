@@ -130,7 +130,7 @@ async function verifyConversation(robot) {
     greeting = 0
   class ProbeConversation extends Conversation {
     constructor(settings) {
-      const observed = { userTranscripts: 0, speech: 0, clears: 0 }
+      const observed = { userTranscripts: 0, speech: 0, clears: 0, search: 0, sources: 0, deviceSearchRequests: 0 }
       super(
         {
           ...settings,
@@ -141,18 +141,48 @@ async function verifyConversation(robot) {
           onEvent(event) {
             if (event.type === 'input_audio_buffer.speech_started') observed.speech++
             if (event.type === 'output_audio_buffer.cleared') observed.clears++
+            const inner = event.event
+            if (inner?.type === 'response.web_search_call.completed') observed.search++
+            if (inner?.item?.type === 'web_search_call' && inner.item.status === 'completed') observed.search++
+            if (inner?.annotation?.type === 'url_citation') observed.sources++
             settings.onEvent?.(event)
+          },
+          onToolResult(result) {
+            const output = typeof result.output === 'string' ? JSON.parse(result.output) : (result.output ?? {})
+            observed.search++
+            observed.sources += output.sources?.length ?? 0
+            observed.searchError = !!(result.error ?? output.error)
+            settings.onToolResult?.(result)
           },
         },
         {
           createTransport: (callback) => (this.transport = new Transport(callback)),
-          fetch,
+          fetch(url, options) {
+            if (url.endsWith('/v1/responses')) observed.deviceSearchRequests++
+            return fetch(url, options)
+          },
           setTimeout: (fn, ms) => Timer.set(fn, ms),
           clearTimeout: (timer) => Timer.clear(timer),
         },
       )
       this.observed = observed
       conversation = this
+    }
+    requestSearch(mode) {
+      const text =
+        'Search for the official Espressif ESP32-S3 datasheet. State the processor architecture briefly and cite the source.'
+      this.transport.send(
+        JSON.stringify({
+          type: mode === 'live' ? 'response.item.create' : 'conversation.item.create',
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
+        }),
+      )
+      this.transport.send(
+        JSON.stringify({
+          type: 'response.create',
+          ...(mode === 'realtime' ? { response: { tool_choice: { type: 'function', name: 'search_web' } } } : {}),
+        }),
+      )
     }
     requestPlayback(mode) {
       const text = 'Count slowly from one to twenty in English, without an introduction.'
@@ -260,6 +290,32 @@ async function verifyConversation(robot) {
             observed: { ...conversation.observed },
           })
         }
+        if (bargeIn && config.cameraProbeSearch) {
+          const before = conversation.stats
+          const searchAt = Performance.now()
+          conversation.requestSearch(mode)
+          while (!(conversation.observed.search > 0 && conversation.observed.sources > 0)) {
+            if (!session.active || conversation.observed.searchError || Performance.now() - searchAt >= 45000)
+              throw new Error('provider_search')
+            await wait(100)
+          }
+          const after = conversation.stats
+          record({
+            phase: 'search',
+            mode,
+            bargeIn,
+            elapsedMs: Performance.now() - searchAt,
+            captured: after.capturedSamples - before.capturedSamples,
+            sent: after.sourceSamples - before.sourceSamples,
+            overruns: after.overruns - before.overruns,
+            observed: { ...conversation.observed },
+          })
+          if (
+            !(after.capturedSamples > before.capturedSamples && after.sourceSamples > before.sourceSamples) ||
+            after.overruns > before.overruns
+          )
+            throw new Error('provider_capture')
+        }
         report({ phase: 'provider-measuring', mode, bargeIn })
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
         const began = Performance.now()
@@ -310,7 +366,7 @@ async function verifyConversation(robot) {
           phase: 'provider-failure',
           mode,
           bargeIn,
-          code: ['provider_capture', 'provider_playback', 'provider_input'].includes(error.message)
+          code: ['provider_capture', 'provider_playback', 'provider_input', 'provider_search'].includes(error.message)
             ? error.message
             : 'provider_startup',
           stats: conversation?.stats,
