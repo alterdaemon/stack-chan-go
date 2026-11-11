@@ -39,7 +39,7 @@ root `internal/`:
 - `work/`: scratch scripts, logs, reports and screenshots.
 - `diagnostics/`: generated R14 variants and input fixtures.
 - `firmware/wifi-settings/`: generated embedded Settings assets.
-- `release-packages/`: installable fork images named by version, without a GPT-Live suffix.
+- `release-packages/`: installable firmware images.
 - `archives/`: local backups and superseded artifacts.
 
 Names above are relative to `internal/`; create only the folders needed.
