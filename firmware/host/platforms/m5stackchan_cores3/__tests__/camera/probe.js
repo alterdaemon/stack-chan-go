@@ -304,6 +304,7 @@ async function verifyConversation(robot) {
     const cases = ['live', 'realtime']
       .filter((mode) => !config.cameraProbeMode || mode === config.cameraProbeMode)
       .flatMap((mode) => [true, false].map((bargeIn) => ({ mode, bargeIn })))
+      .filter(({ bargeIn }) => config.cameraProbeBargeIn === undefined || bargeIn === config.cameraProbeBargeIn)
     for (const { mode, bargeIn } of cases) {
       session.settings = {
         ...saved,
@@ -364,14 +365,15 @@ async function verifyConversation(robot) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
           await wait(100)
         }
-        if (bargeIn && speechClip) {
+        if ((bargeIn || config.cameraProbeAllInput) && speechClip) {
           const before = { ...conversation.observed }
           const injectedAt = Performance.now()
           inject(speechClip, true)
           const accepted = () =>
             mode === 'live'
               ? conversation.observed.userTranscripts > before.userTranscripts
-              : conversation.observed.speech > before.speech && conversation.observed.clears > before.clears
+              : conversation.observed.speech > before.speech &&
+                (!bargeIn || conversation.observed.clears > before.clears)
           while (!accepted()) {
             if (!session.active || Performance.now() - injectedAt >= 20000) throw new Error('provider_input')
             await wait(100)
