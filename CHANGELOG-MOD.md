@@ -13,7 +13,7 @@ series uses `v2.0.1-r<N>` tags.
 
 | Version | Changes |
 | --- | --- |
-| **2.1.0-R1** | Merge upstream 2.1.0 into the R15 fork and use Moddable 10.1.0. Keep integrated GPT-Live and Realtime Mini, saved settings, 48 kHz audio, SPI completion waits and R15 camera teardown. Retain upstream CoreS3 display batching, WebRTC resource cleanup, TLS fix and Avatar DSL tooling. Use the SDK HTTP header-buffer fix for Wi-Fi Settings. See the [release and performance record](./docs/release-notes/v2.1.0-R1.md). |
+| **2.1.0-R1** | Merge upstream 2.1.0 into the R15 fork and use Moddable 10.1.0. Keep integrated GPT-Live and Realtime Mini, saved settings, 48 kHz audio, SPI completion waits and R15 camera teardown. Retain upstream CoreS3 display batching, WebRTC resource cleanup, TLS fix and Avatar DSL tooling. Use the SDK HTTP header-buffer fix for Wi-Fi Settings. The first device comparison recorded 88.4% fewer SPI submissions and 515,076 B more free idle PSRAM. Production write and boot validation are pending. [Release and performance record](./docs/release-notes/v2.1.0-R1.md). |
 
 ## 2.0.1 revisions
 
@@ -74,12 +74,12 @@ upstream base and the release tags identify the published revisions.
 | --- | --- | --- |
 | `v2.0.1` | `v2.0.1-mod` | `/compare/v2.0.1...v2.0.1-mod` |
 | `v2.1.0` | `v2.1.0-mod` | `/compare/v2.1.0...v2.1.0-mod` |
-| `v2.1.0` | Release `v2.1.0-R1` | `/compare/v2.1.0...v2.1.0-R1` |
+| `v2.1.0` | Planned release tag `v2.1.0-R1` | `/compare/v2.1.0...v2.1.0-R1` once tagged |
 
 ```sh
 git diff --stat v2.0.1 v2.0.1-mod
 git diff --stat v2.1.0 v2.1.0-mod
-git diff v2.1.0 v2.1.0-R1
+git diff v2.1.0 v2.1.0-mod
 ```
 
 Detailed notes are in [docs/release-notes](./docs/release-notes/).
