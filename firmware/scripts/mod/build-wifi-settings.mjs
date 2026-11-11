@@ -5,7 +5,7 @@ import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
-const root = fileURLToPath(new URL('../..', import.meta.url))
+const root = fileURLToPath(new URL('../../..', import.meta.url))
 const web = join(root, 'web')
 const output = join(root, 'firmware/dist/wifi-settings')
 const build = join(output, 'build')

@@ -3,7 +3,6 @@ name: Bundle Stack-chan Firmware
 on:
   push:
     branches:
-      - develop
       - main
       - "v*-mod"
     paths:
@@ -18,8 +17,6 @@ on:
       - ".github/workflows/cloudflare-preview.yml"
   pull_request:
     branches:
-      - develop
-      - feat/webrtc-runtime-coexistence
       - main
       - "v*-mod"
     paths:
@@ -205,11 +202,11 @@ jobs:
     needs: build
     if: >-
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      PAGES_CHANNEL: ${{ github.ref == 'refs/heads/main' && 'release' || 'develop' }}
-      PAGES_DIRECTORY: ${{ github.ref == 'refs/heads/main' && 'web' || 'develop/web' }}
+      PAGES_CHANNEL: release
+      PAGES_DIRECTORY: web
     concurrency:
       group: gh-pages-deploy
       cancel-in-progress: false

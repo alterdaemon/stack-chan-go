@@ -168,7 +168,7 @@ if (!dryRun && device.sdkconfigTarget && ['build', 'flash', 'deploy', 'debug'].i
   }
 }
 
-if (integratedLive) run(process.execPath, ['scripts/build-wifi-settings.mjs'])
+if (integratedLive) run(process.execPath, ['scripts/mod/build-wifi-settings.mjs'])
 
 switch (command) {
   case 'build':
@@ -194,7 +194,7 @@ switch (command) {
       buildMode === 'release' &&
       path.resolve(manifest) === path.resolve(device.manifest)
     ) {
-      run('python3', [path.resolve('scripts/package-gpt-live-update.py')])
+      run('python3', [path.resolve('scripts/mod/package-gpt-live-update.py')])
     }
     break
   case 'flash':

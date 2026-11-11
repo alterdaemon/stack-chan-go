@@ -1,3 +1,6 @@
+> Upstream release policy retained for reference. This fork uses the
+> [Community guide](../mod/README.md#branches-and-tags).
+
 # ブランチとリリースフロー
 
 このリポジトリでは、リリースを凍結する際に以下のブランチモデルを使用します。
@@ -42,14 +45,6 @@ version とリリースノートはリリースブランチ上で更新します
 実機検証では[リリース前実機テスト](./release-device-test_ja.md)を使用し、候補コミットと結果をリリース pull request に記録します。
 安定版の `vX.Y.Z` タグをpushすると、バージョンを検証してfirmware bundleを再構築し、GitHub Releaseの成果物を公開します。
 リリース pull request の自動作成と、ファームウェアへの製品version埋め込みは今後の作業です。
-
-## 派生版のリビジョン
-
-`stackchan-community-mod` は upstream の `v2.0.1` から派生しています。
-R<N> の製品バージョンは `2.0.1-r<N>`、タグは `v2.0.1-r<N>` です。
-派生版は GitHub の prerelease として公開し、Latest には設定しません。
-バージョン管理と比較方法は [英語の手順](./release-flow.md#fork-revisions) と
-[CHANGELOG-MOD.md](../../CHANGELOG-MOD.md) を参照してください。
 
 ## GitHub Pages
 

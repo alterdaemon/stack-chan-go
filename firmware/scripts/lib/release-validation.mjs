@@ -14,6 +14,39 @@ export function versionFromReleaseTag(tag) {
   return match[1]
 }
 
+export function releaseNotesForTag(rootDirectory, tag) {
+  const version = versionFromReleaseTag(tag)
+  const prerelease = /-[rR][1-9]\d*$/.test(version)
+  const relativePath = prerelease ? 'CHANGELOG-MOD.md' : `docs/release-notes/v${version}.md`
+  const releaseNotePath = path.join(rootDirectory, relativePath)
+  if (!existsSync(releaseNotePath)) throw new Error(`release notes are missing: ${relativePath}`)
+  let releaseNotes = readFileSync(releaseNotePath, 'utf8').trim()
+  if (prerelease) {
+    const lines = releaseNotes.split(/\r?\n/)
+    const headings = []
+    let fence
+    for (const [index, line] of lines.entries()) {
+      const delimiter = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+      if (delimiter) {
+        if (!fence) fence = delimiter[1]
+        else if (delimiter[1][0] === fence[0] && delimiter[1].length >= fence.length && !delimiter[2].trim())
+          fence = undefined
+        continue
+      }
+      if (fence) continue
+      const heading = /^(#{1,3})\s+(.+?)\s*$/.exec(line)
+      if (heading) headings.push({ index, level: heading[1].length, title: heading[2] })
+    }
+    const matches = headings.filter((heading) => heading.level === 3 && heading.title === version)
+    if (matches.length !== 1) throw new Error(`expected exactly one release section for ${version} in ${relativePath}`)
+    const start = matches[0].index + 1
+    const end = headings.find((heading) => heading.index >= start)?.index ?? lines.length
+    releaseNotes = lines.slice(start, end).join('\n').trim()
+  }
+  if (!releaseNotes) throw new Error(`release notes are empty for ${version}: ${relativePath}`)
+  return { releaseNotePath, releaseNotes, version, prerelease }
+}
+
 export function validateRelease(rootDirectory, tag) {
   const version = versionFromReleaseTag(tag)
 
@@ -44,10 +77,7 @@ export function validateRelease(rootDirectory, tag) {
     }
   }
 
-  const releaseNotePath = path.join(rootDirectory, 'docs', 'release-notes', `v${version}.md`)
-  if (!existsSync(releaseNotePath) || readFileSync(releaseNotePath, 'utf8').trim().length === 0) {
-    throw new Error(`release note is missing or empty: docs/release-notes/v${version}.md`)
-  }
+  const notes = releaseNotesForTag(rootDirectory, tag)
 
   const changesetDirectory = path.join(rootDirectory, '.changeset')
   const pendingChangesets = readdirSync(changesetDirectory).filter(
@@ -57,5 +87,5 @@ export function validateRelease(rootDirectory, tag) {
     throw new Error(`pending Changesets must be consumed before release: ${pendingChangesets.join(', ')}`)
   }
 
-  return { releaseNotePath, version, prerelease: /-[rR][1-9]\d*$/.test(version) }
+  return notes
 }

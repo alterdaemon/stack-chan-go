@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, test } from 'node:test'
 
-import { validateRelease, versionFromReleaseTag } from './release-validation.mjs'
+import { releaseNotesForTag, validateRelease, versionFromReleaseTag } from './release-validation.mjs'
 
 const temporaryDirectories = []
 
@@ -27,7 +27,9 @@ function createReleaseFixture(version = '1.0.0') {
     )
   }
   writeFileSync(path.join(rootDirectory, 'web', 'flash', 'manifest_esp32_fixture.json'), JSON.stringify({ version }))
-  writeFileSync(path.join(rootDirectory, 'docs/release-notes', `v${version}.md`), '# Release notes\n')
+  if (/-[rR]/.test(version))
+    writeFileSync(path.join(rootDirectory, 'CHANGELOG-MOD.md'), `# Fork changes\n\n### ${version}\n\nRelease notes.\n`)
+  else writeFileSync(path.join(rootDirectory, 'docs/release-notes', `v${version}.md`), '# Release notes\n')
   writeFileSync(path.join(rootDirectory, '.changeset', 'README.md'), '# Changesets\n')
 
   return rootDirectory
@@ -55,7 +57,35 @@ test('validateRelease validates fork revision metadata and identifies a prerelea
   const result = validateRelease(rootDirectory, 'v2.0.1-r10')
   assert.equal(result.version, '2.0.1-r10')
   assert.equal(result.prerelease, true)
+  assert.equal(result.releaseNotes, 'Release notes.')
   assert.throws(() => validateRelease(rootDirectory, 'v2.0.1-r9'), /expected 2\.0\.1-r9/)
+})
+
+test('fork notes select exactly the requested revision and preserve its subsections and code', () => {
+  const root = createReleaseFixture('2.1.0-R1')
+  const body = 'Release impact: patch.\n\n#### Checks\n\nPassed.\n\n```md\n### 2.1.0-R1\n```'
+  writeFileSync(
+    path.join(root, 'CHANGELOG-MOD.md'),
+    `# Changes\n\n## Unreleased\n\nNot published.\n\n## 2.1.0\n\n### 2.1.0-R10\n\nLater.\n\n### 2.1.0-R1\n\n${body}\n\n## 2.0.1\n\n### 2.0.1-r15\n\nOlder.\n`.replaceAll(
+      '\n',
+      '\r\n',
+    ),
+  )
+  assert.equal(releaseNotesForTag(root, 'v2.1.0-R1').releaseNotes, body)
+  assert.equal(releaseNotesForTag(root, 'v2.0.1-r15').releaseNotes, 'Older.')
+})
+
+test('fork notes reject missing, empty and duplicate revisions instead of publishing another section', () => {
+  const root = createReleaseFixture('2.1.0-R1')
+  for (const document of [
+    '### 2.1.0-R10\n\nWrong revision.',
+    '### 2.1.0-R1\n\n### 2.0.1-r15\n\nOther series.',
+    '### 2.1.0-R1\n\nFirst.\n\n### 2.1.0-R1\n\nDuplicate.',
+    '~~~md\n### 2.1.0-R1\n\nOnly an example.\n~~~',
+  ]) {
+    writeFileSync(path.join(root, 'CHANGELOG-MOD.md'), document)
+    assert.throws(() => validateRelease(root, 'v2.1.0-R1'), /release (section|notes)/)
+  }
 })
 
 test('validateRelease rejects mismatched versions', () => {

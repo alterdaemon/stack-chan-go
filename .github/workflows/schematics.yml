@@ -3,7 +3,6 @@ name: Generate Stack-chan Schematics Files
 on:
   push:
     branches:
-      - develop
       - main
     paths:
       - '**/*.kicad_sch'
@@ -12,7 +11,6 @@ on:
       - '.github/workflows/schematics.yml'
   pull_request:
     branches:
-      - develop
       - main
     paths:
       - '**/*.kicad_sch'
@@ -48,11 +46,11 @@ jobs:
     needs: build-schematics
     if: >-
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      PAGES_CHANNEL: ${{ github.ref == 'refs/heads/main' && 'release' || 'develop' }}
-      PAGES_DIRECTORY: ${{ github.ref == 'refs/heads/main' && 'web' || 'develop/web' }}
+      PAGES_CHANNEL: release
+      PAGES_DIRECTORY: web
     concurrency:
       group: gh-pages-deploy
       cancel-in-progress: false

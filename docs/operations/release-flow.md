@@ -1,3 +1,6 @@
+> Upstream release policy retained for reference. This fork uses the
+> [Community guide](../mod/README.md#branches-and-tags).
+
 # Branch and Release Flow
 
 This repository uses the following branch model for a frozen release:
@@ -34,22 +37,6 @@ The expected release path is:
 5. Merge `main` back into `develop` after publication.
 
 Changesets are configured with `develop` as the release base branch. Version bumps and release notes are prepared on the release branch. Record the candidate commit and hardware results in the release pull request using the [physical-device release checklist](./release-device-test_ja.md). A stable `vX.Y.Z` tag validates the versions, rebuilds the firmware bundle, and publishes the GitHub Release assets. Automated release pull requests and firmware product-version embedding remain future work.
-
-## Fork revisions
-
-`stackchan-community-mod` forks [stack-chan/stack-chan v2.0.1](https://github.com/stack-chan/stack-chan/tree/v2.0.1).
-The `upstream` remote points to that project and `main` tracks
-`upstream/main`. The `v2.0.1-mod` and `v2.1.0-mod` branches carry the fork's
-revisions. See [CHANGELOG-MOD.md](../../CHANGELOG-MOD.md) for comparisons.
-
-The 2.1.0 series uses product version `2.1.0-R<N>` and tag `v2.1.0-R<N>`.
-Update both package versions and lockfile roots, all web flash manifest versions,
-the GPT-Live packager revision and filenames, and `docs/release-notes/v<version>.md`.
-Run `npm run check:release -- v<version>` from `firmware/` before tagging.
-The Community release workflow verifies the series branch and publishes the two
-validated GPT-Live BINs as a prerelease.
-The ESP application descriptor retains the separate Moddable/host API compatibility
-version required by MOD loading; it is not the fork's product version.
 
 ## GitHub Pages
 

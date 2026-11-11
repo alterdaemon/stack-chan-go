@@ -88,7 +88,7 @@ process.exit(Number(process.env.STACKCHAN_TEST_PACKAGE_STATUS ?? 0))
     )
     chmodSync(fakePython, 0o755)
     writeFileSync(
-      path.join(fixture.firmware, 'scripts/build-wifi-settings.mjs'),
+      path.join(fixture.firmware, 'scripts/mod/build-wifi-settings.mjs'),
       `
 import { appendFileSync } from 'node:fs'
 appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wifi-settings']) + '\\n')
@@ -109,7 +109,7 @@ appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wi
       assert.equal(invocations.at(-2).at(-1), path.join(fixture.firmware, selected))
       assert.deepEqual(invocations.at(-1), [
         'python3',
-        path.join(fixture.firmware, 'scripts/package-gpt-live-update.py'),
+        path.join(fixture.firmware, 'scripts/mod/package-gpt-live-update.py'),
       ])
     }
     const project = path.join(

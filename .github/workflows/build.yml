@@ -3,11 +3,13 @@ name: Build Stack-chan Firmware
 on:
   push:
     branches:
-      - develop
-      - feat/moddable-v10-foundation
       - main
       - "v*-mod"
     paths:
+      - "CHANGELOG-MOD.md"
+      - "docs/mod/**"
+      - ".changeset/config.json"
+      - ".github/workflows/release.yml"
       - "firmware/**"
       - "web/**"
       - "docs/specs/**"
@@ -18,12 +20,13 @@ on:
       - "lefthook.yml"
   pull_request:
     branches:
-      - develop
-      - feat/webrtc-runtime-coexistence
-      - feat/moddable-v10-foundation
       - main
       - "v*-mod"
     paths:
+      - "CHANGELOG-MOD.md"
+      - "docs/mod/**"
+      - ".changeset/config.json"
+      - ".github/workflows/release.yml"
       - "firmware/**"
       - "web/**"
       - "docs/specs/**"

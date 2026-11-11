@@ -24,7 +24,7 @@ def encode_table(partitions):
 
 class UpdateTests(unittest.TestCase):
     def setUp(self):
-        self.layout = json.loads((script.parents[1] / 'host/app/gpt-live-layout.json').read_text())
+        self.layout = json.loads((script.parents[2] / 'host/app/gpt-live-layout.json').read_text())
         self.table = encode_table(self.layout['partitions'])
         self.app = bytearray(4097)
         self.app[0] = 0xE9

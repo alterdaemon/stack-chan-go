@@ -122,7 +122,7 @@ def package_update(root, output):
 
 
 if __name__ == '__main__':
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=root / 'gpt-live-package')
     options = parser.parse_args()

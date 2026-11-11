@@ -152,7 +152,7 @@ export function buildFirmwareBundleTarget(
   }
 
   if (target.realtimePerformance)
-    runCommand(process.execPath, ['scripts/build-wifi-settings.mjs'], firmwareDirectory, process.env)
+    runCommand(process.execPath, ['scripts/mod/build-wifi-settings.mjs'], firmwareDirectory, process.env)
 
   mkdirSync(outputDirectory, { recursive: true })
   const bundleManifestPath = prepareSdkconfigManifest(

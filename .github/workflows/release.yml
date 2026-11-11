@@ -69,6 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           image="release-assets/StackChan-Community-$TAG-GPT-Live"
+          node firmware/scripts/validate-release.mjs "$TAG" --notes > "$RUNNER_TEMP/release-notes.md"
           gh release create "$TAG" "$image.bin" "$image-app.bin" \
             --verify-tag --title "Stack-chan Community $TAG" \
-            --notes-file "docs/release-notes/$TAG.md" --prerelease --latest=false
+            --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease --latest=false

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 unset BASH_ENV
-PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
-TOOLCHAINS="${STACKCHAN_TOOLCHAINS:?Ustaw STACKCHAN_TOOLCHAINS na katalog z Moddable, ESP-IDF i esp-webrtc-solution}"
+PROJECT_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+TOOLCHAINS="${STACKCHAN_TOOLCHAINS:?Set STACKCHAN_TOOLCHAINS to the directory containing Moddable, ESP-IDF and esp-webrtc-solution}"
 export MODDABLE="$TOOLCHAINS/moddable"
 export IDF_PATH="$TOOLCHAINS/esp-idf"
 export IDF_TOOLS_PATH="$TOOLCHAINS/idf-tools"

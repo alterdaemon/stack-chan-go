@@ -11,9 +11,9 @@ Examples of useful contributions:
 
 ## Before opening a pull request
 
-- Base your branch on `develop`
+- Base your branch on `main`
 - Use `feat/*` for feature work and `fix/*` for fixes
-- Open pull requests against `develop` unless the maintainers ask for another base branch
+- Open pull requests against `main`; use a series branch only for an explicit backport
 - Keep each pull request focused on a single topic
 - Run the relevant checks before opening the pull request
 
@@ -45,14 +45,15 @@ If your change depends on Moddable or ESP-IDF tooling, include the build or runt
 
 ## Branch and release flow
 
-The repository uses `main <- release/* <- develop <- feat/* | fix/*` for a frozen release.
+`main` contains current fork work; keep `v2.1.0-mod` at the same commit after changes.
+`v2.0.1-mod` preserves the historical R15 line. The fork has no `develop` branch.
+Record all fork revisions in [CHANGELOG-MOD.md](CHANGELOG-MOD.md), with one
+`### <product-version>` section per revision. Keep only the latest release tag
+per series and archive superseded tags privately. Do not move release tags for
+documentation changes.
 
-- `main` is the stable branch and should represent released or release-ready source.
-- `develop` is the default branch and integration branch for the next release.
-- A release branch is cut from a fixed `develop` commit and reviewed through a `release/*` to `main` pull request.
-- After publication, `main` is merged back into `develop` so version and release metadata remain in the next development cycle.
-
-See `docs/operations/release-flow.md` for the detailed branch policy.
+See the [fork guide](docs/mod/README.md) for publication and installation and
+the [validation record](docs/mod/validation.md) for completed and unverified checks.
 
 ## Issue reports
 
