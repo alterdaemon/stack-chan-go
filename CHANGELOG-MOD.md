@@ -25,6 +25,8 @@ Name release BINs `StackChan-Community-v<version>.bin` and
 Keep full-install and app-update images; preserve their bytes when renaming.
 Use `build-firmware.sh`, `package-release.py` and `test:release-package` for the
 fork's build and packaging tools.
+Document explicitly requested release publication, concise descriptions and the
+`Stack-chan community-mod <tag>` release title convention.
 
 ## 2.1.0
 
