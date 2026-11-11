@@ -166,12 +166,18 @@ async function verifyConversation(robot) {
       report({ phase: 'provider-start', mode, bargeIn })
       try {
         if (!(await session.start())) throw new Error('provider_startup')
-        report({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt })
+        report({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt, stats: conversation.stats })
         const playbackAt = Performance.now()
+        let progressAt = playbackAt
         conversation.requestPlayback(mode)
         while (!(conversation.stats.audibleMs >= 250)) {
           if (!session.active || Performance.now() - playbackAt >= 20000) throw new Error('provider_playback')
           await wait(100)
+          const now = Performance.now()
+          if (now - progressAt >= 5000) {
+            report({ phase: 'provider-wait', mode, bargeIn, elapsedMs: now - playbackAt, stats: conversation.stats })
+            progressAt = now
+          }
         }
         report({ phase: 'playback', mode, bargeIn, playbackMs: Performance.now() - playbackAt })
         // Capture is intentionally suspended during output when barge-in is off.
@@ -214,6 +220,8 @@ async function verifyConversation(robot) {
           mode,
           bargeIn,
           code: ['provider_capture', 'provider_playback'].includes(error.message) ? error.message : 'provider_startup',
+          stats: conversation?.stats,
+          memory: sample(),
         })
       } finally {
         const stopAt = Performance.now()
