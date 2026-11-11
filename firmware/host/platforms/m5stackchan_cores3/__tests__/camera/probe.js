@@ -209,9 +209,20 @@ async function verifyConversation(robot) {
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
         const began = Performance.now()
         let before = conversation.stats
+        let playbackRequest
         for (let elapsed = 0; elapsed < duration; elapsed += 10000) {
+          if (elapsed > 0 && elapsed % 60000 === 0) {
+            playbackRequest = { at: Performance.now(), audibleMs: before.audibleMs }
+            conversation.requestPlayback(mode)
+          }
           await wait(Math.min(10000, duration - elapsed))
           const after = conversation.stats
+          if (playbackRequest) {
+            if (after.audibleMs - playbackRequest.audibleMs >= 250) {
+              record({ phase: 'repeated-playback', mode, bargeIn, elapsedMs: Performance.now() - began })
+              playbackRequest = undefined
+            } else if (Performance.now() - playbackRequest.at >= 20000) throw new Error('provider_playback')
+          }
           const captured = after.capturedSamples - before.capturedSamples
           const sent = after.sourceSamples - before.sourceSamples
           const overruns = after.overruns - before.overruns
