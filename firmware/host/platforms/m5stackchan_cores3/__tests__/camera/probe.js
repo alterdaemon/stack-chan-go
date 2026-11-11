@@ -291,6 +291,7 @@ async function verifyConversation(robot) {
           })
         }
         if (bargeIn && config.cameraProbeSearch) {
+          report({ phase: 'search-start', mode, bargeIn })
           const before = conversation.stats
           const searchAt = Performance.now()
           conversation.requestSearch(mode)
@@ -374,6 +375,7 @@ async function verifyConversation(robot) {
           memory: sample(),
         })
       } finally {
+        report({ phase: 'provider-stopping', mode, bargeIn })
         const stopAt = Performance.now()
         await session.stop()
         const stopMs = Performance.now() - stopAt
