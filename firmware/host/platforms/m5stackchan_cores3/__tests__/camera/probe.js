@@ -9,6 +9,8 @@ import Timer from 'timer'
 
 const sample = native('xs_camera_probe_sample')
 const syntheticMic = native('xs_live_probe_synthetic_mic')
+const measure = native('xs_live_probe_measure')
+const watchTasks = native('xs_live_probe_tasks')
 const wait = (ms) => new Promise((resolve) => Timer.set(resolve, ms))
 const options = { width: 160, height: 120, imageType: 'rgb565be' }
 const report = (event) => trace(`[camera-probe] ${JSON.stringify(event)}\n`)
@@ -167,6 +169,8 @@ async function verifyConversation(robot) {
       try {
         if (!(await session.start())) throw new Error('provider_startup')
         report({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt, stats: conversation.stats })
+        measure()
+        watchTasks()
         const playbackAt = Performance.now()
         let progressAt = playbackAt
         conversation.requestPlayback(mode)
@@ -175,11 +179,21 @@ async function verifyConversation(robot) {
           await wait(100)
           const now = Performance.now()
           if (now - progressAt >= 5000) {
-            report({ phase: 'provider-wait', mode, bargeIn, elapsedMs: now - playbackAt, stats: conversation.stats })
+            report({
+              phase: 'provider-wait',
+              mode,
+              bargeIn,
+              elapsedMs: now - playbackAt,
+              stats: conversation.stats,
+              io: Performance.stats(),
+              memory: sample(),
+            })
             progressAt = now
           }
         }
-        report({ phase: 'playback', mode, bargeIn, playbackMs: Performance.now() - playbackAt })
+        const playbackMs = Performance.now() - playbackAt
+        if (playbackMs >= 20000) throw new Error('provider_playback')
+        report({ phase: 'playback', mode, bargeIn, playbackMs })
         // Capture is intentionally suspended during output when barge-in is off.
         while (!bargeIn && conversation.stats.outputIdleMs < 500) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
@@ -221,6 +235,7 @@ async function verifyConversation(robot) {
           bargeIn,
           code: ['provider_capture', 'provider_playback'].includes(error.message) ? error.message : 'provider_startup',
           stats: conversation?.stats,
+          io: Performance.stats(),
           memory: sample(),
         })
       } finally {

@@ -30,12 +30,12 @@ void xs_camera_probe_sample(xsMachine *the)
 	SET("internalMinimum", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 	SET("psramLargest", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
 	SET("taskCount", uxTaskGetNumberOfTasks());
-	const char *names[] = {"main", "spiLoop", "live_audio", "AUD_SRC", "aenc_0", "pc_send", "IDLE0", "IDLE1"};
+	const char *names[] = {"main", "spiLoop", "live_audio", "AUD_SRC", "aenc_0", "pc_send", "live_peer", "pc_task", "Adec", "ARender", "IDLE0", "IDLE1"};
 	for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
 		TaskHandle_t task = xTaskGetHandle(names[i]);
 		if (task) {
 			TaskStatus_t status;
-			vTaskGetInfo(task, &status, pdTRUE, eInvalid);
+			vTaskGetInfo(task, &status, pdFALSE, eInvalid);
 			SET(names[i], status.ulRunTimeCounter);
 		}
 	}
