@@ -15,6 +15,9 @@ headed `### <product-version>` for the requested tag.
 Release impact: none. Consolidate documentation and release notes, isolate fork
 tools, configure `main` instead of `develop`, and archive obsolete local worktrees.
 Firmware behavior, product versions, release images and release tags are unchanged.
+Store fork-only packages, diagnostics, embedded Settings output, scratch work
+and private archives under ignored `internal/`. Preserve upstream source and
+standard build/dependency layouts.
 
 ## 2.1.0
 

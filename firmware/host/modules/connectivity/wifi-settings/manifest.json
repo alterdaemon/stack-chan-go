@@ -9,6 +9,6 @@
     "wifi-settings-server": "./wifi-settings-server"
   },
   "resources": {
-    "*": ["../../../../dist/wifi-settings/resources/*"]
+    "*": ["../../../../../internal/firmware/wifi-settings/resources/*"]
   }
 }

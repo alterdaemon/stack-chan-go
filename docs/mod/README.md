@@ -31,6 +31,22 @@ Keep upstream history, licenses and credits. Use fixed upstream commit IDs in
 standalone fork tools live in `firmware/scripts/mod/`. Shared firmware changes
 remain in their existing modules with tests and driver provenance.
 
+## Local artifacts
+
+Keep fork-owned generated/private files under the ignored root `internal/`:
+
+- `work/`: scratch work and logs.
+- `diagnostics/`: generated R14 variants and input fixtures.
+- `firmware/wifi-settings/`: generated embedded Settings assets.
+- `gpt-live-package/`: installable fork images.
+- `archives/`: local backups and superseded artifacts.
+
+Names above are relative to `internal/`; create only the folders needed.
+The directory is private and is never committed or uploaded as a whole.
+Release publication selects only the two validated BINs. Standard upstream
+build outputs and `node_modules` retain their existing paths. Source files,
+tests and the sanitized evidence in this guide are not relocated.
+
 ## Build
 
 Use the existing Moddable/ESP-IDF environment, with `ESP_WEBRTC_SOLUTION` set,
@@ -74,7 +90,7 @@ version used by MOD loading.
 
 ## Install
 
-Current files are in the ignored root `gpt-live-package/` directory.
+Current files are in the ignored `internal/gpt-live-package/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.
 The corrected R1 build passed offline/build checks; its hardware/API behavior
 has not been tested. See [validation](validation.md#21-r1).
@@ -82,13 +98,13 @@ has not been tested. See [validation](validation.md#21-r1).
 Application update, preserving other partitions on the supported layout:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 internal/gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live-app.bin
 ```
 
 Full installation **resets settings, MODs and storage**:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 internal/gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live.bin
 ```
 
 The destination address is in device flash, not an input-file offset. Never

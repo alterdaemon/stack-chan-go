@@ -6,5 +6,7 @@
     "*": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/measure.c"
   },
   "defines": { "stackchan": { "live_probe": 1 } },
-  "resources": { "probe-input": "../../dist/probe-input.pcm" }
+  "resources": {
+    "probe-input": "../../../internal/diagnostics/probe-input.pcm"
+  }
 }

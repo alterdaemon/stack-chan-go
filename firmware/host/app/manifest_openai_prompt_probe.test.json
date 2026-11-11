@@ -11,7 +11,7 @@
     }
   },
   "resources": {
-    "probe-input": "../../dist/probe-input.pcm"
+    "probe-input": "../../../internal/diagnostics/probe-input.pcm"
   },
   "config": {
     "openaiPromptProbeSearchOnly": false

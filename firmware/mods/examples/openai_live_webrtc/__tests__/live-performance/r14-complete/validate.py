@@ -19,7 +19,7 @@ for name in js_modules:
     compiled = tmp / 'modules' / (name + '.xsb')
     assert compiled.stat().st_mtime_ns >= expected.stat().st_mtime_ns, ('stale module', name)
 for name in ['liveAudio', 'livePitch', 'opus-policy', 'modSPI', 'complete', 'decoder-bench']:
-    expected = ROOT / 'firmware/dist/r14-complete' / (name + '.c')
+    expected = ROOT / 'internal/diagnostics/r14-complete' / (name + '.c')
     actual = re.findall(r'^\$\(TMP_DIR\)/' + re.escape(name) + r'\.c\.o: (.+?) \$\(HEADERS\)', makefile, re.M)
     assert actual == [str(expected)], (name, actual)
 image = (ROOT / 'firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin').read_bytes()

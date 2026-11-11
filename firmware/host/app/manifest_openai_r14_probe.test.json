@@ -19,7 +19,7 @@
     "CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER": "y"
   },
   "resources": {
-    "probe-input": "../../dist/probe-input.pcm"
+    "probe-input": "../../../internal/diagnostics/probe-input.pcm"
   },
   "config": {
     "r14Followup": true,

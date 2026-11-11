@@ -31,6 +31,13 @@ Stack-chan is a JavaScript-driven M5Stack-embedded robot. The codebase is primar
 - Confirm test startup and progress. Keep measurements low-overhead and batch comparable parameter variants when possible. Fail promptly if a harness never starts; building or flashing is not test execution.
 - Documentation-only changes do not advance the firmware revision or require rebuilding firmware.
 
+### Local artifacts
+
+- Put fork-owned ephemeral files only under the ignored repository-root `internal/` directory. Use `internal/work/` for scratch work and logs, `internal/diagnostics/` for generated probe inputs/variants, `internal/firmware/` for fork-specific generated assets, `internal/gpt-live-package/` for installable fork BINs, and `internal/archives/` for local backups and superseded artifacts. Create subdirectories only when needed.
+- Preserve upstream files, directory layouts and standard tooling paths. Do not relocate shared `firmware/dist`, `firmware/dist-tests`, `firmware/dist-architecture`, `web/dist` or `node_modules` directories. These remain managed by the upstream build/test/package commands; only identifiable fork-specific outputs belong under `internal/`.
+- Do not create root `work/` or `gpt-live-package/` directories, or scatter ad hoc logs, reports, screenshots, installers, scratch scripts and backups through source directories or `/tmp`. For agent-invoked temporary jobs, create `internal/tmp/` and set `TMPDIR` to its absolute path. Set `PYTHONPYCACHEPREFIX` to the absolute `internal/python-cache/` path when invoking Python diagnostics.
+- Keep `internal/` private (mode 0700). Never stage or force-add it, or upload the directory as a whole. Release publication may select only the two validated BINs. Preserve existing image/backup contents when moving them; verify hashes before deleting an old copy. Tracked tests, sanitized validation evidence, source documentation and required upstream assets stay in their source locations.
+
 ### Embedded Performance
 
 - Start from a known working baseline and compare small variants under equivalent workloads with required features enabled. A faster result obtained by disabling a required feature is a functional tradeoff, not an equivalent optimization.
@@ -58,6 +65,7 @@ Espressif references: [speed optimization and profiling](https://docs.espressif.
 - tests: Co-located under the target `firmware/host`, `firmware/mods`, or platform implementation
 - `firmware/typings/`: TypeScript definitions for the Moddable platform
 - `firmware/dist/`: Generated firmware programs and intermediate build files; do not edit or commit them
+- `internal/`: Ignored fork-only packages, diagnostics, scratch work and private archives
 - `case/`: 3D printable robot case files
 - `schematics/`: PCB designs for control boards
 
@@ -112,15 +120,15 @@ All commands should be run from the `firmware/` directory:
   python3 firmware/scripts/mod/package-gpt-live-update.py
   ```
 
-- Keep all installable GPT-Live builds in the single repository-root directory `gpt-live-package/`. Use the packager's default output directory. Do not create revision-specific directories such as `gpt-live-update-r3/`, publish installation files under `/tmp`, or create ad hoc installer scripts.
+- Keep all installable GPT-Live builds in the single directory `internal/gpt-live-package/`. Use the packager's default output directory. Do not create revision-specific directories such as `gpt-live-update-r3/`, publish installation files under `/tmp`, or create ad hoc installer scripts.
 - Every new published revision must contain BOTH `StackChan-Community-v<version>-GPT-Live.bin` (full 16 MiB flash image) and `StackChan-Community-v<version>-GPT-Live-app.bin` (application only), produced from the same release build. Never publish only the application. The full image contains the build's bootloader, partition table and application, with all remaining bytes set to `0xFF`; it resets NVS, xs and storage.
 - Use the next unused revision for a new firmware update; the current update is `2.1.0-R1`, so the next update starts at `2.1.0-R2`. Before building, update `REVISION` in `firmware/scripts/mod/package-gpt-live-update.py`, both filenames and installation commands in `docs/mod/README.md`, and this revision reference. Preserve earlier revision BINs. The packager rejects different contents under an existing revision; repeating an identical package is allowed.
 - The user explicitly requested the response-conflict correction within the existing `2.1.0-R1`. Archive its initial images and Git tag locally before replacing the current R1 package/tag. Keep the version, filenames and `REVISION = 1`; retain the packager's overwrite protection. This exception does not authorize flashing the corrected firmware.
 - Publish only the two validated BINs. Do not add generated reports, checksum files, ZIPs, or helper installation files. Verify that the application BIN matches the newly built `firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin` and the application bytes at `0x10000` in the full image. Verify the full image is exactly 16 MiB and its bootloader and partition table match the same build.
-- Give the user the direct `esptool` command from `docs/mod/README.md`, with the actual revision filename under `gpt-live-package/`: full installation writes the full BIN at `0x0` and resets data; application update writes the app BIN at `0x10000` and preserves other partitions on the supported layout. The address is the destination in device flash, not an offset into the input file: never write the full BIN at `0x10000`. The packager validates offsets against `firmware/host/app/gpt-live-layout.json` and the build's `flasher_args.json`. Build and packaging do not flash the device.
+- Give the user the direct `esptool` command from `docs/mod/README.md`, with the actual revision filename under `internal/gpt-live-package/`: full installation writes the full BIN at `0x0` and resets data; application update writes the app BIN at `0x10000` and preserves other partitions on the supported layout. The address is the destination in device flash, not an offset into the input file: never write the full BIN at `0x10000`. The packager validates offsets against `firmware/host/app/gpt-live-layout.json` and the build's `flasher_args.json`. Build and packaging do not flash the device.
 - Device tests and firmware updates must preserve all existing user data and saved settings. Flash only the validated application BIN at `0x10000`, after checking the device layout and image bounds. Never erase flash, install the full image, rewrite the bootloader/partition table or write NVS, xs or storage without a separate explicit user instruction permitting that data-destructive operation. Do not use a deployment wrapper unless its actual writes satisfy this restriction.
 - Before the first device write in a test session, back up non-application partitions privately outside Git unless the user explicitly declines backups. Diagnostic firmware must keep measurement state in RAM and must not reset, migrate or modify saved preferences. Never print secrets from device data or backups.
-- `gpt-live-package/` and `firmware/dist/` are generated output and stay outside Git.
+- `internal/gpt-live-package/` and `firmware/dist/` are generated output and stay outside Git.
 - Finish each firmware revision with relevant tests, lint/format checks, `npm run check:release -- v<version>`, and the release build and image validation described above. After validation, create a separate English commit and matching local version tag. Preserve earlier revision commits and artifacts. Keep only the latest release tag per mod series; privately archive superseded tag references before removing them.
 
 ### Code Quality

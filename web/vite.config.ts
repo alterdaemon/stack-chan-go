@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      outDir: deviceSettings ? '../firmware/dist/wifi-settings/build' : 'dist',
+      outDir: deviceSettings ? '../internal/firmware/wifi-settings/build' : 'dist',
       emptyOutDir: true,
       rollupOptions: {
         input: deviceSettings

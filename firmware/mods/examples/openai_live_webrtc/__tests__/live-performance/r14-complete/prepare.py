@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[7]
-OUT = ROOT / 'firmware/dist/r14-complete'
+OUT = ROOT / 'internal/diagnostics/r14-complete'
 OUT.mkdir(parents=True, exist_ok=True)
 identities = {}
 

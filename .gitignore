@@ -49,6 +49,5 @@ firmware/stackchan.png
 __pycache__/
 *.py[cod]
 
-/gpt-live-package/
-
-/work/
+# Fork-only packages, scratch work, logs, diagnostics and private archives.
+/internal/

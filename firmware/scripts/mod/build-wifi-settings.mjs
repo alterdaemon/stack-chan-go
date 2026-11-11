@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
 const root = fileURLToPath(new URL('../../..', import.meta.url))
+mkdirSync(join(root, 'internal'), { recursive: true, mode: 0o700 })
 const web = join(root, 'web')
-const output = join(root, 'firmware/dist/wifi-settings')
+const output = join(root, 'internal/firmware/wifi-settings')
 const build = join(output, 'build')
 const resources = join(output, 'resources')
 const result = spawnSync('npm', ['run', 'build:device-settings'], { cwd: web, stdio: 'inherit' })

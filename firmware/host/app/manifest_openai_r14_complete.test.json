@@ -3,18 +3,18 @@
   "modules": {
     "live-probe": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/probe",
     "preference": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/preference",
-    "openai-live-integrated": "../../dist/r14-complete/mod",
-    "openai-live-session": "../../dist/r14-complete/session",
-    "realtimeConversation/http-worker": "../../dist/r14-complete/http-worker",
-    "r14-complete-options": "../../dist/r14-complete/run-options",
+    "openai-live-integrated": "../../../internal/diagnostics/r14-complete/mod",
+    "openai-live-session": "../../../internal/diagnostics/r14-complete/session",
+    "realtimeConversation/http-worker": "../../../internal/diagnostics/r14-complete/http-worker",
+    "r14-complete-options": "../../../internal/diagnostics/r14-complete/run-options",
     "r14-complete-remaining": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/remaining",
     "*": [
-      "../../dist/r14-complete/liveAudio.c",
-      "../../dist/r14-complete/livePitch.c",
-      "../../dist/r14-complete/opus-policy.c",
-      "../../dist/r14-complete/modSPI.c",
-      "../../dist/r14-complete/complete.c",
-      "../../dist/r14-complete/decoder-bench.c"
+      "../../../internal/diagnostics/r14-complete/liveAudio.c",
+      "../../../internal/diagnostics/r14-complete/livePitch.c",
+      "../../../internal/diagnostics/r14-complete/opus-policy.c",
+      "../../../internal/diagnostics/r14-complete/modSPI.c",
+      "../../../internal/diagnostics/r14-complete/complete.c",
+      "../../../internal/diagnostics/r14-complete/decoder-bench.c"
     ],
     "~": [
       "../modules/realtime-conversation/esp32/liveAudio.c",
@@ -32,8 +32,8 @@
     "CONFIG_HEAP_USE_HOOKS": "y"
   },
   "resources": {
-    "probe-opus": "../../dist/r14-complete/probe-opus.dat",
-    "https-fixture": "../../dist/r14-complete/https-fixture.dat"
+    "probe-opus": "../../../internal/diagnostics/r14-complete/probe-opus.dat",
+    "https-fixture": "../../../internal/diagnostics/r14-complete/https-fixture.dat"
   },
   "config": {
     "r14SkipMeter": true,

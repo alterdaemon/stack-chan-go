@@ -256,12 +256,12 @@ require the preference-write guard and bounded startup/progress/completion
 markers. Build/packaging does not flash. Back up protected data before testing.
 
 From `firmware/`, with a nonprivate 16 kHz mono PCM16 fixture at
-`dist/probe-input.pcm`:
+`../internal/diagnostics/probe-input.pcm`:
 
 ```sh
 probe=mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete
 python3 "$probe/prepare.py"
-python3 "$probe/opus-fixture.py" dist/probe-input.pcm dist/r14-complete/probe-opus.dat
+python3 "$probe/opus-fixture.py" ../internal/diagnostics/probe-input.pcm ../internal/diagnostics/r14-complete/probe-opus.dat
 STACKCHAN_REALTIME_WEBRTC=1 npm run build -- --mode=release --manifest host/app/manifest_openai_r14_complete.test.json
 python3 "$probe/validate.py"
 ```
@@ -305,3 +305,22 @@ Five detached worktrees were archived in full outside Git, including uncommitted
 and generated files, with HEAD/status/diff metadata. Their registrations were
 removed; only the main worktree remains. No new firmware build, device write,
 device test, live API test or GitHub publication was performed for this cleanup.
+
+## Internal artifact storage
+
+On 2026-11-11, fork scratch work, GPT-Live packages, generated Settings/R14
+assets, Python caches and private cleanup/tag archives moved under ignored
+`internal/`. All 27 BIN SHA-256 values and both release-tag objects were preserved.
+The cleanup archive was compressed and compared file-by-file before deleting its
+old copy. No tracked source file, shared build directory or dependency directory
+was moved. Standard upstream build paths remain unchanged.
+
+`npm run test:gpt-live-package` passed nine tests with its bytecode cache under
+`internal/`. The embedded Settings build passed and packed 13 routes at the new
+path. All 13 generated resource files and ten generated R14 source mappings
+resolved. Python syntax, release YAML, Git exclusions, firmware lint/format and
+`npm run check:release -- v2.1.0-R1` passed. `npm run check:manifest` passed all
+six targets after activating the existing SDK paths; the earlier attempts
+failed on missing mcconfig or IDF/FONTBM environment settings. No toolchain files
+were changed. This relocation did not rebuild or flash firmware or run device/API
+tests. Future generated inputs, logs and backups follow the rules in `AGENTS.md`.

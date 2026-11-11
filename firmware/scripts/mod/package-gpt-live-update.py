@@ -124,9 +124,10 @@ def package_update(root, output):
 if __name__ == '__main__':
     root = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=root / 'gpt-live-package')
+    parser.add_argument('--output', type=Path, default=root / 'internal/gpt-live-package')
     options = parser.parse_args()
     try:
+        (root / 'internal').mkdir(mode=0o700, exist_ok=True)
         package_update(root, options.output.resolve())
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f'Package rejected: {error}\n')
