@@ -293,9 +293,10 @@ void xs_live_transport_start(xsMachine *the)
         t->pitch = (int)pitch;
     }
 	t->started = true;
-    /* Realtime returns function results while media runs. Keep control below
-     * I2S (20) and encoder/sender (19); Live retains its existing priority. */
-    UBaseType_t controlPriority = t->realtime ? 18 : 10;
+    /* Full-duplex media can keep this core busy below priority 18. Serve
+     * control alongside peer receive so commands and stats keep progressing,
+     * below I2S (20) and encoder/sender (19), in both conversation modes. */
+    UBaseType_t controlPriority = 18;
 	if (xTaskCreatePinnedToCore(worker, "live_peer", 12288, t, controlPriority, NULL, 1) != pdPASS) {
 		t->started = false;
 		xsUnknownError("No memory for WebRTC task");
