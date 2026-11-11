@@ -178,7 +178,7 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 					// forwards silence. Its AEC state will be released after teardown.
 					memset(clean, 0, a->chunk * 2);
 				} else {
-					// Mini capture DSP stays ahead of normal UI; Live keeps its policy.
+					// Capture DSP precedes HTTPS and normal XS work.
 					// I2S remains independent and never waits for this processing.
 					UBaseType_t priority = uxTaskPriorityGet(NULL);
 					vTaskPrioritySet(NULL, a->dspPriority);
@@ -364,8 +364,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	LiveAudio *a = calloc(1, sizeof(*a));
 	if (!a) return ESP_ERR_NO_MEM;
 	*out = a;
-    // Serve paired capture before priority-6 XS work outside its UI windows.
-    a->dspPriority = 7;
+    // Keep capture ahead of HTTPS (7) and XS (6) outside elevated UI windows.
+    a->dspPriority = 8;
     a->stage = "pitch_open";
     if ((err = livePitchOpen(&a->pitch, pitch))) return err;
 	atomic_store(&a->volume, 512);

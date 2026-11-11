@@ -19,8 +19,9 @@ export default createHttpProxy({
       chunk: { initial: 256 * 1024, incremental: 16384 },
       stack: 1024,
       nativeStack: 6144,
-      // Leave codec/RTP work on core 1. Mini AEC (7) precedes this worker (6).
-      priority: 6,
+      // Capture DSP (8) precedes HTTPS (7), which precedes normal XS work (6).
+      // Keep codec/RTP work on core 1 and retain the elevated UI windows.
+      priority: 7,
       core: 0,
     }),
   releaseWorker: (worker) => worker.terminate(),
