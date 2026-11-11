@@ -107,10 +107,7 @@ appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wi
       const invocations = readInvocations(fixture.commandLog)
       assert.ok(invocations.some(([command]) => command === 'build-wifi-settings'))
       assert.equal(invocations.at(-2).at(-1), path.join(fixture.firmware, selected))
-      assert.deepEqual(invocations.at(-1), [
-        'python3',
-        path.join(fixture.firmware, 'scripts/mod/package-gpt-live-update.py'),
-      ])
+      assert.deepEqual(invocations.at(-1), ['python3', path.join(fixture.firmware, 'scripts/mod/package-release.py')])
     }
     const project = path.join(
       fixture.firmware,
@@ -126,8 +123,8 @@ appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wi
   }
 })
 
-test('only the integrated CoreS3 release build publishes GPT-Live images', () => {
-  assert.match(dryRunCommand('build'), /python3 .*package-gpt-live-update\.py/)
+test('only the integrated CoreS3 release build packages release images', () => {
+  assert.match(dryRunCommand('build'), /python3 .*package-release\.py/)
   for (const args of [
     ['--mode=debug'],
     ['--mode=instrument'],
@@ -135,7 +132,7 @@ test('only the integrated CoreS3 release build publishes GPT-Live images', () =>
     ['stackchan_rt'],
     ['takao_core2_sg90'],
   ]) {
-    assert.doesNotMatch(dryRunCommand('build', ...args), /package-gpt-live-update\.py/)
+    assert.doesNotMatch(dryRunCommand('build', ...args), /package-release\.py/)
   }
 })
 

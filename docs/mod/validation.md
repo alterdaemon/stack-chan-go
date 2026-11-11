@@ -281,10 +281,12 @@ Release impact: none. Documentation, release extraction, fork-tool paths,
 test text and branch/CI configuration are reorganized without changing production
 firmware or existing images. Verification on 2026-11-11:
 
+Packaging commands below use their current names after the release-tool rename.
+
 | Command/check | Result |
 | --- | --- |
 | `node --test scripts/lib/release-validation.test.mjs scripts/lib/firmware-command.test.mjs scripts/lib/firmware-bundle.test.mjs` from `firmware/` | 29 passed |
-| `npm run test:gpt-live-package` from `firmware/` | Nine passed after tool relocation |
+| `npm run test:release-package` from `firmware/` | Nine passed after tool relocation |
 | `node --test --test-concurrency=1 mods/examples/openai_live_webrtc/session.test.mjs mods/examples/openai_live_webrtc/settings.test.mjs host/modules/realtime-conversation/__tests__/realtime.test.mjs` from `firmware/` | 65 passed with English prompts and retained Unicode coverage |
 | `npx tsc --project tsconfig.test.json`, then `node --test dist-tests/host/modules/preferences/openai-live-options.test.js` from `firmware/` | Compilation and four tests passed |
 | `node scripts/mod/build-wifi-settings.mjs` from `firmware/` | Typecheck and embedded Settings build passed; 13 routes packed; existing large-chunk warning retained |
@@ -315,7 +317,7 @@ The cleanup archive was compressed and compared file-by-file before deleting its
 old copy. No tracked source file, shared build directory or dependency directory
 was moved. Standard upstream build paths remain unchanged.
 
-`npm run test:gpt-live-package` passed nine tests with its bytecode cache under
+`npm run test:release-package` passed nine tests with its bytecode cache under
 `internal/`. The embedded Settings build passed and packed 13 routes at the new
 path. All 13 generated resource files and ten generated R14 source mappings
 resolved. Python syntax, release YAML, Git exclusions, firmware lint/format and
@@ -356,3 +358,11 @@ and existing overwrite protection. Workflow YAML, firmware lint/format and
 write was performed. One downloadable full BIN is technically sufficient only
 with a separate validated app-extraction step; the two BINs retain direct full
 installation and app-only update commands.
+
+Build and packaging tools now use `build-firmware.sh`, `package-release.py`,
+`test_package_release.py` and `npm run test:release-package`. On 2026-11-11,
+nine packaging tests and 15 firmware-command tests passed after renaming.
+Mock-toolchain wrapper checks verified release/debug argument forwarding,
+environment setup and propagation of a failed build's exit status. Shell syntax,
+firmware lint/format and `check:release -- v2.1.0-R1` passed. The build and
+packaging script contents are unchanged; no firmware was rebuilt or flashed.

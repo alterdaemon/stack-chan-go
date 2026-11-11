@@ -14,8 +14,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-script = Path(__file__).with_name('package-gpt-live-update.py')
-spec = importlib.util.spec_from_file_location('gpt_live_package', script)
+script = Path(__file__).with_name('package-release.py')
+spec = importlib.util.spec_from_file_location('release_package', script)
 package = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(package)
 

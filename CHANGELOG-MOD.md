@@ -23,6 +23,8 @@ working files under `internal/`, and retain reusable tests and validation eviden
 Name release BINs `StackChan-Community-v<version>.bin` and
 `StackChan-Community-v<version>-app.bin` under `internal/release-packages/`.
 Keep full-install and app-update images; preserve their bytes when renaming.
+Use `build-firmware.sh`, `package-release.py` and `test:release-package` for the
+fork's build and packaging tools.
 
 ## 2.1.0
 

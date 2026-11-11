@@ -9,7 +9,7 @@ from v2.0.1 (6a8f7553610e5d91770901e76fd93a0c50cfd970). Preserve upstream histor
 and attribution. Keep fork changes in subsequent English commits and document them
 in CHANGELOG-MOD.md. The 2.1.0 series uses product version 2.1.0-R<N> and tag
 v2.1.0-R<N>. The historical 2.0.1 series uses lowercase r; synchronize firmware/web package and lockfile versions, web flash
-manifests, CHANGELOG-MOD.md revision sections and GPT-Live package filenames when advancing a revision.
+manifests, CHANGELOG-MOD.md revision sections and release package filenames when advancing a revision.
 
 `main` contains current fork work and stays aligned with `v2.1.0-mod` after changes.
 `v2.0.1-mod` preserves the historical R15 line. There is no fork `develop` branch;
@@ -99,7 +99,7 @@ All commands should be run from the `firmware/` directory:
 - The named `npm run build:release:<target>` scripts and `npm run bundle:package` are the CI building blocks for parallel target builds and final artifact assembly.
 - `npm run mod` uses `mcrun -t build` to create an archive, then discovers and writes the live device's `xs` partition with `esptool`.
 
-### GPT-Live Builds and Published Updates
+### Firmware Builds and Release Packages
 
 - The default M5StackChan CoreS3 target includes GPT-Live through `firmware/host/app/manifest_openai_live_integrated.json`. Read `docs/mod/README.md` for the current build, package name, and installation command.
 - Build a release from `firmware/` in the activated Moddable / ESP-IDF environment with `ESP_WEBRTC_SOLUTION` set, `esptool` available to `python3`, and `xtensa-esp-elf-nm` on `PATH`:
@@ -111,19 +111,19 @@ All commands should be run from the `firmware/` directory:
 - Alternatively, from the repository root, use the existing toolchain wrapper:
 
   ```sh
-  STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-gpt-live.sh --mode=release
+  STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-firmware.sh --mode=release
   ```
 
   The toolchain directory contains `moddable`, `esp-idf`, `idf-tools`, `esp-webrtc-solution`, and `fontbm`. Use the existing installation; keep machine-specific paths out of tracked files.
-- Both release build commands automatically run `firmware/scripts/mod/package-gpt-live-update.py` after a successful integrated GPT-Live build. A packaging failure fails the build command. Debug, instrument, other-device and alternate-manifest builds do not publish GPT-Live images. To package an existing release without rebuilding, run from the repository root in the same toolchain environment:
+- Both release build commands automatically run `firmware/scripts/mod/package-release.py` after a successful integrated GPT-Live build. A packaging failure fails the build command. Debug, instrument, other-device and alternate-manifest builds do not generate these release packages. To package an existing release without rebuilding, run from the repository root in the same toolchain environment:
 
   ```sh
-  python3 firmware/scripts/mod/package-gpt-live-update.py
+  python3 firmware/scripts/mod/package-release.py
   ```
 
 - Keep installable release packages in the single directory `internal/release-packages/`. Use the packager's default output directory. Do not include feature names such as GPT-Live in BIN filenames. Preserve superseded images under `internal/archives/`. Do not create revision-specific output directories, publish installation files under `/tmp`, or create ad hoc installer scripts.
 - Every new published revision must contain BOTH `StackChan-Community-v<version>.bin` (full 16 MiB flash image) and `StackChan-Community-v<version>-app.bin` (application only), produced from the same release build. Never publish only the application. The full image contains the build's bootloader, partition table and application, with all remaining bytes set to `0xFF`; it resets NVS, xs and storage. Esptool writes the entire input BIN at the destination address; using one full BIN for an app-only update requires extracting a validated application slice first. Keep the two direct installation commands in the guide.
-- Use the next unused revision for a new firmware update; the current update is `2.1.0-R1`, so the next update starts at `2.1.0-R2`. Before building, update `REVISION` in `firmware/scripts/mod/package-gpt-live-update.py`, both filenames and installation commands in `docs/mod/README.md`, and this revision reference. Preserve earlier revision BINs. The packager rejects different contents under an existing revision; repeating an identical package is allowed.
+- Use the next unused revision for a new firmware update; the current update is `2.1.0-R1`, so the next update starts at `2.1.0-R2`. Before building, update `REVISION` in `firmware/scripts/mod/package-release.py`, both filenames and installation commands in `docs/mod/README.md`, and this revision reference. Preserve earlier revision BINs. The packager rejects different contents under an existing revision; repeating an identical package is allowed.
 - The user explicitly requested the response-conflict correction within the existing `2.1.0-R1`. Archive its initial images and Git tag locally before replacing the current R1 package/tag. Keep the version, filenames and `REVISION = 1`; retain the packager's overwrite protection. This exception does not authorize flashing the corrected firmware.
 - Publish only the two validated BINs. Do not add generated reports, checksum files, ZIPs, or helper installation files. Verify that the application BIN matches the newly built `firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin` and the application bytes at `0x10000` in the full image. Verify the full image is exactly 16 MiB and its bootloader and partition table match the same build.
 - Give the user the direct `esptool` command from `docs/mod/README.md`, with the actual revision filename under `internal/release-packages/`: full installation writes the full BIN at `0x0` and resets data; application update writes the app BIN at `0x10000` and preserves other partitions on the supported layout. The address is the destination in device flash, not an offset into the input file: never write the full BIN at `0x10000`. The packager validates offsets against `firmware/host/app/gpt-live-layout.json` and the build's `flasher_args.json`. Build and packaging do not flash the device.

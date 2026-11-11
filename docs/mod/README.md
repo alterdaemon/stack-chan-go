@@ -66,7 +66,7 @@ npm run build -- --mode=release
 Alternatively, from the repository root:
 
 ```sh
-STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-gpt-live.sh --mode=release
+STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-firmware.sh --mode=release
 ```
 
 The toolchain directory contains `moddable`, `esp-idf`, `idf-tools`,
@@ -80,7 +80,7 @@ revision are rejected; identical repackaging is allowed.
 To package an existing release in the same environment:
 
 ```sh
-python3 firmware/scripts/mod/package-gpt-live-update.py
+python3 firmware/scripts/mod/package-release.py
 ```
 
 For a new revision, advance package/lockfile versions, web flash manifests,

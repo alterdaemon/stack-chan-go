@@ -194,7 +194,7 @@ switch (command) {
       buildMode === 'release' &&
       path.resolve(manifest) === path.resolve(device.manifest)
     ) {
-      run('python3', [path.resolve('scripts/mod/package-gpt-live-update.py')])
+      run('python3', [path.resolve('scripts/mod/package-release.py')])
     }
     break
   case 'flash':
