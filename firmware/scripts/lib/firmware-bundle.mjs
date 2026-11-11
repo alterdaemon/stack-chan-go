@@ -7,6 +7,7 @@ import {
   hostApplicationName,
   moddableOutputArguments,
 } from './build-output.mjs'
+import { prepareBuildProfile } from './build-profile.mjs'
 import { validateCoreS3AudioBindings } from './core-s3-audio-bindings.mjs'
 import { prepareCoreS3IdfDependencies } from './idf-dependencies.mjs'
 import {
@@ -130,7 +131,16 @@ export function buildFirmwareBundleTarget(
     realtimePerformance: target.realtimePerformance,
   })
 
+  let commitBuildProfile
   if (target.idfDependencyPlatform) {
+    commitBuildProfile = prepareBuildProfile({
+      outputDirectory,
+      platformName: target.outputPlatform,
+      applicationName: hostApplicationName,
+      mode: 'release',
+      manifest: target.manifestPath,
+      moddableDirectory,
+    })
     prepareCoreS3IdfDependencies({
       outputDirectory,
       platformName: target.idfDependencyPlatform,
@@ -212,6 +222,7 @@ export function buildFirmwareBundleTarget(
       2,
     )}\n`,
   )
+  commitBuildProfile?.()
   console.log(`[stack-chan] bundle target staged: ${target.bundleId} (${versionSdkconfig.version})`)
   return { target, directory: stagingDirectory, firmwareVersion: versionSdkconfig.version }
 }
