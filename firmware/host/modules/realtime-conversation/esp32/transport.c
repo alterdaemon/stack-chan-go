@@ -16,6 +16,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "poll-watchdog.h"
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -200,7 +201,7 @@ static void worker(void *ctx)
 			}
 		}
 		/* This watchdog runs even when the JS VM aborts or blocks in IPC. */
-		if ((TickType_t)(xTaskGetTickCount() - atomic_load(&t->lastPollTick)) > pdMS_TO_TICKS(10000)) {
+		if (livePollTimedOut(&t->lastPollTick, pdMS_TO_TICKS(10000))) {
 			t->failureStage = "event_loop_watchdog";
 			if (t->rtc) {
 				static const char close[] = "{\"type\":\"session.close\"}";
