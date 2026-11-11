@@ -1,4 +1,4 @@
-# Stack-chan Community
+# Stack-chan (community-mod)
 
 [![Build](https://github.com/alterdaemon/stack-chan-mod/actions/workflows/build.yml/badge.svg)](https://github.com/alterdaemon/stack-chan-mod/actions/workflows/build.yml)
 
