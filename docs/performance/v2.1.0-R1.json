@@ -1,4 +1,5 @@
 {
+  "measurementScope": "Initial R1 hardware qualification; responseConflictAmendment records the later same-version local correction, which was not installed on the device.",
   "version": "2.1.0-R1",
   "baselineTag": "v2.0.1-r15",
   "baselineSourceCommit": "d3a13034",
@@ -514,5 +515,80 @@
     "An early diagnostic relocated a same-value volume record, changing 35 physical NVS bytes with identical active payloads. ESP-IDF PHY calibration also changed, with unknown trigger. Saved volume 0 was explicitly requested.",
     "Original checkout path exceeded the linker shell argument limit. Verified builds used short-path worktrees.",
     "Standard device writes failed MD5. Paced uncompressed app-only writes passed an independent reconnect verification."
-  ]
+  ],
+  "responseConflictAmendment": {
+    "sourceCommit": "ad5c3e03",
+    "productVersionUnchanged": true,
+    "initialReleaseArchiveTag": "v2.1.0-R1-before-response-conflict-fix",
+    "capturedIncident": {
+      "mode": "realtime",
+      "bargeIn": false,
+      "userReportedWorkload": "conversation followed by silence",
+      "code": "conversation_already_has_active_response",
+      "stage": "events",
+      "site": "event_on_error",
+      "collectorClosingSeconds": 779.828,
+      "collectorErrorSeconds": 782.11,
+      "collectorDiagnosticSeconds": 782.116,
+      "conversationDurationSeconds": null,
+      "originatingEventId": null,
+      "continuationAttemptCount": null,
+      "exactConflictOrdering": "unknown; production diagnostics omit originating event ID and attempt count",
+      "privateStructuredLogSha256": "957cbc56927c5dc1f84ca42c55287a54f7cdac52df943bb03cc3d44707163ccd"
+    },
+    "regressionComparison": {
+      "command": "node --test host/modules/realtime-conversation/__tests__/realtime.test.mjs",
+      "initialSourceCommit": "49ae3939",
+      "initialPassed": 10,
+      "initialFailed": 16,
+      "correctedPassed": 26,
+      "correctedFailed": 0,
+      "integratedModes": [
+        "live",
+        "realtime"
+      ],
+      "integratedInterruption": [
+        false,
+        true
+      ],
+      "unitAndNativePassed": 684,
+      "packagingPassed": 9,
+      "lintPassed": true,
+      "formatPassed": true,
+      "releaseMetadataCheckPassed": true
+    },
+    "images": {
+      "sourceCommit": "ad5c3e03",
+      "version": "2.1.0-R1",
+      "appBytes": 8558992,
+      "fullBytes": 16777216,
+      "applicationSha256": "dd5c21d0287fabf093216703401dfe514fceea25d7d997d4f1e9bc3fcf13bcbc",
+      "fullSha256": "4662384e4c87ac26d613cb825eac72cb150f65c90a7b5fd2a8600de3e675a05f",
+      "applicationMatchesBuildAndFull": true,
+      "bootloaderAndPartitionTableMatchBuild": true,
+      "remainingBytesErased": true,
+      "supportedLayoutAndImageBounds": true,
+      "flashSettings": {
+        "flash_mode": "dio",
+        "flash_size": "16MB",
+        "flash_freq": "80m"
+      },
+      "installedOnDevice": false,
+      "physicalAndLiveApiVerification": "not performed; user forbids flashing"
+    },
+    "runtimePerformanceMeasured": false,
+    "runtimePerformanceConclusion": "unknown; no physical or live API test of the correction",
+    "verifiedProtocolBounds": {
+      "retryTimersWhileResponseKnownActive": 0,
+      "maxContinuationSendsBeforeWaitingForResponseCompletion": 3,
+      "functionOutputSendsPerCompletedToolCall": 1,
+      "retryTimersAfterStop": 0
+    },
+    "limitations": [
+      "Captured error observed on initial production R1; corrected images not flashed or tested against the live API.",
+      "Live protection validated with fault injection; this error was not observed on hardware in Live mode.",
+      "Initial long API probes used synthetic microphone input and forced playback every minute; extended natural silence was not reproduced.",
+      "Protocol timer and send-count assertions do not establish ESP32 CPU utilization, audio quality or end-to-end latency."
+    ]
+  }
 }
