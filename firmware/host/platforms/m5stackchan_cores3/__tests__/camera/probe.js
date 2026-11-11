@@ -360,10 +360,19 @@ async function verifyConversation(robot) {
         report({ phase: 'provider-playing', mode, bargeIn })
         if (config.cameraProbeVoiceUI) await exerciseVoiceUI(robot, conversation, mode, bargeIn, record)
         // Capture is intentionally suspended during output when barge-in is off.
-        while (!bargeIn && conversation.stats.outputIdleMs < 500) {
-          if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
+        // Slow counting can pause beyond the normal 500 ms microphone gate.
+        // Wait for a longer idle tail before injecting the Off-mode fixture.
+        while (!bargeIn && conversation.stats.outputIdleMs < 3000) {
+          const now = Performance.now()
+          if (!session.active || now - playbackAt >= 60000) throw new Error('provider_playback')
+          if (now - progressAt >= 10000) {
+            report({ phase: 'provider-wait', mode, bargeIn, context: 'output-idle', elapsedMs: now - playbackAt })
+            progressAt = now
+          }
           await wait(100)
         }
+        if (!bargeIn && config.cameraProbeAllInput)
+          record({ phase: 'input-ready', mode, bargeIn, outputIdleMs: conversation.stats.outputIdleMs })
         if ((bargeIn || config.cameraProbeAllInput) && speechClip) {
           const before = { ...conversation.observed }
           const injectedAt = Performance.now()
