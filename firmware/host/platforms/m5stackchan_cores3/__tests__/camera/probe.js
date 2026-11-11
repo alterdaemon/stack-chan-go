@@ -182,10 +182,8 @@ async function verifyConversation(robot) {
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
         const began = Performance.now()
         let before = conversation.stats
-        while (Performance.now() - began < duration) {
-          const interval = Math.min(10000, duration - (Performance.now() - began))
-          if (interval <= 0) break
-          await wait(interval)
+        for (let elapsed = 0; elapsed < duration; elapsed += 10000) {
+          await wait(Math.min(10000, duration - elapsed))
           const after = conversation.stats
           const captured = after.capturedSamples - before.capturedSamples
           const sent = after.sourceSamples - before.sourceSamples
@@ -233,6 +231,7 @@ async function verifyConversation(robot) {
 export function onContextCreated(robot) {
   report({ phase: 'boot' })
   void (async () => {
+    if (Preference.blockedWrites !== 0) throw new Error('preference_guard_unavailable')
     let blocked = false
     try {
       Preference.set('tts', 'volume', Preference.get('tts', 'volume'))
