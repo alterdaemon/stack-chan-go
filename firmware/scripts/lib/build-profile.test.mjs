@@ -74,6 +74,11 @@ test('failed profile changes remain invalidated until a successful build commits
     writeFileSync(manifest, JSON.stringify({ creation: { stack: 1024 } }))
     prepareBuildProfile(options)
     assert.ok(!existsSync(partial))
+    mkdirSync(path.dirname(partial), { recursive: true })
+    writeFileSync(partial, 'failed changed build')
+    writeFileSync(manifest, JSON.stringify({ creation: { stack: 768 } }))
+    prepareBuildProfile(options)
+    assert.ok(!existsSync(partial), 'returning to the prior profile must discard failed-build output')
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

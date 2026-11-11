@@ -58,6 +58,7 @@ export function prepareBuildProfile({
   )
   const previous = existsSync(profile) ? readFileSync(profile, 'utf8') : undefined
   if (previous !== fingerprint) {
+    rmSync(profile, { force: true })
     // Make compares timestamps, so remapping an alias to an older source can
     // otherwise keep bytecode and native objects from a different manifest.
     rmSync(path.join(outputDirectory, 'tmp/esp32', platformName, mode, applicationName), {
