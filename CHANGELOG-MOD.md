@@ -34,7 +34,7 @@ Release impact: minor.
 
 Merge upstream 2.1.0 and Moddable 10.1.0 with the complete R1–R15 fork. Retain both conversation modes, Wi-Fi/BLE Settings, Pitch, 48 kHz audio, SPI waits and camera release/reopen; include upstream display batching, TLS/HTTP fixes, WebRTC cleanup and Avatar DSL tools. Correct generated SDK configuration, stale build profiles, XS stack/affinity, poll-watchdog ordering, Live control priority and capture/HTTPS scheduling. Skip AEC after local quiescence during close. Amend R1: treat `conversation_already_has_active_response` as recoverable in both modes and interruption settings; bound Mini continuation retries and never replay tool output.
 
-Validation and limits: The correction passed 684 Node/native tests, nine packaging tests, lint, format, release validation and release/image checks. Initial R1 completed four API cases exceeding 15 minutes each, zero input FIFO overruns in 360 windows, and normal-device/data checks. These device/API results do not validate the corrected build: it is not installed or live-API tested. Acoustic quality and physical interruption/touch latency remain unverified.
+Validation and limits: The correction passed 684 Node/native tests, nine packaging tests, lint, format, release validation and release/image checks. Initial R1 completed four API cases exceeding 15 minutes each, zero input FIFO overruns in 360 windows, and normal-device/data checks. On 2026-11-11, the maintainer confirmed that the corrected R1 was tested on hardware with the live API and is working. Recorded automated checks do not quantify acoustic quality or physical interruption/touch latency.
 
 ## 2.0.1
 

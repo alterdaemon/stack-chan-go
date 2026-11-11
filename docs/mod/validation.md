@@ -44,9 +44,10 @@ remained in the successful build.
 | Archived initial full | 16,777,216 | `65335a9c2193a3ed42d35c88fe3d72f1c1c69c2e4eca44584b637da87fde5a2c` |
 
 Initial images/build symbols and tag were privately archived before replacement.
-The corrected build was not flashed or tested against the live API. Its device
-behavior remains unverified. Earlier forced-playback probes did not reproduce
-extended natural silence.
+On 2026-11-11, the maintainer confirmed that the corrected R1 build was tested
+on hardware with the live API and is working. This runtime confirmation is
+separate from the automated results above. Earlier forced-playback probes did
+not reproduce extended natural silence.
 
 ### Initial R1 qualification
 
@@ -210,8 +211,8 @@ audit matched all 458,752 protected bytes. Raw NVS was never flashed.
 Open measurement work remains: normal-image whole-device CPU/load baselines,
 representative acoustic equivalence and physical interruption/touch latency,
 successful delayed TLS delivery, and controlled sustained capture after the
-camera fix. Later R1 checks cover their stated workloads only; the corrected
-R1 build still requires its own device/API qualification.
+camera fix. Later R1 checks and the maintainer's corrected-R1 confirmation
+cover their stated workloads; they do not supply these missing measurements.
 
 All evidence below is sanitized historical data retained unchanged:
 

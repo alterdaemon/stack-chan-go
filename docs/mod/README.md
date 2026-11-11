@@ -98,8 +98,8 @@ version used by MOD loading.
 
 Current files are in the ignored `internal/release-packages/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.
-The corrected R1 build passed offline/build checks; its hardware/API behavior
-has not been tested. See [validation](validation.md#21-r1).
+The corrected R1 build passed offline/build checks, and the maintainer confirmed
+it is tested and working on hardware with the live API. See [validation](validation.md#21-r1).
 
 Application update, preserving other partitions on the supported layout:
 
