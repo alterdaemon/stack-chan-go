@@ -118,7 +118,8 @@ async function measureDisplay(robot) {
 async function verifyConversation(robot) {
   const session = installConversation(robot)
   if (!session) throw new Error('conversation_unavailable')
-  let conversation
+  let conversation,
+    greeting = 0
   class ProbeConversation extends Conversation {
     constructor(settings) {
       const observed = { userTranscripts: 0, speech: 0, clears: 0 }
@@ -151,7 +152,7 @@ async function verifyConversation(robot) {
         this.transport.send(
           JSON.stringify({
             type: 'session.commentary.append',
-            event_id: 'camera_probe_greeting',
+            event_id: `camera_probe_greeting_${++greeting}`,
             delegation_id: null,
             content: text,
           }),
@@ -169,6 +170,7 @@ async function verifyConversation(robot) {
   }
   session.Conversation = ProbeConversation
   const saved = session.settings
+  const speechClip = config.cameraProbeSpeech ? new Resource('probe-input.pcm') : undefined
   syntheticMic(true)
   let failures = 0
   try {
@@ -230,11 +232,10 @@ async function verifyConversation(robot) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
           await wait(100)
         }
-        if (bargeIn && config.cameraProbeSpeech) {
-          const clip = new Resource('probe-input.pcm')
+        if (bargeIn && speechClip) {
           const before = { ...conversation.observed }
           const injectedAt = Performance.now()
-          inject(clip, true)
+          inject(speechClip, true)
           const accepted = () =>
             mode === 'live'
               ? conversation.observed.userTranscripts > before.userTranscripts
