@@ -1,3 +1,4 @@
+import Resource from 'Resource'
 import Conversation from 'realtimeConversation/core'
 import fetch from 'realtimeConversation/http'
 import Transport from 'realtimeConversation/transport'
@@ -11,6 +12,7 @@ const sample = native('xs_camera_probe_sample')
 const syntheticMic = native('xs_live_probe_synthetic_mic')
 const measure = native('xs_live_probe_measure')
 const watchTasks = native('xs_live_probe_tasks')
+const inject = native('xs_live_probe_input')
 const wait = (ms) => new Promise((resolve) => Timer.set(resolve, ms))
 const options = { width: 160, height: 120, imageType: 'rgb565be' }
 const report = (event) => trace(`[camera-probe] ${JSON.stringify(event)}\n`)
@@ -119,12 +121,28 @@ async function verifyConversation(robot) {
   let conversation
   class ProbeConversation extends Conversation {
     constructor(settings) {
-      super(settings, {
-        createTransport: (callback) => (this.transport = new Transport(callback)),
-        fetch,
-        setTimeout: (fn, ms) => Timer.set(fn, ms),
-        clearTimeout: (timer) => Timer.clear(timer),
-      })
+      const observed = { userTranscripts: 0, speech: 0, clears: 0 }
+      super(
+        {
+          ...settings,
+          onTranscript(fragment) {
+            if (fragment.role === 'user' && fragment.delta?.trim()) observed.userTranscripts++
+            settings.onTranscript?.(fragment)
+          },
+          onEvent(event) {
+            if (event.type === 'input_audio_buffer.speech_started') observed.speech++
+            if (event.type === 'output_audio_buffer.cleared') observed.clears++
+            settings.onEvent?.(event)
+          },
+        },
+        {
+          createTransport: (callback) => (this.transport = new Transport(callback)),
+          fetch,
+          setTimeout: (fn, ms) => Timer.set(fn, ms),
+          clearTimeout: (timer) => Timer.clear(timer),
+        },
+      )
+      this.observed = observed
       conversation = this
     }
     requestPlayback(mode) {
@@ -173,7 +191,14 @@ async function verifyConversation(robot) {
       }
       try {
         if (!(await session.start())) throw new Error('provider_startup')
-        record({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt, stats: conversation.stats })
+        record({
+          phase: 'connected',
+          mode,
+          bargeIn,
+          pitch: session.settings.pitch ?? 0,
+          startMs: Performance.now() - startedAt,
+          stats: conversation.stats,
+        })
         measure()
         watchTasks()
         const playbackAt = Performance.now()
@@ -204,6 +229,27 @@ async function verifyConversation(robot) {
         while (!bargeIn && conversation.stats.outputIdleMs < 500) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
           await wait(100)
+        }
+        if (bargeIn && config.cameraProbeSpeech) {
+          const clip = new Resource('probe-input.pcm')
+          const before = { ...conversation.observed }
+          const injectedAt = Performance.now()
+          inject(clip, true)
+          const accepted = () =>
+            mode === 'live'
+              ? conversation.observed.userTranscripts > before.userTranscripts
+              : conversation.observed.speech > before.speech && conversation.observed.clears > before.clears
+          while (!accepted()) {
+            if (!session.active || Performance.now() - injectedAt >= 20000) throw new Error('provider_input')
+            await wait(100)
+          }
+          record({
+            phase: 'input-accepted',
+            mode,
+            bargeIn,
+            elapsedMs: Performance.now() - injectedAt,
+            observed: { ...conversation.observed },
+          })
         }
         report({ phase: 'provider-measuring', mode, bargeIn })
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
@@ -255,7 +301,9 @@ async function verifyConversation(robot) {
           phase: 'provider-failure',
           mode,
           bargeIn,
-          code: ['provider_capture', 'provider_playback'].includes(error.message) ? error.message : 'provider_startup',
+          code: ['provider_capture', 'provider_playback', 'provider_input'].includes(error.message)
+            ? error.message
+            : 'provider_startup',
           stats: conversation?.stats,
           io: Performance.stats(),
           memory: sample(),
