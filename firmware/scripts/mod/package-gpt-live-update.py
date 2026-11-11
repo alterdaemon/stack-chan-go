@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish matching full-flash and application-only CoreS3 GPT-Live images."""
+"""Package matching full-flash and application-only CoreS3 release images."""
 import argparse
 import hashlib
 import json
@@ -109,7 +109,7 @@ def package_update(root, output):
     for image in (bootloader_path, app_path):
         subprocess.run([sys.executable, '-m', 'esptool', '--chip', 'esp32s3',
                         'image_info', str(image)], check=True)
-    name = f'StackChan-Community-v{version}-GPT-Live'
+    name = f'StackChan-Community-v{version}'
     images = {output / (name + '.bin'): full, output / (name + '-app.bin'): app}
     for target, data in images.items():
         require(not target.exists() or target.read_bytes() == data,
@@ -124,7 +124,7 @@ def package_update(root, output):
 if __name__ == '__main__':
     root = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=root / 'internal/gpt-live-package')
+    parser.add_argument('--output', type=Path, default=root / 'internal/release-packages')
     options = parser.parse_args()
     try:
         (root / 'internal').mkdir(mode=0o700, exist_ok=True)

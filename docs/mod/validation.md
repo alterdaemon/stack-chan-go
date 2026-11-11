@@ -332,3 +332,27 @@ Upstream already defines `web/avatar-dsl/.test-output/` and its output-producing
 acceptance test. The 17 retained fork measurement JSON files total 213,408 bytes
 and remain published validation evidence. Agent instructions now explicitly
 distinguish ad hoc artifacts from tool-managed outputs and reusable source/tests.
+
+## Release package names and installation modes
+
+On 2026-11-11, the R15 and corrected R1 full/app pairs were renamed to
+`StackChan-Community-v<version>.bin` and `StackChan-Community-v<version>-app.bin`
+under ignored `internal/release-packages/`. The other 23 images retain their
+original names under `internal/archives/legacy-release-packages/`. SHA-256
+comparisons preserved all 27 images; release tags and firmware bytes are unchanged.
+
+Installed esptool 5.6.0 CLI help and `write_flash`/`get_bytes` implementation
+confirmed whole-file writes at the destination address, without a CLI input-range
+selector. Both actual release pairs passed image checksum/digest inspection,
+tag-specific partition validation and byte comparison of the app inside the full
+image. All protected data regions in the full images contain `0xFF`. App-only
+sector ranges are `[0x10000, 0x830000)` for R15 and `[0x10000, 0x83a000)` for R1,
+with no protected-partition overlap. Either full image at `0x10000` would extend
+to `0x1010000`, beyond the 16 MiB flash, and is rejected as an app update.
+
+Nine packaging tests passed, including the real CLI default output/name contract
+and existing overwrite protection. Workflow YAML, firmware lint/format and
+`check:release -- v2.1.0-R1` passed. No firmware rebuild, device access or flash
+write was performed. One downloadable full BIN is technically sufficient only
+with a separate validated app-extraction step; the two BINs retain direct full
+installation and app-only update commands.

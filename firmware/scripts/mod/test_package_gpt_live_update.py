@@ -5,8 +5,11 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import runpy
+import shutil
 import struct
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -125,15 +128,19 @@ class UpdateTests(unittest.TestCase):
                 target.write_bytes(data)
             symbols = '\n'.join('0 T ' + name for name in (
                 'xs_live_transport_constructor', 'xs_live_transport_start', 'xs_live_transport_close'))
-            output = root / 'output'
+            output = root / 'internal/release-packages'
+            installed_script = root / 'firmware/scripts/mod' / script.name
+            installed_script.parent.mkdir(parents=True)
+            shutil.copyfile(script, installed_script)
             with (patch.object(package.shutil, 'which', return_value='/fixture/nm'),
                   patch.object(package.subprocess, 'check_output', return_value=symbols),
                   patch.object(package.subprocess, 'run') as inspect_image,
                   redirect_stdout(io.StringIO())):
-                package.package_update(root, output)
+                with patch.object(sys, 'argv', [str(installed_script)]):
+                    runpy.run_path(str(installed_script), run_name='__main__')
                 files = sorted(output.iterdir())
-                self.assertEqual(len(files), 2)
-                self.assertTrue(all(p.suffix == '.bin' for p in files))
+                name = f'StackChan-Community-v0.0.0-R{package.REVISION}'
+                self.assertEqual({p.name for p in files}, {name + '.bin', name + '-app.bin'})
                 app_file = next(p for p in files if p.name.endswith('-app.bin'))
                 self.assertTrue(app_file.name.startswith(f'StackChan-Community-v0.0.0-R{package.REVISION}-'))
                 full_file = output / app_file.name.replace('-app.bin', '.bin')

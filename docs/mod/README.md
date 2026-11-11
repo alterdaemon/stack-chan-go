@@ -39,7 +39,7 @@ root `internal/`:
 - `work/`: scratch scripts, logs, reports and screenshots.
 - `diagnostics/`: generated R14 variants and input fixtures.
 - `firmware/wifi-settings/`: generated embedded Settings assets.
-- `gpt-live-package/`: installable fork images.
+- `release-packages/`: installable fork images named by version, without a GPT-Live suffix.
 - `archives/`: local backups and superseded artifacts.
 
 Names above are relative to `internal/`; create only the folders needed.
@@ -96,7 +96,7 @@ version used by MOD loading.
 
 ## Install
 
-Current files are in the ignored `internal/gpt-live-package/` directory.
+Current files are in the ignored `internal/release-packages/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.
 The corrected R1 build passed offline/build checks; its hardware/API behavior
 has not been tested. See [validation](validation.md#21-r1).
@@ -104,13 +104,13 @@ has not been tested. See [validation](validation.md#21-r1).
 Application update, preserving other partitions on the supported layout:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 internal/gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 internal/release-packages/StackChan-Community-v2.1.0-R1-app.bin
 ```
 
 Full installation **resets settings, MODs and storage**:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 internal/gpt-live-package/StackChan-Community-v2.1.0-R1-GPT-Live.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 internal/release-packages/StackChan-Community-v2.1.0-R1.bin
 ```
 
 The destination address is in device flash, not an input-file offset. Never
@@ -119,6 +119,14 @@ write the full image at `0x10000`. The packager checks the
 build's `flasher_args.json`. Before device tests/updates, verify the live layout
 and app bounds and privately back up non-application partitions. Tests use
 app-only writes; destructive installation requires explicit authorization.
+
+Keep both BINs for direct installation. The full image already contains the
+application, but [esptool writes each entire input BIN at its destination address](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/esptool/basic-commands.html#write-binary-data-to-flash-write-flash).
+Its CLI does not select an application range inside that input file. A single
+download would require extracting and validating the app first; changing only
+the flash address cannot do that. The full image contains erased data partitions,
+so flashing it at `0x0` resets them. Do not use differential-flashing options to
+preserve user data: they may fall back to rewriting the entire input image.
 
 ## Settings
 

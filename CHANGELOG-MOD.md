@@ -20,6 +20,9 @@ and private archives under ignored `internal/`. Preserve upstream source and
 standard build/dependency layouts.
 Clarify agent artifact rules: keep existing build/test output paths, place ad hoc
 working files under `internal/`, and retain reusable tests and validation evidence.
+Name release BINs `StackChan-Community-v<version>.bin` and
+`StackChan-Community-v<version>-app.bin` under `internal/release-packages/`.
+Keep full-install and app-update images; preserve their bytes when renaming.
 
 ## 2.1.0
 

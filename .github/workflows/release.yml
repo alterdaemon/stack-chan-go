@@ -42,13 +42,15 @@ jobs:
           source "$HOME/.local/share/xs-dev-export.sh"
           source "$IDF_PATH/export.sh"
           npm run build -- --mode=release
-          image="../internal/gpt-live-package/StackChan-Community-$TAG-GPT-Live"
+          image="../internal/release-packages/StackChan-Community-$TAG"
           test -s "$image.bin"
           test -s "$image-app.bin"
       - uses: actions/upload-artifact@v7
         with:
           name: stack-chan-community-images
-          path: ./internal/gpt-live-package/*.bin
+          path: |
+            ./internal/release-packages/StackChan-Community-${{ github.ref_name }}.bin
+            ./internal/release-packages/StackChan-Community-${{ github.ref_name }}-app.bin
           if-no-files-found: error
 
   publish:
@@ -68,7 +70,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          image="release-assets/StackChan-Community-$TAG-GPT-Live"
+          image="release-assets/StackChan-Community-$TAG"
           node firmware/scripts/validate-release.mjs "$TAG" --notes > "$RUNNER_TEMP/release-notes.md"
           gh release create "$TAG" "$image.bin" "$image-app.bin" \
             --verify-tag --title "Stack-chan Community $TAG" \
