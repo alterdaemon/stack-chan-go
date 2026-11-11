@@ -15,7 +15,15 @@ const watchTasks = native('xs_live_probe_tasks')
 const inject = native('xs_live_probe_input')
 const wait = (ms) => new Promise((resolve) => Timer.set(resolve, ms))
 const options = { width: 160, height: 120, imageType: 'rgb565be' }
-const report = (event) => trace(`[camera-probe] ${JSON.stringify(event)}\n`)
+function report(event) {
+  const line = `[camera-probe] ${JSON.stringify(event)}\n`
+  // The USB console can truncate a long trace. Large records are emitted
+  // outside the active audio window and give the host time to drain chunks.
+  for (let offset = 0; offset < line.length; offset += 128) {
+    trace(line.slice(offset, offset + 128))
+    Timer.delay(2)
+  }
+}
 
 function assertIdle(phase) {
   const after = sample()
