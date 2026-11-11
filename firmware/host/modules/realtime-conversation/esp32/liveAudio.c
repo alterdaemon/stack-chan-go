@@ -173,19 +173,25 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 				// Paired, planar frames arrive through the existing input FIFO.
 				if (readInput(a, (uint8_t *)mic, a->chunk * 4) != a->chunk * 4)
 					return ESP_CAPTURE_ERR_NOT_SUPPORTED;
-				// Mini capture DSP stays ahead of normal UI; Live keeps its policy.
-				// I2S remains independent and never waits for this processing.
-				UBaseType_t priority = uxTaskPriorityGet(NULL);
-				vTaskPrioritySet(NULL, a->dspPriority);
+				if (atomic_load(&a->quiesced)) {
+					// Close keeps the source clock and FIFO drain alive, but only
+					// forwards silence. Its AEC state will be released after teardown.
+					memset(clean, 0, a->chunk * 2);
+				} else {
+					// Mini capture DSP stays ahead of normal UI; Live keeps its policy.
+					// I2S remains independent and never waits for this processing.
+					UBaseType_t priority = uxTaskPriorityGet(NULL);
+					vTaskPrioritySet(NULL, a->dspPriority);
 #ifdef MODDEF_STACKCHAN_LIVE_PROBE
-                int64_t began = esp_timer_get_time();
+					int64_t began = esp_timer_get_time();
 #endif
-				aec_process(a->aec, mic, ref, clean);
+					aec_process(a->aec, mic, ref, clean);
 #ifdef MODDEF_STACKCHAN_LIVE_PROBE
-                extern void stackchanProbeAEC(unsigned elapsed);
-                stackchanProbeAEC(esp_timer_get_time() - began);
+					extern void stackchanProbeAEC(unsigned elapsed);
+					stackchanProbeAEC(esp_timer_get_time() - began);
 #endif
-				vTaskPrioritySet(NULL, priority);
+					vTaskPrioritySet(NULL, priority);
+				}
 				captureStats(a, mic, ref, clean);
 				a->cleanOffset = 0;
 			}

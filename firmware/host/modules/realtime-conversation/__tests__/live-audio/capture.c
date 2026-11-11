@@ -206,9 +206,9 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     assert(atomic_load(&audio.done) && !atomic_load(&audio.error));
     assert(!atomic_load(&audio.overruns));
     assert(atomic_load(&submitted) >= total && atomic_load(&audio.sourceSamples) == total);
-    assert(atomic_load(&dspCalls) == (interruption ? total / aec.count : 0));
+    assert(atomic_load(&dspCalls) == (interruption && !quiesce ? total / aec.count : 0));
     assert(atomic_load(&priorityChanges) == atomic_load(&dspCalls) * 2);
-    assert(delayedPlayback == (interruption && delay));
+    assert(delayedPlayback == (interruption && delay && !quiesce));
     assert(sourceRead(&audio.source, &(esp_capture_stream_frame_t){.data = input.data, .size = 320})
         == ESP_CAPTURE_ERR_NOT_SUPPORTED);
     free(audio.buffers);

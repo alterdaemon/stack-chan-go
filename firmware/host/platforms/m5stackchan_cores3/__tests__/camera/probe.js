@@ -147,6 +147,11 @@ async function verifyConversation(robot) {
             if (inner?.annotation?.type === 'url_citation') observed.sources++
             settings.onEvent?.(event)
           },
+          onError(error) {
+            observed.error =
+              typeof error.code === 'string' && /^[a-z0-9_:-]{1,80}$/i.test(error.code) ? error.code : 'provider_error'
+            settings.onError?.(error)
+          },
           onToolResult(result) {
             const output = typeof result.output === 'string' ? JSON.parse(result.output) : (result.output ?? {})
             observed.search++
@@ -291,7 +296,13 @@ async function verifyConversation(robot) {
           })
         }
         if (bargeIn && config.cameraProbeSearch) {
+          // The injected turn may still be answering. Use the existing
+          // stop/start lifecycle so the forced search begins on a fresh turn.
+          await session.stop()
           report({ phase: 'search-start', mode, bargeIn })
+          if (!(await session.start())) throw new Error('provider_startup')
+          measure()
+          watchTasks()
           const before = conversation.stats
           const searchAt = Performance.now()
           conversation.requestSearch(mode)
@@ -371,17 +382,22 @@ async function verifyConversation(robot) {
             ? error.message
             : 'provider_startup',
           stats: conversation?.stats,
+          observed: conversation && { ...conversation.observed },
           io: Performance.stats(),
           memory: sample(),
         })
       } finally {
         report({ phase: 'provider-stopping', mode, bargeIn })
         const stopAt = Performance.now()
+        const beforeClose = Performance.stats()
         await session.stop()
         const stopMs = Performance.now() - stopAt
+        const afterClose = Performance.stats()
+        const closeAecCalls = afterClose.aecCalls - beforeClose.aecCalls
+        const closeIoWrites = afterClose.ioWrites - beforeClose.ioWrites
         const memory = sample()
         for (const event of records) report(event)
-        report({ phase: 'stopped', mode, bargeIn, stopMs, memory })
+        report({ phase: 'stopped', mode, bargeIn, stopMs, closeAecCalls, closeIoWrites, memory })
       }
     }
   } finally {
