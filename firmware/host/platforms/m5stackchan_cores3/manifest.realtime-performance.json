@@ -1,5 +1,6 @@
 {
   "creation": {
+    "stack": 1024,
     "chunk": {
       "initial": 524288,
       "incremental": 0
