@@ -166,9 +166,14 @@ async function verifyConversation(robot) {
       }
       const startedAt = Performance.now()
       report({ phase: 'provider-start', mode, bargeIn })
+      const records = []
+      const record = (event) => {
+        if (records.length === 128) throw new Error('provider_record_limit')
+        records.push(event)
+      }
       try {
         if (!(await session.start())) throw new Error('provider_startup')
-        report({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt, stats: conversation.stats })
+        record({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt, stats: conversation.stats })
         measure()
         watchTasks()
         const playbackAt = Performance.now()
@@ -179,7 +184,7 @@ async function verifyConversation(robot) {
           await wait(100)
           const now = Performance.now()
           if (now - progressAt >= 5000) {
-            report({
+            record({
               phase: 'provider-wait',
               mode,
               bargeIn,
@@ -193,12 +198,14 @@ async function verifyConversation(robot) {
         }
         const playbackMs = Performance.now() - playbackAt
         if (playbackMs >= 20000) throw new Error('provider_playback')
-        report({ phase: 'playback', mode, bargeIn, playbackMs })
+        record({ phase: 'playback', mode, bargeIn, playbackMs })
+        report({ phase: 'provider-playing', mode, bargeIn })
         // Capture is intentionally suspended during output when barge-in is off.
         while (!bargeIn && conversation.stats.outputIdleMs < 500) {
           if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
           await wait(100)
         }
+        report({ phase: 'provider-measuring', mode, bargeIn })
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
         const began = Performance.now()
         let before = conversation.stats
@@ -209,7 +216,7 @@ async function verifyConversation(robot) {
           const sent = after.sourceSamples - before.sourceSamples
           const overruns = after.overruns - before.overruns
           const underruns = after.underruns - before.underruns
-          report({
+          record({
             phase: 'provider',
             mode,
             bargeIn,
@@ -226,10 +233,14 @@ async function verifyConversation(robot) {
           })
           if (!session.active || !(sent > 0 && captured > 0) || overruns) throw new Error('provider_capture')
           before = after
+          // Full serial records can block under duplex load. Emit only a small
+          // liveness marker and flush the bounded records after audio stops.
+          if (elapsed % 30000 === 20000)
+            report({ phase: 'provider-progress', mode, bargeIn, elapsedMs: Performance.now() - began })
         }
       } catch (error) {
         failures++
-        report({
+        record({
           phase: 'provider-failure',
           mode,
           bargeIn,
@@ -241,7 +252,10 @@ async function verifyConversation(robot) {
       } finally {
         const stopAt = Performance.now()
         await session.stop()
-        report({ phase: 'stopped', mode, bargeIn, stopMs: Performance.now() - stopAt, memory: sample() })
+        const stopMs = Performance.now() - stopAt
+        const memory = sample()
+        for (const event of records) report(event)
+        report({ phase: 'stopped', mode, bargeIn, stopMs, memory })
       }
     }
   } finally {
