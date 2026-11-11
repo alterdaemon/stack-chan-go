@@ -27,6 +27,8 @@ Use `build-firmware.sh`, `package-release.py` and `test:release-package` for the
 fork's build and packaging tools.
 Document explicitly requested release publication, concise descriptions and the
 `Stack-chan community-mod <tag>` release title convention.
+Summarize fork features and ready-to-flash BINs in the root README; state the
+quick-start, performance and upstream-sync goal in both fork README introductions.
 
 ## 2.1.0
 

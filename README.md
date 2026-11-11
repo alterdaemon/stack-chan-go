@@ -4,13 +4,31 @@
 
 A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.
+
+The goal is to provide simple, preconfigured firmware images for a quick start,
+optimize performance, and keep the fork up to date and in sync with upstream.
+
 Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
 The current 2.1.0 series also incorporates upstream 2.1.0.
 
-Current firmware: **2.1.0-R1**, for **M5StackChan CoreS3**. Includes GPT-Live 1,
-GPT-Realtime 2.1 Mini, shared Wi-Fi/BLE Settings and the changes in the changelog.
-The corrected R1 build has offline/build validation; device/API verification
-of that correction remains outstanding.
+Current firmware: **[2.1.0-R1](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R1)**,
+for **M5StackChan CoreS3**.
+
+## What this fork adds
+
+Compared with upstream **2.1.0**, the current CoreS3 firmware adds:
+
+| Area | What you get |
+| --- | --- |
+| Installation | Full and app-only BINs with chat MODs preconfigured. No local build needed. |
+| Voice chat | Built-in GPT-Live 1 and GPT-Realtime 2.1 Mini, started with the LIVE button. |
+| Settings | Bluetooth (BLE) or a password-protected Wi-Fi settings page. |
+| Voice controls | Saved voices, pitch, speaking style and optional interruption while the robot speaks. |
+| Conversation resume | GPT-Live idle standby with recent conversation memory. |
+| Web search | Search preconfigured for both conversation modes. |
+| Firmware fixes | Camera memory cleanup, audio/UI scheduling fixes and chat error recovery. |
+
+Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
 
 - [Build, install, settings and branch guide](docs/mod/README.md)
 - [All fork release notes](CHANGELOG-MOD.md)

@@ -4,8 +4,11 @@
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R1**. Standard hardware: M5StackChan CoreS3.
-This fork adds integrated GPT-Live/GPT-Realtime Mini, Wi-Fi Settings and the
-changes recorded in the changelog. Upstream is
+
+The goal is to provide simple, preconfigured firmware images for a quick start,
+optimize performance, and keep the fork up to date and in sync with upstream.
+
+Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
 `docs/release-notes/` describes upstream releases, not fork revisions.
 
