@@ -31,6 +31,9 @@ Summarize fork features and ready-to-flash BINs in the root README; state the
 quick-start, performance and upstream-sync goal in both fork README introductions.
 Require agents to keep both READMEs, changelog, version metadata and release BINs
 consistent, with publication only on explicit request.
+Restore `AGENTS.md` byte-for-byte from upstream 2.1.0 and maintain fork-specific
+agent instructions in the separate local project workspace. Preserve the
+implementation repository's tracked paths, firmware versions and release images.
 
 ## 2.1.0
 

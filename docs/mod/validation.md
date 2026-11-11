@@ -367,3 +367,42 @@ Mock-toolchain wrapper checks verified release/debug argument forwarding,
 environment setup and propagation of a failed build's exit status. Shell syntax,
 firmware lint/format and `check:release -- v2.1.0-R1` passed. The build and
 packaging script contents are unchanged; no firmware was rebuilt or flashed.
+
+## Local project workspace and upstream agent instructions
+
+On 2026-11-11, the existing implementation checkout moved intact into the local
+workspace's `codebase/` directory. All 2,018 tracked Git paths were preserved;
+the implementation repository does not contain a new `codebase/` prefix.
+Its Git configuration, historical refs and all 27 existing private BIN hashes
+were preserved. Governance and OpenSpec use separate local Git repositories.
+
+The modified fork `AGENTS.md` was archived before restoring the implementation
+copy byte-for-byte from upstream 2.1.0, commit
+`b050a44592ab847f0f4c2ceb6eb350a02bcb609a`, blob
+`b63884ca79d588e2a1e3f1f584ce334596a802fd`. The workspace-root instructions were
+reconstructed from the archived modified file, with the coding template's
+universal sections unchanged. Release impact: none.
+
+| Local/static check | Result |
+| --- | --- |
+| Workspace `python3 internal/scripts/check_project_contract.py` | Passed; three independent Git roots and generated OpenCode adapters |
+| `openspec validate --specs --strict --no-interactive` from the workspace | Eight accepted specs passed; requirements, archives and reconstruction audits unchanged |
+| `npm run test:release-package` from `codebase/firmware/` | Nine tests passed |
+| `npm run check:release -- v2.1.0-R1` from `codebase/firmware/` | Passed |
+| `node scripts/mod/build-wifi-settings.mjs` from `codebase/firmware/` | Typecheck/build passed; 13 routes packed through the private artifact link; large-chunk warning retained |
+| `npm run check:manifest` with the existing SDK environment | All six target preflights passed; SDK deprecation warnings retained |
+| Settings and diagnostic path audit | All 13 Settings resources and ten existing diagnostic mappings resolve to the same private storage |
+| Instruction provenance, Git ownership, upstream blob and whitespace checks | Passed |
+
+The ignored local `codebase/internal -> ../internal` link preserves existing
+artifact paths without changing tracked tooling or CI. Six legacy diagnostic
+references still lack three fixtures: `probe-input.pcm`, `probe-opus.dat` and
+`https-fixture.dat`. Their physical destinations are identical before and after
+relocation; the fixtures were not regenerated or used by these checks.
+
+The old firmware build output contained absolute paths to the previous checkout
+location. All 26,953 generated files/links were privately archived and verified
+before leaving the standard `firmware/dist/` directory empty for the next build.
+Other standard dependency/test-output paths remain in place. Firmware source,
+versions, release tags and published assets are unchanged. No firmware rebuild,
+device write, device/live-API test or GitHub push/publication was performed.

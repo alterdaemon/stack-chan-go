@@ -4,53 +4,7 @@ This file provides repository-wide guidance for coding agents working in this re
 
 ## Project Overview
 
-This repository is stack-chan-mod (Stack-chan Community), a fork of https://github.com/stack-chan/stack-chan
-from v2.0.1 (6a8f7553610e5d91770901e76fd93a0c50cfd970). Preserve upstream history
-and attribution. Keep fork changes in subsequent English commits and document them
-in CHANGELOG-MOD.md. The 2.1.0 series uses product version 2.1.0-R<N> and tag
-v2.1.0-R<N>. The historical 2.0.1 series uses lowercase r; synchronize firmware/web package and lockfile versions, web flash
-manifests, README.md, docs/mod/README.md, CHANGELOG-MOD.md revision sections and release package filenames when advancing a revision.
-
-`main` contains current fork work and stays aligned with `v2.1.0-mod` after changes.
-`v2.0.1-mod` preserves the historical R15 line. There is no fork `develop` branch;
-retained upstream policy documents are labeled as references. Fork documentation
-lives in `docs/mod/`, release history only in `CHANGELOG-MOD.md`, and standalone
-fork tools in `firmware/scripts/mod/`. Write fork documentation, commands and test
-prompts in English; retain meaningful Unicode coverage.
-
 Stack-chan is a JavaScript-driven M5Stack-embedded robot. The codebase is primarily TypeScript/JavaScript built on the Moddable SDK platform for ESP32 microcontrollers.
-
-## Working Principles
-
-- Keep changes surgical and proportional to the request. Reuse existing mechanisms; add abstractions, background work or persistence only when needed.
-- Preserve existing features, saved settings and performance fixes outside the requested scope.
-- Review earlier attempts and their recorded outcomes before retrying an approach. For concurrency changes, verify progress and data continuity while work is delayed; compilation and configuration checks alone are insufficient. Match measurements to the reported symptom; timing counters alone do not establish end-to-end output quality.
-- Bound buffers, queues and retained history. Keep expensive or blocking work off UI and audio timing paths; explicitly stop session tasks and timers before releasing their resources.
-- Verify material claims against source code, generated artifacts, test logs or primary documentation. Distinguish inference from verified behavior; report unverified results as unknown.
-- Distinguish successful compilation, simulator execution, physical-device tests and live API tests. Record actual commands, outcomes and remaining verification in CHANGELOG-MOD.md and docs/mod/validation.md; do not repeat passing checks unless changes or unresolved failures justify it.
-- Confirm test startup and progress. Keep measurements low-overhead and batch comparable parameter variants when possible. Fail promptly if a harness never starts; building or flashing is not test execution.
-- Keep README.md and docs/mod/README.md consistent with user-visible changes. Preserve their shared one-sentence goal; keep the root README's comparison table concise, friendly and directly after the introduction, highlighting preconfigured BINs. Put details under the existing guide/changelog links.
-- Record fork changes in CHANGELOG-MOD.md: documentation/tooling changes under Unreleased, firmware changes under their numbered revision. Keep release history in this single file.
-- Documentation-only changes do not advance the firmware revision or require rebuilding firmware. Leave BINs, release tags and published assets unchanged unless the user explicitly requests changes to them.
-
-### Local artifacts
-
-- Put ad hoc working artifacts under the ignored repository-root `internal/` directory. Use `internal/work/` for scratch scripts, logs, reports and screenshots, `internal/diagnostics/` for generated probe inputs/variants, `internal/firmware/` for fork-specific generated assets, `internal/release-packages/` for installable fork BINs, and `internal/archives/` for backups and superseded artifacts. Create subdirectories only when needed.
-- Preserve upstream files, directory layouts and existing tool-managed output paths. Keep `firmware/dist`, `firmware/dist-tests`, `firmware/dist-architecture`, `web/dist`, `web/avatar-dsl/.test-output` and `node_modules` in place and ignored. Do not change build/test output paths merely to collect them under `internal/`.
-- Before moving a candidate, compare it with upstream and check its consumers. Move only identified local artifacts. Reusable tools, tests, fixtures, licenses, source documentation and sanitized validation evidence stay tracked at their source locations; generated filenames alone do not make them disposable.
-- Do not create root `work/`, `gpt-live-package/` or `release-packages/` directories, or scatter ad hoc artifacts through source directories or `/tmp`. Use output flags or shell redirection to write diagnostic reports/logs under `internal/`. For temporary jobs, create `internal/tmp/` and set `TMPDIR` to its absolute path. Set `PYTHONPYCACHEPREFIX` to the absolute `internal/python-cache/` path when invoking Python diagnostics. Keep existing cleanup behavior for temporary test fixtures.
-- Keep `internal/` private (mode 0700). Never stage or force-add it, or upload the directory as a whole. Release publication may select only the two validated BINs. Preserve existing image/backup contents when moving them; verify hashes before deleting an old copy.
-
-### Embedded Performance
-
-- Start from a known working baseline and compare small variants under equivalent workloads with required features enabled. A faster result obtained by disabling a required feature is a functional tradeoff, not an equivalent optimization.
-- Identify the limiting resource before tuning: CPU time per task/core, memory capacity or bandwidth, peripheral I/O, or network delivery. Wall-clock duration includes preemption and waiting; it does not establish CPU utilization.
-- Check effective generated configuration, compiler flags, linked library versions and image metadata rather than relying on defaults or README claims. Use manufacturer documentation for the actual chip and SDK version; treat upstream benchmarks as evidence only for their stated conditions.
-- Prefer reducing measured hot-path work: busy polling, repeated allocation/copying, unnecessary format conversion and redraws. Use completion-driven synchronization with bounded callbacks. Priority, affinity and buffer changes redistribute service time or latency; verify dependencies and progress instead of treating them as added processing capacity.
-- Choose SRAM, PSRAM, IRAM and stack placement using measured access cost and available headroom. Check DMA capabilities, stack high-water use and contiguous allocation requirements. More free internal memory alone does not establish faster execution.
-- Evaluate vendor options such as performance-oriented compiler optimization, IRAM placement, cache and DMA configuration against measurements and hardware constraints. Compiler flags do not recompile prebuilt libraries. For streaming changes, account for buffering latency and preserve sample order, timestamps, reference alignment and cancellation.
-
-Espressif references: [speed optimization and profiling](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/performance/speed.html), [external RAM](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/external-ram.html), [I2S and DMA sizing](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-reference/peripherals/i2s.html). Select the documentation version matching the toolchain in use.
 
 ## Core Architecture
 
@@ -68,7 +22,6 @@ Espressif references: [speed optimization and profiling](https://docs.espressif.
 - tests: Co-located under the target `firmware/host`, `firmware/mods`, or platform implementation
 - `firmware/typings/`: TypeScript definitions for the Moddable platform
 - `firmware/dist/`: Generated firmware programs and intermediate build files; do not edit or commit them
-- `internal/`: Ignored fork-only packages, diagnostics, scratch work and private archives
 - `case/`: 3D printable robot case files
 - `schematics/`: PCB designs for control boards
 
@@ -100,51 +53,6 @@ All commands should be run from the `firmware/` directory:
 - `npm run bundle` builds every release target under `firmware/dist/`, stages validated target artifacts in `firmware/dist/bundle-targets/`, and writes the assembled directory and ZIP under `firmware/host/app/`.
 - The named `npm run build:release:<target>` scripts and `npm run bundle:package` are the CI building blocks for parallel target builds and final artifact assembly.
 - `npm run mod` uses `mcrun -t build` to create an archive, then discovers and writes the live device's `xs` partition with `esptool`.
-
-### Firmware Builds and Release Packages
-
-- The default M5StackChan CoreS3 target includes GPT-Live through `firmware/host/app/manifest_openai_live_integrated.json`. Read `docs/mod/README.md` for the current build, package name, and installation command.
-- Build a release from `firmware/` in the activated Moddable / ESP-IDF environment with `ESP_WEBRTC_SOLUTION` set, `esptool` available to `python3`, and `xtensa-esp-elf-nm` on `PATH`:
-
-  ```sh
-  npm run build -- --mode=release
-  ```
-
-- Alternatively, from the repository root, use the existing toolchain wrapper:
-
-  ```sh
-  STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-firmware.sh --mode=release
-  ```
-
-  The toolchain directory contains `moddable`, `esp-idf`, `idf-tools`, `esp-webrtc-solution`, and `fontbm`. Use the existing installation; keep machine-specific paths out of tracked files.
-- Both release build commands automatically run `firmware/scripts/mod/package-release.py` after a successful integrated GPT-Live build. A packaging failure fails the build command. Debug, instrument, other-device and alternate-manifest builds do not generate these release packages. To package an existing release without rebuilding, run from the repository root in the same toolchain environment:
-
-  ```sh
-  python3 firmware/scripts/mod/package-release.py
-  ```
-
-- Keep installable release packages in the single directory `internal/release-packages/`. Use the packager's default output directory. Preserve superseded images under `internal/archives/`. Do not create revision-specific output directories, publish installation files under `/tmp`, or create ad hoc installer scripts.
-- Every new published revision must contain BOTH `StackChan-Community-v<version>.bin` (full 16 MiB flash image) and `StackChan-Community-v<version>-app.bin` (application only), produced from the same release build. Never publish only the application. The full image contains the build's bootloader, partition table and application, with all remaining bytes set to `0xFF`; it resets NVS, xs and storage. Esptool writes the entire input BIN at the destination address; using one full BIN for an app-only update requires extracting a validated application slice first. Keep the two direct installation commands in the guide.
-- Use the next unused revision for a new firmware update; the current update is `2.1.0-R1`, so the next update starts at `2.1.0-R2`. Before building, synchronize the current version, release links and install filenames in README.md and docs/mod/README.md; the numbered CHANGELOG-MOD.md entry; firmware/web package and lockfile versions; web flash manifests; `REVISION` in `firmware/scripts/mod/package-release.py`; and this revision reference. Verify that both generated BIN filenames and contents match that revision and build. Preserve earlier revision BINs. The packager rejects different contents under an existing revision; repeating an identical package is allowed.
-- The user explicitly requested the response-conflict correction within the existing `2.1.0-R1`. Archive its initial images and Git tag locally before replacing the current R1 package/tag. Keep the version, filenames and `REVISION = 1`; retain the packager's overwrite protection. This exception does not authorize flashing the corrected firmware.
-- Publish only the two validated BINs. Do not add generated reports, checksum files, ZIPs, or helper installation files. Verify that the application BIN matches the newly built `firmware/dist/bin/esp32/m5stackchan_cores3/release/stack-chan-host/xs_esp32.bin` and the application bytes at `0x10000` in the full image. Verify the full image is exactly 16 MiB and its bootloader and partition table match the same build.
-- Give the user the direct `esptool` command from `docs/mod/README.md`, with the actual revision filename under `internal/release-packages/`: full installation writes the full BIN at `0x0` and resets data; application update writes the app BIN at `0x10000` and preserves other partitions on the supported layout. The address is the destination in device flash, not an offset into the input file: never write the full BIN at `0x10000`. The packager validates offsets against `firmware/host/app/gpt-live-layout.json` and the build's `flasher_args.json`. Build and packaging do not flash the device.
-- Device tests and firmware updates must preserve all existing user data and saved settings. Flash only the validated application BIN at `0x10000`, after checking the device layout and image bounds. Never erase flash, install the full image, rewrite the bootloader/partition table or write NVS, xs or storage without a separate explicit user instruction permitting that data-destructive operation. Do not use a deployment wrapper unless its actual writes satisfy this restriction.
-- Before the first device write in a test session, back up non-application partitions privately outside Git unless the user explicitly declines backups. Diagnostic firmware must keep measurement state in RAM and must not reset, migrate or modify saved preferences. Never print secrets from device data or backups.
-- `internal/release-packages/` and `firmware/dist/` are generated output and stay outside Git.
-- Finish each firmware revision with relevant tests, lint/format checks, `npm run check:release -- v<version>`, and the release build and image validation described above. After validation, create a separate English commit. Create or push release tags and publish GitHub Releases only when the user requests release work, following the procedure below. Preserve earlier revision commits and artifacts. Keep only the latest release tag per mod series; privately archive superseded tag references before removing them.
-
-### GitHub Releases
-
-- Create drafts, upload assets, publish or edit GitHub Releases only when explicitly requested by the user. Building, packaging, committing or pushing code alone does not authorize release publication. A request to publish authorizes preparation, draft creation, verification and publication without another confirmation; honor requests for a draft only.
-- Use the requested existing tag and verify its remote commit; do not move it to include later cleanup. Publishing a historical release does not change the current version advertised in the READMEs. Create/push a new version tag only as part of requested release work. Inspect `.github/workflows/release.yml` before pushing tags: its current automatic publication creates prereleases from raw changelog sections and does not follow the procedure below.
-- Title each release `Stack-chan community-mod <tag>`, for example `Stack-chan community-mod v2.1.0-R1`. Publish regular releases (`prerelease=false`); use a prerelease only if explicitly requested. Mark the newest current version Latest, keeping historical releases non-latest.
-- Prepare short English descriptions under `internal/work/release-publication/`. Use CHANGELOG-MOD.md and actual tagged commit differences; add no tracked per-release note files. Include 2–3 bullets since the previous fork release (or the baseline specified by the user), 4–6 bullets covering all fork changes versus the matching upstream version, and links to both comparisons. Resolve deleted comparison tags through archived commit IDs instead of restoring them. Exclude changes made after the release tag and do not present upstream features as fork additions.
-- Include simple CoreS3 installation instructions with two direct esptool commands using the downloaded filenames: app at `0x10000` preserves other partitions on the supported layout; full image at `0x0` resets settings, MODs and storage. Link [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html) and cover Windows (`COM3`), macOS (`/dev/cu.*`) and Linux (`/dev/ttyACM0` or `/dev/ttyUSB0`) port selection. Public download commands must not reference the local `internal/` directory.
-- Omit Validation sections and test reports from GitHub release descriptions. Keep validation evidence in the existing changelog/validation record. End each release description with this exact notice: "Use this firmware at your own risk. The maintainer accepts no responsibility for bricked devices, data loss or other damage."
-- Attach exactly the matching full/app BIN pair from `internal/release-packages/`, named as specified above. Verify tag/build provenance, hashes, image metadata, supported layout, matching bootloader/table/app and full-image size before uploading. Keep drafts, logs and checksums private; do not attach reports, ZIPs or helper files.
-- Inspect existing releases before creating one. With the authenticated GitHub CLI, create a draft using `gh release create` with the two explicit BIN paths, `--repo alterdaemon/stack-chan-mod --verify-tag --draft --prerelease=false --latest=false --notes-file <draft> --title "Stack-chan community-mod <tag>"`. Verify the description, tag, release flags and exact two assets; download both assets under `internal/` and compare their hashes before publishing. Then use `gh release edit --draft=false --prerelease=false` with the appropriate Latest flag. For requested edits to existing releases, change only the requested fields and preserve their assets and release flags.
-- Verify the public release URLs, final descriptions, release type, Latest selection and asset names/sizes/digests. Preserve existing tag targets when publishing from existing tags. Remove temporary download copies after verification and return the release links.
 
 ### Code Quality
 - `npm run lint` - Run Biome linter
