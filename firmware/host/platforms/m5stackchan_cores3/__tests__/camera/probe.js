@@ -1,4 +1,6 @@
-import Conversation from 'realtimeConversation'
+import Conversation from 'realtimeConversation/core'
+import fetch from 'realtimeConversation/http'
+import Transport from 'realtimeConversation/transport'
 import Performance from 'io-performance'
 import config from 'mc/config'
 import { onContextCreated as installConversation } from 'openai-live-integrated'
@@ -18,7 +20,7 @@ function assertIdle(phase) {
 }
 
 async function captureCycles(robot) {
-  for (let cycle = 0; cycle < 8; cycle++) {
+  for (let cycle = 0; cycle < 50; cycle++) {
     const before = sample()
     await robot.camera.start(options)
     const frame = await robot.camera.capture(options)
@@ -45,6 +47,24 @@ async function captureCycles(robot) {
   assertIdle('immediate-stop')
 }
 
+async function verifyPreview() {
+  const began = Performance.now()
+  application.delegate('cameraPreview')
+  let cameraWasActive = false
+  while (Performance.now() - began < 4500) {
+    const state = sample()
+    cameraWasActive ||= state.worker && state.hal
+    if (cameraWasActive && !state.worker && !state.hal) {
+      report({ phase: 'preview-on-screen', elapsedMs: Performance.now() - began, ...state })
+      await wait(5500)
+      assertIdle('preview-dismissed')
+      return
+    }
+    await wait(25)
+  }
+  throw new Error(cameraWasActive ? 'preview:camera_task_remains' : 'preview:camera_task_missing')
+}
+
 async function singleCapture(robot) {
   const frames = await Promise.all([robot.camera.capture(options), robot.camera.capture(options)])
   if (frames.some((frame) => frame?.buffer.byteLength !== 38400)) throw new Error('single_capture_missing')
@@ -60,7 +80,7 @@ async function measureDisplay(robot) {
   robot.ui.setFaceMotionEnabled?.(false)
   try {
     Performance.setLiveUI(true)
-    for (let trial = 0; trial < 5; trial++) {
+    for (let trial = -1; trial < 5; trial++) {
       Performance.reset()
       const before = sample()
       for (let frame = 0; frame < 40; frame++) {
@@ -71,6 +91,7 @@ async function measureDisplay(robot) {
         await wait(50)
       }
       const after = sample()
+      if (trial < 0) continue
       rows.push({
         phase: 'display',
         trial,
@@ -96,13 +117,40 @@ async function verifyConversation(robot) {
   let conversation
   class ProbeConversation extends Conversation {
     constructor(settings) {
-      super(settings)
+      super(settings, {
+        createTransport: (callback) => (this.transport = new Transport(callback)),
+        fetch,
+        setTimeout: (fn, ms) => Timer.set(fn, ms),
+        clearTimeout: (timer) => Timer.clear(timer),
+      })
       conversation = this
+    }
+    requestPlayback(mode) {
+      const text = 'Count slowly from one to twenty in English, without an introduction.'
+      if (mode === 'live') {
+        this.transport.send(
+          JSON.stringify({
+            type: 'session.commentary.append',
+            event_id: 'camera_probe_greeting',
+            delegation_id: null,
+            content: text,
+          }),
+        )
+      } else {
+        this.transport.send(
+          JSON.stringify({
+            type: 'conversation.item.create',
+            item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
+          }),
+        )
+        this.transport.send(JSON.stringify({ type: 'response.create' }))
+      }
     }
   }
   session.Conversation = ProbeConversation
   const saved = session.settings
   syntheticMic(true)
+  let failures = 0
   try {
     const cases = ['live', 'realtime'].flatMap((mode) => [true, false].map((bargeIn) => ({ mode, bargeIn })))
     for (const { mode, bargeIn } of cases) {
@@ -119,7 +167,18 @@ async function verifyConversation(robot) {
       try {
         if (!(await session.start())) throw new Error('provider_startup')
         report({ phase: 'connected', mode, bargeIn, startMs: Performance.now() - startedAt })
-        await wait(1000)
+        const playbackAt = Performance.now()
+        conversation.requestPlayback(mode)
+        while (!(conversation.stats.audibleMs >= 250)) {
+          if (!session.active || Performance.now() - playbackAt >= 20000) throw new Error('provider_playback')
+          await wait(100)
+        }
+        report({ phase: 'playback', mode, bargeIn, playbackMs: Performance.now() - playbackAt })
+        // Capture is intentionally suspended during output when barge-in is off.
+        while (!bargeIn && conversation.stats.outputIdleMs < 500) {
+          if (!session.active || Performance.now() - playbackAt >= 40000) throw new Error('provider_playback')
+          await wait(100)
+        }
         const duration = (config.cameraProbeSeconds ?? 12) * 1000
         const began = Performance.now()
         let before = conversation.stats
@@ -141,6 +200,8 @@ async function verifyConversation(robot) {
             captured,
             overruns,
             underruns,
+            rendered: after.renderedSamples - before.renderedSamples,
+            audibleMs: after.audibleMs - before.audibleMs,
             active: !!session.active,
             io: Performance.stats(),
             memory: sample(),
@@ -149,11 +210,12 @@ async function verifyConversation(robot) {
           before = after
         }
       } catch (error) {
+        failures++
         report({
           phase: 'provider-failure',
           mode,
           bargeIn,
-          code: error.message === 'provider_capture' ? 'capture' : 'startup',
+          code: ['provider_capture', 'provider_playback'].includes(error.message) ? error.message : 'provider_startup',
         })
       } finally {
         const stopAt = Performance.now()
@@ -165,6 +227,7 @@ async function verifyConversation(robot) {
     syntheticMic(false)
     session.settings = saved
   }
+  if (failures) throw new Error('provider_checks_failed')
 }
 
 export function onContextCreated(robot) {
@@ -180,11 +243,7 @@ export function onContextCreated(robot) {
     await wait(1500)
     assertIdle('baseline')
     await measureDisplay(robot)
-    application.delegate('cameraPreview')
-    await wait(1100)
-    assertIdle('preview-on-screen')
-    await wait(5000)
-    assertIdle('preview-dismissed')
+    await verifyPreview()
     await captureCycles(robot)
     await singleCapture(robot)
     await verifyConversation(robot)

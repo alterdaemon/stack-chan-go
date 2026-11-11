@@ -6,7 +6,7 @@ import path from 'node:path'
 import { buildOutputDirectory } from './lib/build-output.mjs'
 
 const sdk = process.env.MODDABLE
-assert.ok(sdk, 'Set MODDABLE to SDK 9.5.0')
+assert.ok(sdk, 'Set MODDABLE to the configured SDK')
 const directory = path.join(buildOutputDirectory, 'avatar-dsl-render')
 mkdirSync(directory, { recursive: true })
 function run(command, args, options = {}) {
@@ -31,7 +31,7 @@ run('cc', [
 writeFileSync(path.join(directory, 'build.log'), run('npm', ['run', 'test:avatar-dsl:render:build']))
 const log = run(
   runner,
-  [path.join(buildOutputDirectory, 'bin/lin/m5stack/debug/avatar-dsl-render/mc.so'), directory, '6'],
+  [path.join(buildOutputDirectory, 'bin/lin/m5stack/instrument/avatar-dsl-render/mc.so'), directory, '6'],
   { env: { ...process.env, XSBUG_HOST: '127.0.0.1', XSBUG_PORT: '5099' }, timeout: 12000 },
 )
 writeFileSync(path.join(directory, 'render.log'), log)

@@ -135,7 +135,7 @@ class UpdateTests(unittest.TestCase):
                 self.assertEqual(len(files), 2)
                 self.assertTrue(all(p.suffix == '.bin' for p in files))
                 app_file = next(p for p in files if p.name.endswith('-app.bin'))
-                self.assertTrue(app_file.name.startswith(f'StackChan-Community-v0.0.0-r{package.REVISION}-'))
+                self.assertTrue(app_file.name.startswith(f'StackChan-Community-v0.0.0-R{package.REVISION}-'))
                 full_file = output / app_file.name.replace('-app.bin', '.bin')
                 self.assertEqual(app_file.read_bytes(), bytes(self.app))
                 full = full_file.read_bytes()

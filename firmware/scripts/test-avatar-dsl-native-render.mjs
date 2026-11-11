@@ -20,7 +20,7 @@ const output = path.join(directory, 'frames')
 mkdirSync(output, { recursive: true })
 const log = run(
   runner,
-  [path.join(buildOutputDirectory, 'bin/lin/m5stack/debug/avatar-dsl-native-render/mc.so'), output, '10'],
+  [path.join(buildOutputDirectory, 'bin/lin/m5stack/instrument/avatar-dsl-native-render/mc.so'), output, '10'],
   {
     env: { ...process.env, XSBUG_HOST: '127.0.0.1', XSBUG_PORT: '5099' },
     timeout: 18000,
