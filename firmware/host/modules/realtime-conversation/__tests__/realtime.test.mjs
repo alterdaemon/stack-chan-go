@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { LiveSession } from '../../../../mods/examples/openai_live_webrtc/session.js'
 import { summarizeWebSearchResponse } from '../web-search.js'
 
 let source = readFileSync(new URL('../core.js', import.meta.url), 'utf8')
@@ -23,6 +24,7 @@ function fixture(options = {}) {
     sent = [],
     transcripts = [],
     errors = [],
+    events = [],
     timers = new Set(),
     starts = []
   const c = new Conversation(
@@ -33,6 +35,7 @@ function fixture(options = {}) {
       search: { model: 'test-backend', reasoningEffort: 'medium' },
       onTranscript: (value) => transcripts.push(value),
       onError: (value) => errors.push(value),
+      onEvent: (value) => events.push(value),
       ...options,
     },
     {
@@ -72,7 +75,10 @@ function fixture(options = {}) {
           status: url.endsWith('/hangup') ? 200 : 201,
           ok: true,
           location: '/v1/realtime/calls/rtc_test',
-          text: async () => 'v=0\r\nanswer',
+          text: async () =>
+            options.mode === 'live'
+              ? JSON.stringify({ session: { id: 'sess_test' }, transport: { type: 'webrtc', sdp: 'v=0\r\nanswer' } })
+              : 'v=0\r\nanswer',
         })
       },
       setTimeout(fn, ms) {
@@ -92,6 +98,7 @@ function fixture(options = {}) {
     sent,
     transcripts,
     errors,
+    events,
     timers,
     starts,
     message,
@@ -120,11 +127,14 @@ function fixture(options = {}) {
     async connect() {
       const connecting = c.connect()
       await this.signal()
-      message({ type: 'session.created', session: { id: 'sess_test' } })
-      message({
-        type: 'session.updated',
-        session: { ...sent.at(-1).session, id: 'sess_test' },
-      })
+      if (options.mode === 'live') message({ type: 'session.started', session: { id: 'sess_test' } })
+      else {
+        message({ type: 'session.created', session: { id: 'sess_test' } })
+        message({
+          type: 'session.updated',
+          session: { ...sent.at(-1).session, id: 'sess_test' },
+        })
+      }
       this.setup = sent.splice(0)
       await connecting
     },
@@ -142,6 +152,75 @@ function fixture(options = {}) {
       })
       message({ type: 'response.done', response: { id: 'resp_test', status: 'completed' } })
     },
+  }
+}
+
+for (const mode of ['live', 'realtime']) {
+  for (const bargeIn of [false, true]) {
+    test(`integrated ${mode} retains LIVE and its resources after a response conflict (interruption ${bargeIn})`, async () => {
+      let f,
+        audioReleased = 0,
+        radioReleased = 0
+      const states = [],
+        idleTimers = new Set()
+      const session = new LiveSession({
+        Conversation: class {
+          constructor(options) {
+            f = fixture(options)
+          }
+          setVolume(value) {
+            f.c.setVolume(value)
+          }
+          connect() {
+            return f.connect()
+          }
+          close() {
+            return f.c.close()
+          }
+        },
+        settings: { mode, bargeIn, apiKey: 'test-only', volume: 0, instructions: 'Use Polish.' },
+        audio: { acquireExclusive: () => () => audioReleased++ },
+        acquireLowLatency: () => ({ close: () => radioReleased++ }),
+        networkReady: Promise.resolve({ status: 'connected' }),
+        amp: { sampleRate: 24000 },
+        onState: (state) => states.push(state),
+        Timer: {
+          set(fn, ms) {
+            const timer = { fn, ms }
+            idleTimers.add(timer)
+            return timer
+          },
+          clear(timer) {
+            idleTimers.delete(timer)
+          },
+        },
+      })
+      assert.equal(await session.start(), true)
+      const entry = session.active
+      for (const event_id of [undefined, null, 'tool_continue_old']) {
+        f.message({ type: 'error', error: { code: 'conversation_already_has_active_response', event_id } })
+        await flush()
+        assert.equal(session.active, entry)
+        assert.equal(entry.cancelled, false)
+        assert.equal(f.c.state, 'connected')
+        assert.equal(states.at(-1), 'connected')
+        assert.equal(f.closed, 0)
+        assert.equal(audioReleased, 0)
+        assert.equal(radioReleased, 0)
+      }
+      assert.equal(idleTimers.size, mode === 'live' ? 1 : 0)
+      // Real failures still reach the integrated control and release ownership.
+      f.message({ type: 'error', error: { code: 'invalid_api_key', message: 'Rejected' } })
+      if (mode === 'live') f.message({ type: 'session.closed', reason: 'close_requested' })
+      await session.stop()
+      assert.equal(session.active, undefined)
+      assert.equal(states.at(-1), 'error')
+      assert.equal(f.closed, 1)
+      assert.equal(audioReleased, 1)
+      assert.equal(radioReleased, 1)
+      assert.equal(idleTimers.size, 0)
+      assert.equal(f.timers.size, 0)
+    })
   }
 }
 async function requestedSession(f) {
@@ -418,3 +497,155 @@ test('a VAD/create race retries only continuation, with a bounded timer canceled
   await f.c.close()
   assert.equal(f.timers.size, 0)
 })
+
+for (const bargeIn of [false, true]) {
+  for (const eventID of [undefined, null]) {
+    test(`an uncorrelated active-response conflict preserves Mini and retries its pending continuation (interruption ${bargeIn}, ID ${eventID})`, async () => {
+      const f = fixture({ bargeIn })
+      await f.connect()
+      f.setSearch(Promise.resolve(searchReply()))
+      f.call()
+      await flush()
+      const conflict = {
+        type: 'error',
+        error: { code: 'conversation_already_has_active_response', event_id: eventID },
+      }
+      f.message(conflict)
+      assert.equal(f.errors.length, 0)
+      assert.equal(f.c.state, 'connected')
+      assert.deepEqual(f.events.at(-1), JSON.parse(JSON.stringify(conflict)))
+      const timer = [...f.timers].find((item) => item.ms === 250)
+      assert.ok(timer)
+      // An actual response completion resumes work before the retry timer.
+      f.message({ type: 'response.created', response: { id: 'vad_response' } })
+      f.message({ type: 'response.done', response: { id: 'vad_response', status: 'completed' } })
+      assert.equal(f.timers.size, 0)
+      f.message({ type: 'response.created', response: { id: 'answer' } })
+      f.message({ type: 'response.output_audio_transcript.delta', delta: 'Search answer.' })
+      f.message({ type: 'response.done', response: { id: 'answer', status: 'completed' } })
+      assert.deepEqual(f.transcripts, [{ role: 'assistant', delta: 'Search answer.' }])
+      assert.deepEqual(
+        f.sent.map((event) => event.type),
+        ['conversation.item.create', 'response.create', 'response.create'],
+      )
+      assert.equal(f.closed, 0)
+      await f.c.close()
+      assert.equal(f.closed, 1)
+      assert.equal(f.timers.size, 0)
+    })
+  }
+
+  test(`repeated active-response conflicts wait for completion after bounded retries (interruption ${bargeIn})`, async () => {
+    const f = fixture({ bargeIn })
+    await f.connect()
+    f.setSearch(Promise.resolve(searchReply()))
+    f.call()
+    await flush()
+    const continuation = f.sent.at(-1)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      f.message({
+        type: 'error',
+        error: { code: 'conversation_already_has_active_response', event_id: continuation.event_id },
+      })
+      assert.equal(f.errors.length, 0)
+      const timers = [...f.timers]
+      assert.equal(timers.length, attempt < 3 ? 1 : 0)
+      for (const timer of timers) {
+        f.timers.delete(timer)
+        timer.fn()
+      }
+    }
+    assert.equal(f.sent.filter((event) => event.type === 'response.create').length, 3)
+    f.message({ type: 'response.created', response: { id: 'busy_response' } })
+    f.message({ type: 'response.done', response: { id: 'unrelated_response', status: 'completed' } })
+    assert.equal(f.sent.filter((event) => event.type === 'response.create').length, 3)
+    f.message({ type: 'response.done', response: { id: 'busy_response', status: 'completed' } })
+    assert.equal(f.sent.filter((event) => event.type === 'response.create').length, 4)
+    assert.equal(f.sent.filter((event) => event.item?.type === 'function_call_output').length, 1)
+    f.message({ type: 'response.created', response: { id: 'answer' } })
+    f.message({ type: 'response.output_audio_transcript.delta', delta: 'Still connected.' })
+    f.message({ type: 'response.done', response: { id: 'answer', status: 'completed' } })
+    assert.equal(f.c.state, 'connected')
+    assert.equal(f.transcripts.at(-1).delta, 'Still connected.')
+    assert.equal(f.closed, 0)
+    assert.equal(f.timers.size, 0)
+    await f.c.close()
+    assert.equal(f.closed, 1)
+  })
+
+  test(`late or foreign conflicts never replay a completed tool result (interruption ${bargeIn})`, async () => {
+    const f = fixture({ bargeIn })
+    await f.connect()
+    f.setSearch(Promise.resolve(searchReply()))
+    f.call()
+    await flush()
+    const continuation = f.sent.at(-1)
+    f.message({
+      type: 'error',
+      error: { code: 'conversation_already_has_active_response', event_id: 'unrelated_command' },
+    })
+    assert.equal(f.errors.length, 0)
+    assert.equal(f.timers.size, 0)
+    assert.equal(f.sent.length, 2)
+    f.message({ type: 'response.created', response: { id: 'answer' } })
+    f.message({ type: 'error', error: { code: 'conversation_already_has_active_response' } })
+    assert.equal(f.errors.length, 0)
+    assert.equal(f.timers.size, 0)
+    f.message({ type: 'response.done', response: { id: 'answer', status: 'completed' } })
+    for (const event_id of [continuation.event_id, 'unrelated_command', undefined]) {
+      f.message({ type: 'error', error: { code: 'conversation_already_has_active_response', event_id } })
+      assert.equal(f.errors.length, 0)
+      assert.equal(f.timers.size, 0)
+      assert.equal(f.sent.length, 2)
+    }
+    f.message({ type: 'response.created', response: { id: 'next_turn' } })
+    f.message({ type: 'response.output_audio_transcript.delta', delta: 'Next turn.' })
+    f.message({ type: 'response.done', response: { id: 'next_turn', status: 'completed' } })
+    assert.equal(f.c.state, 'connected')
+    assert.equal(f.transcripts.at(-1).delta, 'Next turn.')
+    f.message({ type: 'error', error: { code: 'invalid_api_key', message: 'Rejected' } })
+    assert.equal(f.errors.at(-1).code, 'invalid_api_key')
+    await f.c.close()
+    assert.equal(f.timers.size, 0)
+  })
+
+  test(`STOP cancels a pending conflict retry (interruption ${bargeIn})`, async () => {
+    const f = fixture({ bargeIn })
+    await f.connect()
+    f.setSearch(Promise.resolve(searchReply()))
+    f.call()
+    await flush()
+    f.message({ type: 'error', error: { code: 'conversation_already_has_active_response' } })
+    assert.equal(f.errors.length, 0)
+    assert.equal(f.timers.size, 1)
+    await f.c.close()
+    assert.equal(f.timers.size, 0)
+    assert.equal(f.sent.filter((event) => event.type === 'response.create').length, 1)
+    assert.equal(f.closed, 1)
+  })
+
+  test(`a known active response resumes the rejected continuation without polling (interruption ${bargeIn})`, async () => {
+    const f = fixture({ bargeIn })
+    await f.connect()
+    f.setSearch(Promise.resolve(searchReply()))
+    f.call()
+    await flush()
+    const continuation = f.sent.at(-1)
+    f.message({ type: 'response.created', response: { id: 'vad_response' } })
+    f.message({
+      type: 'error',
+      error: { code: 'conversation_already_has_active_response', event_id: continuation.event_id },
+    })
+    assert.equal(f.errors.length, 0)
+    assert.equal(f.timers.size, 0)
+    assert.equal(f.sent.length, 2)
+    f.message({ type: 'response.done', response: { id: 'vad_response', status: 'completed' } })
+    assert.equal(f.sent.length, 3)
+    assert.equal(f.sent.at(-1).event_id, continuation.event_id)
+    f.message({ type: 'response.created', response: { id: 'answer' } })
+    f.message({ type: 'response.done', response: { id: 'answer', status: 'completed' } })
+    assert.equal(f.sent.filter((event) => event.item?.type === 'function_call_output').length, 1)
+    await f.c.close()
+    assert.equal(f.timers.size, 0)
+  })
+}

@@ -433,6 +433,7 @@ export default class Conversation {
         case 'input_audio_buffer.speech_started':
           if (this.#realtime && this.#options.bargeIn) {
             this.#tools?.cancelPending()
+            this.#cancelTimer(this.#continuationTimer)
             this.#continuation = undefined
             this.#sentContinuation = undefined
           }
@@ -488,7 +489,10 @@ export default class Conversation {
         case 'response.done':
           if (this.#realtime) {
             if (message.response?.usage) this.#usage = { ...message.response.usage }
-            if (message.response?.id === this.#activeResponse) this.#activeResponse = undefined
+            if (message.response?.id === this.#activeResponse) {
+              this.#activeResponse = undefined
+              if (!this.#continuation && !this.#continuationInFlight) this.#sentContinuation = undefined
+            }
             if (this.#continuation && !this.#activeResponse) this.#continueResponse()
           }
           break
@@ -539,30 +543,27 @@ export default class Conversation {
           break
         }
         case 'error': {
-          if (
-            this.#realtime &&
-            this.#sentContinuation &&
-            message.error?.code === 'conversation_already_has_active_response' &&
-            message.error?.event_id === this.#sentContinuation?.event_id &&
-            this.#continuationAttempts < 3
-          ) {
-            // VAD can start a response before response.created reaches the device.
-            // Retry only our continuation; never resend the function result.
-            this.#cancelTimer(this.#continuationTimer)
-            this.#continuationInFlight = false
-            this.#continuation ??= this.#sentContinuation
-            this.#continuationTimer = this.#after(250, () => this.#continueResponse())
+          if (message.error?.code === 'conversation_already_has_active_response') {
+            // This rejects a command, not the session, with either interruption
+            // policy. event_id is optional; attribute an absent ID only while
+            // our single continuation is awaiting a response.
+            const eventID = message.error.event_id
+            if (
+              this.#realtime &&
+              this.#sentContinuation &&
+              (eventID === this.#sentContinuation.event_id || (eventID == null && this.#continuationInFlight))
+            ) {
+              this.#cancelTimer(this.#continuationTimer)
+              this.#continuationInFlight = false
+              this.#continuation ??= this.#sentContinuation
+              // VAD may win before response.created reaches the device. Bound
+              // speculative retries, then wait for response.done. Never replay
+              // function_call_output or retry an unrelated/stale command.
+              if (!this.#activeResponse && this.#continuationAttempts < 3)
+                this.#continuationTimer = this.#after(250, () => this.#continueResponse())
+            }
             break
           }
-          if (
-            this.#realtime &&
-            this.#options.bargeIn &&
-            !this.#sentContinuation &&
-            message.error?.code === 'conversation_already_has_active_response' &&
-            typeof message.error?.event_id === 'string' &&
-            message.error.event_id.startsWith('tool_continue_')
-          )
-            break
           const error = attachErrorMetadata(
             new ConversationError(
               message.error?.message ?? 'Live command rejected',
@@ -608,6 +609,7 @@ export default class Conversation {
   }
   #continueResponse() {
     if (!this.#continuation || this.#activeResponse || this.#continuationInFlight || this.#state !== 'connected') return
+    this.#cancelTimer(this.#continuationTimer)
     const message = this.#continuation
     this.#continuation = undefined
     this.#sentContinuation = message

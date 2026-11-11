@@ -1,6 +1,10 @@
 Fork Community v2.1.0: 2.1.0-R1 + GPT-Live 1 / GPT-Realtime 2.1 Mini (M5StackChan CoreS3).
 Upstream: https://github.com/stack-chan/stack-chan (tag v2.1.0).
 Zmiany forka i instalacja: CHANGELOG-MOD.md.
+Poprawka w ramach R1: konflikt conversation_already_has_active_response nie zamyka
+sesji w Live ani Realtime. Mini ponawia tylko odrzucona kontynuacje, z limitem
+i oczekiwaniem na koniec aktywnej odpowiedzi. Wynik narzedzia nie jest powielany.
+Testy i ograniczenia: docs/release-notes/v2.1.0-R1.md (Response-conflict amendment).
 R15: Po podgladzie kamera CoreS3 przestaje przechwytywac klatki i zwalnia bufory.
 R14: Oczekiwanie na SPI przez powiadomienia zamiast aktywnej petli.
 Bufory AEC pozostaja w PSRAM po ocenie zysku i zapasu pamieci.
