@@ -11,6 +11,7 @@ import {
   hostApplicationName,
   moddableOutputArguments,
 } from './lib/build-output.mjs'
+import { prepareBuildProfile } from './lib/build-profile.mjs'
 import { aliases, devices, resolveDevice } from './lib/devices.mjs'
 import { validateFirmwareBundleTarget } from './lib/firmware-bundle.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
@@ -74,6 +75,7 @@ let subprocessEnvironment = uploadPort ? { ...process.env, UPLOAD_PORT: uploadPo
 let realtime = false
 let integratedLive = false
 let solutionDirectory
+let commitBuildProfile
 if (!dryRun && deviceName === 'm5stackchan_cores3' && ['build', 'flash', 'deploy', 'debug'].includes(command)) {
   try {
     realtime = manifestUsesWebRtc(manifest, deviceName)
@@ -105,6 +107,14 @@ if (
   command !== 'mod:build'
 ) {
   try {
+    commitBuildProfile = prepareBuildProfile({
+      outputDirectory: buildOutputDirectory,
+      platformName: deviceName,
+      mode: buildMode,
+      applicationName: hostApplicationName,
+      manifest,
+      moddableDirectory: process.env.MODDABLE,
+    })
     prepareCoreS3IdfDependencies({
       outputDirectory: buildOutputDirectory,
       platformName: deviceName,
@@ -273,6 +283,8 @@ switch (command) {
     printHelp()
     process.exit(1)
 }
+
+commitBuildProfile?.()
 
 /**
  * Runs a firmware tool or prints the command during a dry run.

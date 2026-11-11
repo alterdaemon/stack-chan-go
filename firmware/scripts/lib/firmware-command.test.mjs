@@ -486,6 +486,12 @@ function createFirmwareWrapperFixture(deviceName = 'm5stackchan_cores3', mode = 
   const fakeModdable = path.join(root, 'moddable')
   mkdirSync(path.join(fakeModdable, 'tools'), { recursive: true })
   writeFileSync(path.join(fakeModdable, 'tools', 'VERSION'), '8.3.1\n')
+  const sdkMainDirectory = path.join(fakeModdable, 'build/devices/esp32/lib/main')
+  mkdirSync(sdkMainDirectory, { recursive: true })
+  writeFileSync(
+    path.join(sdkMainDirectory, 'main.c'),
+    'void app_main() {\n xTaskCreate(loop_task, "main", 4096, NULL, 4, NULL);\n}\n',
+  )
   const partitionDirectory = path.join(
     fakeModdable,
     'build',

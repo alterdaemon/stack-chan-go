@@ -10,6 +10,7 @@ import {
   hostApplicationName,
   moddableOutputArguments,
 } from './lib/build-output.mjs'
+import { prepareBuildProfile } from './lib/build-profile.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
 import { prepareCoreS3VersionSdkconfig, prepareSdkconfigManifest } from './lib/moddable-version.mjs'
 import { manifestUsesModule, manifestUsesWebRtc, prepareWebRtcSolution } from './lib/webrtc-solution.mjs'
@@ -31,6 +32,7 @@ const platformName = platformArgument.split(/[/:\\]/).at(-1)
 const manifest = args.find((arg) => arg.endsWith('.json'))
 const isCoreS3 = ['m5stack_cores3', 'm5stackchan_cores3'].includes(platformName)
 let usesWebRtc = false
+let commitBuildProfile
 try {
   usesWebRtc = Boolean(manifest) && isCoreS3 && manifestUsesWebRtc(manifest, platformName)
   const solutionDirectory = usesWebRtc ? prepareWebRtcSolution() : undefined
@@ -38,6 +40,14 @@ try {
   if (manifest && isCoreS3) {
     const modeArgs = args.filter((arg) => ['-d', '-dn', '-dl', '-dx', '-i'].includes(arg))
     const mode = modeArgs.some((arg) => arg !== '-i') ? 'debug' : modeArgs.includes('-i') ? 'instrument' : 'release'
+    commitBuildProfile = prepareBuildProfile({
+      outputDirectory: buildOutputDirectory,
+      platformName,
+      mode,
+      applicationName: hostApplicationName,
+      manifest,
+      moddableDirectory: process.env.MODDABLE,
+    })
     prepareCoreS3IdfDependencies({
       outputDirectory: buildOutputDirectory,
       platformName,
@@ -80,6 +90,7 @@ if (result.error) {
   process.exit(1)
 }
 
+if (result.status === 0) commitBuildProfile?.()
 process.exit(result.status ?? 1)
 
 function targetsM5StackChanCoreS3(values) {
