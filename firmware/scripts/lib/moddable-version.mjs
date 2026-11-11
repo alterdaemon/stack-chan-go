@@ -157,6 +157,22 @@ export function prepareCoreS3VersionSdkconfig({
 export const renderCoreS3VersionSdkconfig = renderVersionSdkconfig
 
 /**
+ * Applies the SDK configuration after the board manifest. Keep the wrapper
+ * next to the application so mcconfig resolves relative font resources.
+ * The caller removes the returned wrapper after running mcconfig.
+ */
+export function prepareSdkconfigManifest(manifest, sdkconfigDirectory, target, outputDirectory = buildOutputDirectory) {
+  const application = path.resolve(manifest)
+  const directory = path.join(outputDirectory, 'generated', 'host-manifests', target)
+  const override = path.join(directory, 'sdkconfig.json')
+  const wrapper = path.join(path.dirname(application), `stack-chan-host.${target}.${process.pid}.manifest.json`)
+  mkdirSync(directory, { recursive: true })
+  writeFileSync(override, JSON.stringify({ build: { SDKCONFIGPATH: sdkconfigDirectory } }))
+  writeFileSync(wrapper, JSON.stringify({ include: [application, override] }))
+  return wrapper
+}
+
+/**
  * Validates a version before embedding it in a quoted Kconfig value and the
  * 32-byte esp_app_desc version field.
  * @param {string} version - Candidate version.

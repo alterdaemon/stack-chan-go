@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import path from 'node:path'
 import {
   assertNoCustomBuildOutput,
@@ -15,7 +15,12 @@ import { aliases, devices, resolveDevice } from './lib/devices.mjs'
 import { validateFirmwareBundleTarget } from './lib/firmware-bundle.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
 import { installModArchive, resolveModArchivePath } from './lib/mod-flash.mjs'
-import { prepareCoreS3VersionSdkconfig, prepareVersionSdkconfig, readModdableVersion } from './lib/moddable-version.mjs'
+import {
+  prepareCoreS3VersionSdkconfig,
+  prepareSdkconfigManifest,
+  prepareVersionSdkconfig,
+  readModdableVersion,
+} from './lib/moddable-version.mjs'
 import { manifestUsesModule, manifestUsesWebRtc, prepareWebRtcSolution } from './lib/webrtc-solution.mjs'
 
 const command = process.argv[2]
@@ -114,13 +119,15 @@ if (
   }
 }
 
-if (!dryRun && deviceName === 'm5stackchan_cores3' && command !== 'mod' && command !== 'mod:build') {
+if (!dryRun && deviceName === 'm5stackchan_cores3' && ['build', 'flash', 'deploy', 'debug'].includes(command)) {
   try {
     const versionSdkconfig = prepareCoreS3VersionSdkconfig({
       realtime,
       realtimePerformance: integratedLive || path.basename(manifest) === 'manifest_openai_live.json',
     })
     subprocessEnvironment = { ...subprocessEnvironment, SDKCONFIGPATH: versionSdkconfig.directory }
+    toolManifest = prepareSdkconfigManifest(manifest, versionSdkconfig.directory, deviceName)
+    process.on('exit', () => rmSync(toolManifest, { force: true }))
   } catch (error) {
     console.error(`[stack-chan] CoreS3 firmware version could not be prepared: ${error.message}`)
     process.exit(1)
@@ -143,17 +150,7 @@ if (!dryRun && device.sdkconfigTarget && ['build', 'flash', 'deploy', 'debug'].i
       ),
     })
     expectedDescriptorVersion = versionSdkconfig.version
-    // The included board manifest overrides SDKCONFIGPATH from the environment.
-    // Apply this last, as the standard release bundle wrapper does.
-    const overrideDirectory = path.join(buildOutputDirectory, 'generated', 'host-manifests', deviceName)
-    const overrideManifest = path.join(overrideDirectory, 'sdkconfig.json')
-    mkdirSync(overrideDirectory, { recursive: true })
-    writeFileSync(overrideManifest, JSON.stringify({ build: { SDKCONFIGPATH: versionSdkconfig.directory } }))
-    toolManifest = path.join(
-      path.dirname(path.resolve(manifest)),
-      `stack-chan-host.${deviceName}.${process.pid}.manifest.json`,
-    )
-    writeFileSync(toolManifest, JSON.stringify({ include: [path.resolve(manifest), overrideManifest] }))
+    toolManifest = prepareSdkconfigManifest(manifest, versionSdkconfig.directory, deviceName)
     process.on('exit', () => rmSync(toolManifest, { force: true }))
   } catch (error) {
     console.error(`[stack-chan] firmware version could not be prepared: ${error.message}`)

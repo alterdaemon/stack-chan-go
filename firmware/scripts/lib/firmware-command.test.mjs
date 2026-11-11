@@ -278,10 +278,14 @@ test('build wrappers select WebRTC settings from the manifest, not an inherited 
     writeFileSync(
       fakeMcconfig,
       `#!/usr/bin/env node
+const assert = require('node:assert/strict')
 const { readFileSync, writeFileSync } = require('node:fs')
 const path = require('node:path')
+const wrapper = JSON.parse(readFileSync(process.argv.at(-1), 'utf8'))
+const override = JSON.parse(readFileSync(wrapper.include.at(-1), 'utf8'))
+assert.equal(override.build.SDKCONFIGPATH, process.env.SDKCONFIGPATH)
 writeFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG,
-  readFileSync(path.join(process.env.SDKCONFIGPATH, 'sdkconfig.defaults')))
+  readFileSync(path.join(override.build.SDKCONFIGPATH, 'sdkconfig.defaults')))
 `,
     )
     const run = (manifestPath, checkout, runner) => {
@@ -366,7 +370,13 @@ const platform = args[args.indexOf('-p') + 1].split(/[/:\\\\]/).at(-1)
 const mode = args.some(arg => ['-d', '-dn', '-dl', '-dx'].includes(arg)) ? 'debug' : args.includes('-i') ? 'instrument' : 'release'
 const tmp = path.join(output, 'tmp/esp32', platform, mode, 'stack-chan-host')
 const project = path.join(tmp, 'xsProj-esp32s3')
-const manifestPath = args.find(arg => arg.endsWith('.json'))
+let manifestPath = args.find(arg => arg.endsWith('.json'))
+if (platform === 'm5stackchan_cores3') {
+  const wrapper = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const override = JSON.parse(readFileSync(wrapper.include.at(-1), 'utf8'))
+  assert.equal(override.build.SDKCONFIGPATH, process.env.SDKCONFIGPATH)
+  manifestPath = wrapper.include[0]
+}
 const realtime = Boolean(JSON.parse(readFileSync(manifestPath, 'utf8')).modules?.realtimeConversation)
 const idf = readFileSync(path.join(project, 'main/idf_component.yml'), 'utf8')
 assert.ok(idf.includes('espressif/esp32-camera:'))
@@ -503,10 +513,18 @@ function createFirmwareWrapperFixture(deviceName = 'm5stackchan_cores3', mode = 
   writeFileSync(
     fakeMcconfig,
     `#!/usr/bin/env node
+const assert = require('node:assert/strict')
 const { appendFileSync, existsSync, readFileSync } = require('node:fs')
 const path = require('node:path')
 
 const args = process.argv.slice(2)
+if (${JSON.stringify(deviceName)} === 'm5stackchan_cores3') {
+  const manifestIndex = args.findIndex(arg => arg.endsWith('.json'))
+  const wrapper = JSON.parse(readFileSync(args[manifestIndex], 'utf8'))
+  const override = JSON.parse(readFileSync(wrapper.include.at(-1), 'utf8'))
+  assert.equal(override.build.SDKCONFIGPATH, process.env.SDKCONFIGPATH)
+  args[manifestIndex] = wrapper.include[0]
+}
 appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(args) + '\\n')
 const outputIndex = args.indexOf('-o')
 const outputDirectory = args[outputIndex + 1]

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import {
   assertNoCustomBuildOutput,
@@ -10,8 +11,8 @@ import {
   moddableOutputArguments,
 } from './lib/build-output.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
-import { prepareCoreS3VersionSdkconfig } from './lib/moddable-version.mjs'
-import { manifestUsesWebRtc, prepareWebRtcSolution } from './lib/webrtc-solution.mjs'
+import { prepareCoreS3VersionSdkconfig, prepareSdkconfigManifest } from './lib/moddable-version.mjs'
+import { manifestUsesModule, manifestUsesWebRtc, prepareWebRtcSolution } from './lib/webrtc-solution.mjs'
 
 const args = process.argv.slice(2)
 
@@ -54,9 +55,16 @@ if (targetsM5StackChanCoreS3(args)) {
   try {
     const versionSdkconfig = prepareCoreS3VersionSdkconfig({
       realtime: usesWebRtc,
-      realtimePerformance: path.basename(manifest ?? '') === 'manifest_openai_live.json',
+      realtimePerformance:
+        path.basename(manifest ?? '') === 'manifest_openai_live.json' ||
+        (manifest && manifestUsesModule(manifest, platformName, 'openai-live-integrated')),
     })
     subprocessEnvironment = { ...subprocessEnvironment, SDKCONFIGPATH: versionSdkconfig.directory }
+    if (manifest) {
+      const wrapper = prepareSdkconfigManifest(manifest, versionSdkconfig.directory, platformName)
+      args[args.indexOf(manifest)] = wrapper
+      process.on('exit', () => rmSync(wrapper, { force: true }))
+    }
   } catch (error) {
     console.error(`[stack-chan] CoreS3 firmware version could not be prepared: ${error.message}`)
     process.exit(1)
