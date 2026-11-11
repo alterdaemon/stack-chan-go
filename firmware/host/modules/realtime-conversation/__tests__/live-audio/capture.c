@@ -17,7 +17,6 @@ static unsigned permittedBlocks;
 static _Thread_local unsigned taskPriority;
 static const unsigned uiPriority = 6, ioPriority = 20, sourcePriority = 15;
 static bool delayDsp, delayedPlayback;
-static bool realtimeAudio;
 
 UBaseType_t uxTaskPriorityGet(void *task) { assert(!task); return taskPriority; }
 void vTaskPrioritySet(void *task, UBaseType_t priority) {
@@ -118,8 +117,7 @@ int livePitchRender(LivePitch *pitch, LivePitchRead read, void *context,
 void aec_process(const aec_handle_t *aec, int16_t *mic, int16_t *ref, int16_t *clean) {
     assert(pthread_equal(pthread_self(), consumer));
     assert(taskPriority == session->dspPriority);
-    if (realtimeAudio) assert(taskPriority > uiPriority && taskPriority < sourcePriority);
-    else assert(taskPriority == uiPriority);
+    assert(taskPriority > uiPriority && taskPriority < sourcePriority);
     assert(!((uintptr_t)mic % 16) && !((uintptr_t)ref % 16) && !((uintptr_t)clean % 16));
     if (delayDsp && !atomic_load(&dspCalls)) {
         // The mouth meter must already follow I2S before capture DSP finishes.
@@ -159,7 +157,7 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     LiveAudio audio = {.input = &input, .output = &output,
         .aec = interruption ? &aec : NULL, .pitch = semitones ? &pitch : NULL,
         .bargeIn = interruption, .chunk = interruption ? aec.count : 160,
-        .dspPriority = realtimeAudio ? uiPriority + 1 : uiPriority};
+        .dspPriority = uiPriority + 1};
     size_t samples = BLOCK * (8 + DMA_BLOCKS) + audio.chunk * (interruption ? 5 : 3);
     audio.buffers = aligned_alloc(16, samples * sizeof(int16_t));
     assert(audio.buffers);
@@ -214,8 +212,6 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     free(audio.buffers);
 }
 int main(void) {
-  for (unsigned mode = 0; mode < 2; mode++) {
-    realtimeAudio = mode != 0;
     for (int pitch = -6; pitch <= 6; pitch++) {
         run(false, pitch, false, false, false);
         run(true, pitch, false, true, false);
@@ -224,6 +220,5 @@ int main(void) {
     }
     run(true, 0, true, true, false);
     run(true, 3, true, true, false);
-  }
     return 0;
 }

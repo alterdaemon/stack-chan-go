@@ -355,6 +355,7 @@ static void audioTask(void *ctx)
 
 int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch, bool realtime)
 {
+  (void)realtime; // Both conversation modes now share the capture schedule.
   atomic_store(&quiesceAudio, false);
   int err = stackchanMediaAdapter();
   if (!err) err = stackchanInstallOpusPolicy();
@@ -363,7 +364,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	LiveAudio *a = calloc(1, sizeof(*a));
 	if (!a) return ESP_ERR_NO_MEM;
 	*out = a;
-    a->dspPriority = realtime ? 7 : 6;
+    // Serve paired capture before priority-6 XS work outside its UI windows.
+    a->dspPriority = 7;
     a->stage = "pitch_open";
     if ((err = livePitchOpen(&a->pitch, pitch))) return err;
 	atomic_store(&a->volume, 512);

@@ -157,6 +157,9 @@ async function verifyConversation(robot) {
             observed.search++
             observed.sources += output.sources?.length ?? 0
             observed.searchError = !!(result.error ?? output.error)
+            const code = result.error ?? output.error
+            if (typeof code === 'string' && /^[a-z][a-z0-9_]{0,63}$/i.test(code)) observed.searchErrorCode = code
+            if (Number.isInteger(output.status)) observed.searchStatus = output.status
             settings.onToolResult?.(result)
           },
         },

@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
+import { prepareModdableMain } from './moddable-main.mjs'
 import { webRtcComponents } from './webrtc-solution.mjs'
 
 const dependenciesByPlatform = {
@@ -35,6 +36,7 @@ export function prepareCoreS3IdfDependencies({
   mode,
   realtime = false,
   solutionDirectory,
+  moddableDirectory = process.env.MODDABLE,
 }) {
   if (!outputDirectory) throw new Error('Build output directory is required')
   const dependencies = dependenciesByPlatform[platformName]
@@ -92,6 +94,7 @@ export function prepareCoreS3IdfDependencies({
   // POSIX. RT needs both entries seeded before make, including after a target
   // clean, to avoid concurrent manifest writes and reconfigure reading too early.
   if (manifest !== originalManifest) writeFileSync(manifestPath, manifest)
+  prepareModdableMain({ moddableDirectory, mainDirectory, realtime })
   console.log(`[stack-chan] prepared IDF dependencies: ${manifestPath}`)
   return manifestPath
 }

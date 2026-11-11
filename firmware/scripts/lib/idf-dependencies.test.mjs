@@ -138,6 +138,13 @@ test('discovers local WebRTC components without editing their sources and isolat
   const { mkdirSync, writeFileSync, realpathSync } = await import('node:fs')
   const outputDirectory = mkdtempSync(path.join(tmpdir(), 'stackchan-realtime-deps-'))
   const solutionDirectory = path.join(outputDirectory, 'solution')
+  const moddableDirectory = path.join(outputDirectory, 'sdk')
+  const sdkMain = path.join(moddableDirectory, 'build/devices/esp32/lib/main')
+  mkdirSync(sdkMain, { recursive: true })
+  writeFileSync(
+    path.join(sdkMain, 'main.c'),
+    'void app_main() {\n xTaskCreate(loop_task, "main", 4096, NULL, 4, NULL);\n}\n',
+  )
   const names = ['esp_webrtc', 'esp_peer', 'media_lib_utils', 'webrtc_utils', 'av_render']
   for (const name of names) {
     const component = path.join(solutionDirectory, 'components', name)
@@ -147,6 +154,7 @@ test('discovers local WebRTC components without editing their sources and isolat
   const options = {
     outputDirectory,
     solutionDirectory,
+    moddableDirectory,
     platformName: 'm5stackchan_cores3',
     applicationName: 'stack-chan-host',
     mode: 'release',
