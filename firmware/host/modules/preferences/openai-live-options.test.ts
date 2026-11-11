@@ -35,7 +35,7 @@ test('standby accepts integer seconds and rejects missing, zero, fractional and 
 })
 
 test('default style preserves context exactly; selected styles add delivery without mutating it', () => {
-  const context = 'Mów po polsku. Give one step at a time.'
+  const context = 'Speak English. Give one step at a time.'
   assert.equal(liveStyleInstructions(context, 'default'), context)
   assert.equal(liveStyleInstructions(context, 'unknown'), context)
   const variants = ['calm', 'expressive'].map((style) => liveStyleInstructions(context, style))

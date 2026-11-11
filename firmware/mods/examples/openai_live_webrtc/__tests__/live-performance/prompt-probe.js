@@ -1,12 +1,13 @@
 // Device/API test. Never writes preferences or prints credentials/instructions.
-import Conversation from 'realtimeConversation/core'
+
 import Resource from 'Resource'
-import Performance from 'io-performance'
+import Conversation from 'realtimeConversation/core'
 import fetch from 'realtimeConversation/http'
 import Transport from 'realtimeConversation/transport'
+import Performance from 'io-performance'
+import config from 'mc/config'
 import { onContextCreated as installLive } from 'openai-live-integrated'
 import Timer from 'timer'
-import config from 'mc/config'
 
 const wait = (ms) => new Promise((resolve) => Timer.set(resolve, ms))
 const report = (value) => trace(`[prompt-probe] ${JSON.stringify(value)}\n`)
@@ -168,7 +169,7 @@ export function onContextCreated(robot) {
       await wait(4000)
       await until(() => current.stats.outputIdleMs >= 500, 20000, 'audio_not_idle')
       if (variant === 'saved_search') {
-        current.say('Wyszukaj w internecie aktualną pogodę w Warszawie i podaj źródło.')
+        current.say('Search the web for the current weather in Warsaw and cite the source.')
         await until(() => observed.tools > 0, 60000, 'search_result_missing')
         if (observed.toolError || !observed.sources) throw new Error('search_result_failed')
         await until(
@@ -220,7 +221,7 @@ export function onContextCreated(robot) {
         await wait(1500)
       }
       await ask('initial')
-      if (variant.startsWith('saved_')) await ask('arithmetic', 'Czy dwa plus dwa daje pięć?')
+      if (variant.startsWith('saved_')) await ask('arithmetic', 'Does two plus two equal five?')
       if (variant === 'marker') {
         const before = observed.updates
         current.applyInstructions()

@@ -122,7 +122,7 @@ test('empty key and unavailable network never acquire audio or create a session'
 })
 
 test('Mini frames the saved prompt once per start without changing settings or Live instructions', async () => {
-  const instructions = 'Odpowiadaj krótko. Zachowaj znak: żółw.\nUse the configured character.'
+  const instructions = 'Answer briefly. Preserve Unicode: 🐢.\nUse the configured character.'
   const settings = Object.freeze({ apiKey: 'test-only', mode: 'realtime', bargeIn: false, instructions })
   const f = fixture({ settings })
   await f.session.start()

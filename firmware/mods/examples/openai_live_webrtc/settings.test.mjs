@@ -72,7 +72,7 @@ test('nested read-only defaults become independent mutable session data', () => 
 test('saved credentials and context are read afresh; deleting the key disables starting', () => {
   const values = new Map([
     ['ai.token', '  saved-key  '],
-    ['ai.context', ' Krótko po polsku. '],
+    ['ai.context', ' Be brief. '],
     ['tts.volume', '0.35'],
   ])
   const defaults = { apiKey: '', instructions: 'default', volume: 0.1 }
@@ -80,7 +80,7 @@ test('saved credentials and context are read afresh; deleting the key disables s
   assert.deepEqual(read(), {
     mode: 'live',
     apiKey: 'saved-key',
-    instructions: 'Krótko po polsku.',
+    instructions: 'Be brief.',
     volume: 0.35,
     bargeIn: false,
     voice: 'marin',
@@ -158,7 +158,7 @@ test('backend settings and hosted search are forwarded without adding instructio
 })
 
 test('voice, pitch and style reload saved values and recover from invalid storage', () => {
-  const defaults = { voice: 'marin', pitch: 0, style: 'default', instructions: 'Mów po polsku.' }
+  const defaults = { voice: 'marin', pitch: 0, style: 'default', instructions: 'Speak English.' }
   const saved = new Map()
   const read = () => readLiveSettings(defaults, (domain, key) => saved.get(`${domain}.${key}`))
   saved.set('openailive.voice', 'cedar')

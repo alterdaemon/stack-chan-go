@@ -231,7 +231,7 @@ async function requestedSession(f) {
   return JSON.parse(body.get('session'))
 }
 test('Mini waits for the requested instructions before opening microphone input', async () => {
-  const f = fixture({ instructions: 'Odpowiadaj wyłącznie: miedziany pingwin.' })
+  const f = fixture({ instructions: 'Reply only: copper penguin.' })
   const connecting = f.c.connect()
   await f.signal()
   const requested = await requestedSession(f)
