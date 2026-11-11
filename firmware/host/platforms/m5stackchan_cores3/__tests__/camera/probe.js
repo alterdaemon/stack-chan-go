@@ -304,7 +304,6 @@ async function verifyConversation(robot) {
     const cases = ['live', 'realtime']
       .filter((mode) => !config.cameraProbeMode || mode === config.cameraProbeMode)
       .flatMap((mode) => [true, false].map((bargeIn) => ({ mode, bargeIn })))
-      .filter(({ bargeIn }) => config.cameraProbeBargeIn === undefined || bargeIn === config.cameraProbeBargeIn)
     for (const { mode, bargeIn } of cases) {
       session.settings = {
         ...saved,
@@ -378,12 +377,16 @@ async function verifyConversation(robot) {
             if (!session.active || Performance.now() - injectedAt >= 20000) throw new Error('provider_input')
             await wait(100)
           }
+          const inputIO = Performance.stats()
+          if (!(inputIO.injectedSamples > 0 && inputIO.sentSamples > 0 && inputIO.sentPeak > 0))
+            throw new Error('provider_input')
           record({
             phase: 'input-accepted',
             mode,
             bargeIn,
             elapsedMs: Performance.now() - injectedAt,
             observed: { ...conversation.observed },
+            io: inputIO,
           })
         }
         if (bargeIn && config.cameraProbeSearch) {
