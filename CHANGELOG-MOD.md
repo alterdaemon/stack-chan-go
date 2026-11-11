@@ -29,6 +29,8 @@ Document explicitly requested release publication, concise descriptions and the
 `Stack-chan community-mod <tag>` release title convention.
 Summarize fork features and ready-to-flash BINs in the root README; state the
 quick-start, performance and upstream-sync goal in both fork README introductions.
+Require agents to keep both READMEs, changelog, version metadata and release BINs
+consistent, with publication only on explicit request.
 
 ## 2.1.0
 
