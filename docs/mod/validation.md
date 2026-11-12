@@ -599,3 +599,29 @@ with the SDK environment for manifest checks and private temporary/cache paths.
 XS simulator checks are unavailable because `xvfb-run` is absent; no simulator
 pass is claimed. Web source/settings behavior is unchanged; the release wrapper
 rebuilds the embedded Settings assets.
+
+
+The managed CoreS3 release build (`npm run build -- --mode=release`) passed from
+clean implementation commit `c197013cf7b5ac05fb9826b6cfe24ee71f63cb4d`, with no
+source overlay, in a short temporary checkout to avoid the SDK argument limit.
+Embedded Settings rebuilt successfully. Independent verification confirmed the
+source commit/tree, ESP32-S3 chip, supported partition entries and write/erase
+bounds, matching build/app/full bytes, same-build bootloader/table and erased
+`0xFF` gaps. Esptool reported valid checksums and validation hashes. Effective
+SDK configuration explicitly disables partition-table MD5, as in prior R3.
+
+| Amended R3 image | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Application | 8,565,952 | `f8d2e0bba9a7bc0876823a9b746062285410abe4cf4bd1458c1831a8afca386d` |
+| Full | 16,777,216 | `c3d5ebbda7b9dc41e8db7eb6e1597e7e446317227336ef11a81ad6eeaaa97efa` |
+
+Both images retain the echo-filter fix and three conversation choices from R3.
+The pair remains in workspace `internal/release-packages/`. Before replacement,
+the prior R3 pair was copied and rehashed under
+`internal/archives/2.1.0-R3-before-live-interruption-recovery/`; its app/full hashes
+remain `dfb5f06d79017f4a0cf321cbf20564c139d068f869606f4ebee0a834027121d6` and
+`7b1a1b6ba19a1b719e1407ba5aca1b4dd8dd16c02c5ac384b98419ac121c24b3`.
+Logs, source/image provenance, effective SDK configuration and build symbols are
+retained under `internal/work/r3-live-interruption-recovery/`. The task-owned
+short checkout and compiler cache were removed after retained-file hash checks.
+No device, settings, tag, remote release or experimental image was modified.
