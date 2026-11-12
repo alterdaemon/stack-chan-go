@@ -4,8 +4,7 @@
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R2**. Standard hardware: M5StackChan CoreS3.
-The published stable release remains R1; the maintainer has physically verified
-the local R2 build and confirmed it is working.
+The published stable release is **[2.1.0-R2](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -22,7 +21,7 @@ Upstream is
 - `origin`: this fork. `upstream`: the original repository, used for fetching.
   A separate local branch mirroring upstream is unnecessary.
 - There is no fork `develop` branch. Keep only the latest release tag per series:
-  currently `v2.0.1-r15` and `v2.1.0-R1`. Tags identify release builds;
+  currently `v2.0.1-r15` and `v2.1.0-R2`. Tags identify release builds;
   documentation commits do not move them. Archive a superseded tag privately.
 
 Local remotes disable automatic tag fetching so historical tags do not reappear:
@@ -136,7 +135,7 @@ verification of the amended R2 is complete and it is working. This confirmation
 is separate from unit-test results. Historical
 combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
-The local R2 pair is `StackChan-Community-v2.1.0-R2-app.bin` and
+The R2 release pair is `StackChan-Community-v2.1.0-R2-app.bin` and
 `StackChan-Community-v2.1.0-R2.bin`. Preserve supported-layout settings by writing
 only the application:
 
@@ -152,9 +151,9 @@ esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 St
 
 Use your device port: Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, macOS
 `/dev/cu.*`. See [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
-Do not write the full image at `0x10000`. R2 has not been published.
+Do not write the full image at `0x10000`. Download the BINs from the [R2 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2).
 
-## Install the published R1
+## Historical R1 installation
 
 Current files are in the ignored `internal/release-packages/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.

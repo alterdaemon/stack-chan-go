@@ -10,66 +10,18 @@ The fork started at upstream `v2.0.1`, commit
 This is the only source of fork release notes. Publication extracts the section
 headed `### <product-version>` for the requested tag.
 
-## Unreleased
-
-Remove automatic release/prerelease publication from tag CI. Require manual
-workflow dispatch for Pages deployments; remove automatic Cloudflare preview
-and close-page triggers. Branch, tag and PR builds retain their verification
-artifacts. Publication requires an explicit user request.
-
-Release impact: none. Consolidate documentation and release notes, isolate fork
-tools, configure `main` instead of `develop`, and archive obsolete local worktrees.
-Firmware behavior, product versions, release images and release tags are unchanged.
-Store fork-only packages, diagnostics, embedded Settings output, scratch work
-and private archives under ignored `internal/`. Preserve upstream source and
-standard build/dependency layouts.
-Clarify agent artifact rules: keep existing build/test output paths, place ad hoc
-working files under `internal/`, and retain reusable tests and validation evidence.
-Name release BINs `StackChan-Community-v<version>.bin` and
-`StackChan-Community-v<version>-app.bin` under `internal/release-packages/`.
-Keep full-install and app-update images; preserve their bytes when renaming.
-Use `build-firmware.sh`, `package-release.py` and `test:release-package` for the
-fork's build and packaging tools.
-Document explicitly requested release publication, concise descriptions and the
-`Stack-chan community-mod <tag>` release title convention.
-Summarize fork features and ready-to-flash BINs in the root README; state the
-quick-start, performance and upstream-sync goal in both fork README introductions.
-Require agents to keep both READMEs, changelog, version metadata and release BINs
-consistent, with publication only on explicit request.
-Restore `AGENTS.md` byte-for-byte from upstream 2.1.0 and maintain fork-specific
-agent instructions in the separate local project workspace. Preserve the
-implementation repository's tracked paths, firmware versions and release images.
-
 ## 2.1.0
 
 ### 2.1.0-R2
 
-Release impact: patch. Promote the selected R8 16 kHz/FD2 profile into the
-unpublished R2, retaining the production interruption repair. Queue renderer
-flush on its peer owner; silence and discard old output on the audio task and reset Pitch. Mini handles server
-speech-start/output-clear once per turn and preserves the session after an
-idle-cancel race. Live uses caller/assistant source intervals to invalidate
-overlapping old output while preserving later replies after delayed captions.
-Bound On-mode queues and enable the vendor stale-render drop policy. Return one
-cancelled result for interrupted accepted tools without obsolete continuation.
-Restore the documented 0.5 Mini VAD default; per-session overrides support
-diagnostic comparisons without changing saved settings.
+Release impact: patch.
 
-Use 16 kHz I2S, direct Opus output and Pitch in both modes and interruption
-settings; close restores the amplifier baseline and releases the decoder-rate
-override. On uses FD2, temporary 6 dB ADC gain with saturating digital restoration,
-AEC bypass after a 200 ms silent-reference tail, and 200 ms mouth updates. Off
-retains the microphone gate, original gain and 100 ms mouth updates. Allow
-Wi-Fi/LwIP allocations in PSRAM. Preserve saved settings, web search, task layout
-and non-chat audio behavior; omit other experimental prototypes.
-
-Native delayed-render/capture/Pitch and protocol regressions pass; the new
-protocol tests fail against the R1 core. Probes now observe local output silence
-separately from recognized words. Build/image checks are recorded in validation.
-On 2026-11-12, the maintainer confirmed physical verification of the amended
-R2 is complete and it is working. The agent performed no device write or
-audible trial for this amendment. The same repairs are applied separately to gpt-full-duplex and
-its requested R8 image. Neither branch is published by this work.
+- Fix local playback interruption in Live and Realtime Mini: clear queued audio, reset Pitch, discard stale output and preserve later replies after delayed captions.
+- Correct interrupted web-search cancellation and Mini cancellation races; use the 0.5 server-VAD default.
+- Use 16 kHz I2S, Opus output and local Pitch with Interruption On or Off; restore the amplifier baseline and release the decoder-rate override when chat closes.
+- With Interruption On, use FD2 AEC and temporary 6 dB microphone gain with digital restoration; bypass AEC after a 200 ms silent-reference tail, bound playback queues and drop stale rendering data.
+- Allow Wi-Fi/LwIP allocations in PSRAM; update the mouth every 200 ms with Interruption On and retain 100 ms with Off.
+- Remove automatic release/prerelease publication and automatic public-deployment triggers.
 
 ### 2.1.0-R1
 
@@ -192,7 +144,7 @@ Integrate the GPT-Live MOD into CoreS3 firmware and its drawer. Read AI token, c
 
 `main` contains current fork work. `v2.1.0-mod` follows the current series;
 `v2.0.1-mod` preserves the historical R15 line. Only the latest release tag per
-series is kept locally: `v2.0.1-r15` and `v2.1.0-R1`. Earlier tag references are
+series is kept locally: `v2.0.1-r15` and `v2.1.0-R2`. Earlier tag references are
 archived privately; their commits remain in history. Documentation commits do
 not move release tags.
 
