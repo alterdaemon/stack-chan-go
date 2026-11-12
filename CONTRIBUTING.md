@@ -52,8 +52,7 @@ Record all fork revisions in [CHANGELOG-MOD.md](CHANGELOG-MOD.md), with one
 per series and archive superseded tags privately. Do not move release tags for
 documentation changes.
 
-See the [fork guide](docs/mod/README.md) for publication and installation and
-the [validation record](docs/mod/validation.md) for completed and unverified checks.
+See the [fork guide](docs/stack-chan-go-fork/README.md) for publication and installation.
 
 ## Issue reports
 

@@ -33,7 +33,7 @@ See the [R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
 
-- [Build, install, settings and branch guide](docs/mod/README.md)
+- [Build, install, settings and branch guide](docs/stack-chan-go-fork/README.md)
 - [All fork release notes](CHANGELOG-MOD.md)
 - [Contributing](CONTRIBUTING.md)
 - [Fork releases](https://github.com/alterdaemon/stack-chan-go/releases)

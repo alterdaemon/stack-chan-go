@@ -1,4 +1,4 @@
-> For this fork, use the [English Community guide](docs/mod/README.md) and
+> For this fork, use the [English Community guide](docs/stack-chan-go-fork/README.md) and
 > [fork changelog](CHANGELOG-MOD.md). The upstream documentation follows.
 
 # ｽﾀｯｸﾁｬﾝ(Stack-chan)

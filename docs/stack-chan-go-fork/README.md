@@ -1,7 +1,7 @@
 # Stack-chan Community fork
 
 [Repository](https://github.com/alterdaemon/stack-chan-go) ·
-[Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
+[Changelog](../../CHANGELOG-MOD.md)
 
 Current product version: **2.1.0-R4**. Standard hardware: M5StackChan CoreS3.
 The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
@@ -66,7 +66,8 @@ Names above are relative to `internal/`; create only the folders needed.
 The directory is private and is never committed or uploaded as a whole.
 Release publication selects only the two validated BINs. Standard upstream
 build outputs and `node_modules` retain their existing paths. Source files,
-tests and the sanitized evidence in this guide are not relocated.
+tests and licenses stay tracked. Validation records and performance reports
+remain private outside Git.
 Standard outputs include the three `firmware/dist*` folders and upstream Avatar DSL
 `.test-output` files. Do not reconfigure standard build/test outputs to move them
 under `internal/`. For temporary jobs, set `TMPDIR` to the absolute
@@ -177,8 +178,7 @@ unchanged. A failed servo operation cancels the current gesture; fresh speech ca
 start another after two to three seconds, using a newly read pose. Speaking
 feedback allows 200 ms for servo acknowledgements; ordinary motion retains 120 ms.
 Feedback reuses the existing 100/200 ms UI tick; LEDs are written only
-when their displayed color changes. Physical appearance and performance require
-[device verification](validation.md#21-r4).
+when their displayed color changes.
 
 ## Build
 
@@ -282,10 +282,7 @@ With **Interruption Off**, microphone samples are gated during playback and unti
 the existing 500 ms received-silence gate clears: voice interruption is unavailable.
 On keeps capture and AEC active. Explicit microphone mute remains separate.
 Live caption delivery can lag speech; event-to-PCM-silence timing does not prove
-physical speech-onset latency. On 2026-11-12, the maintainer confirmed physical
-verification of the amended R2 is complete and it is working. This confirmation
-is separate from unit-test results. Historical
-combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
+physical speech-onset latency.
 
 The published R4 release pair is `StackChan-Community-v2.1.0-R4-app.bin` and
 `StackChan-Community-v2.1.0-R4.bin`. Preserve supported-layout settings by writing
@@ -309,8 +306,6 @@ Do not write the full image at `0x10000`. Download the BINs from the [R4 release
 
 Current files are in the ignored `internal/release-packages/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.
-The corrected R1 build passed offline/build checks, and the maintainer confirmed
-it is tested and working on hardware with the live API. See [validation](validation.md#21-r1).
 
 Application update, preserving other partitions on the supported layout:
 
