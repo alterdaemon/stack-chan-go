@@ -11,13 +11,6 @@ This changelog records changes between fork releases. Differences from upstream
 are summarized in the [README](README.md#what-this-fork-adds) and published release notes.
 Publication extracts the section headed `### <product-version>` for the requested tag.
 
-## Unreleased
-
-- Credit alterdaemon for fork modifications and remove the README's Fork issues link.
-- Refresh both README comparison tables so the main R3 differences from upstream are easy to find.
-- Remove the README's test-results link to keep its navigation focused on getting started.
-- Keep the upstream comparison in the READMEs and release notes instead of repeating it here.
-
 ## 2.1.0
 
 ### 2.1.0-R3
