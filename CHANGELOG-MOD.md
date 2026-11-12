@@ -16,13 +16,20 @@ headed `### <product-version>` for the requested tag.
 
 Release impact: minor.
 
-- Add GPT-Realtime 2.1 as a third conversation choice alongside GPT-Live 1 and Realtime Mini, sharing Realtime voices, web search and interruption controls.
-- Filter Realtime microphone input with far-field noise reduction before server VAD when Interruption is On; verify the filter acknowledgement before enabling input and retain voice interruption.
-- Reduce Realtime post-AEC amplification by 8 dB during playback and its echo tail to suppress self-triggered answers; retain full listening sensitivity between answers and keep voice interruption active.
-- Add USB-only RAM audio trials for VAD, silence detection, noise filtering, speaker/capture gain and AEC suppression; acknowledge changes and restore defaults when diagnostics end without changing saved settings.
-- Fix Live answers remaining muted after interruption: resume continued speech without requiring a new turn, handle delayed overlapping captions and recover after 1.5 seconds of suppressed audible PCM. Preserve Realtime recovery and existing late-caption protection.
-- Remove an inactive automatic audio-drop flag; retain the smaller playback queues, backpressure and interruption flushing.
-- Add USB-controlled device diagnostics, disabled after every boot, with bounded RAM records for lifecycle, connectivity, safe failures and correlated voice-chat interruption events.
+#### Since 2.1.0-R2
+
+- **Another conversation choice:** Select GPT-Realtime 2.1 alongside GPT-Live 1 and Realtime Mini. The two Realtime choices share your saved Realtime voice and web-search settings.
+- **Fewer unwanted answer restarts:** Reduce cases where Realtime hears its own speaker and starts another answer. Fix Live playback getting stuck silent after an interruption. Speaking to interrupt remains available when enabled.
+- **Troubleshooting without repeated installations:** USB logs and temporary audio adjustments let developers investigate problems without rebuilding firmware for every trial. Logging starts Off, and these adjustments do not overwrite your saved settings.
+
+#### Compared with upstream 2.1.0
+
+- **Voice chat ready to use:** The prepared firmware includes GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, with web search in all three. After setting up Wi-Fi and your OpenAI key, start or stop chat from the LIVE button or drawer; connection problems appear on the robot.
+- **Make the robot respond your way:** Use Bluetooth or the added password-protected Wi-Fi settings page to set conversation instructions, choose conversation and reasoning models and thinking effort, save separate Live/Realtime voices, and adjust voice pitch and speaking style.
+- **Interrupt and move on:** Enable voice interruption to speak while the robot is talking and stop its current reply. Cancelling an ongoing web search does not bring back the interrupted answer.
+- **Resume a GPT-Live conversation:** Choose when an idle Live session disconnects. After automatic standby, tap LIVE to resume with recent conversation context, so you have less to repeat. This history is temporary, specific to GPT-Live, and cleared by a device restart.
+- **Chat, screen and camera recovery:** Fixes cover interrupted chat recovery and keeping screen/touch work running alongside voice chat. Camera capture releases memory when closed and can reopen for another photo; recoverable “already answering” service responses no longer close the chat.
+- **Updates and troubleshooting:** Prepared app-update BINs preserve settings, MODs and storage on the supported layout. When investigating a problem, developers can enable USB logs and temporarily adjust audio behavior without reinstalling for each test; diagnostics stay Off until enabled.
 
 ### 2.1.0-R2
 
