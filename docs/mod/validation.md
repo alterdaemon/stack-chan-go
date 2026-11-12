@@ -83,6 +83,21 @@ in the browser, including headings, lists, installation commands and the notice.
 The existing passing unit/native, XS, lint/format and release-build evidence above
 is reused for identical firmware/web inputs; those checks were not rerun.
 
+R4 publication, 2026-11-12: published the regular Latest release
+[stack-chan-go v2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
+The annotated tag resolves to `2a5af483bebf07c2880bef30e63e48d86c09d27d`;
+its firmware/web inputs match the validated R4 build. The draft contained exactly
+the matching app/full pair. Both assets were downloaded and matched the retained
+local images byte for byte, including their recorded sizes and SHA-256 hashes.
+Public release and asset URLs returned HTTP 200; title, description, regular
+release type, Latest selection and both asset identities were verified. Previous
+releases and assets remain unchanged. No additional build or device write was
+performed for publication. The release tag remains fixed across later record edits.
+
+Publication cleanup removed the task-created verification downloads and temporary
+preview HTML, and stopped the local preview server. Release notes and original,
+draft, download, public-release and image verification evidence remain private.
+
 Cleanup: task-created short build worktrees and identified disposable simulator
 profiles were removed after retained-file hash checks.
 Release images, useful logs, source/image provenance, SDK configuration and build
