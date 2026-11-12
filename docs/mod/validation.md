@@ -76,8 +76,18 @@ SDK setup, versions, release tags and published images are unchanged.
   checks and one module-test shard. The other shard failed only the debug control
   fixture: its acknowledgement was absent at the fixed 10 ms assertion. The
   fixture now continues on the actual acknowledgement, with a two-second failure
-  timeout. That focused XS fixture and Biome check passed locally; hosted retry
-  is pending. No production change was needed for this test timing repair.
+  timeout. That focused XS fixture and Biome check passed locally. The
+  [final test run on main](https://github.com/alterdaemon/stack-chan-go/actions/runs/43314616176)
+  passed every job at `8a5d5b85`, including both simulator shards, in 6 minutes
+  58 seconds. No production change was needed for this test timing repair;
+  firmware build inputs are unchanged from the passing Bundle run.
+- Static workflow verification parsed the YAML with duplicate-key checks and
+  verified the boolean input's false default and the deployment condition.
+  The workspace contract passed. Task-created simulator/debugger scratch was
+  removed; focused runtime logs were retained privately.
+- Verification used manual dispatches on `main`. This session's pushes did not
+  produce automatic runs; the cause was not established. Existing push/PR branch
+  and path filters remain configured, but their execution was not verified here.
 - No device was flashed. Hosted compilation and simulator/browser checks do not
   establish physical-device or live-API performance.
 
