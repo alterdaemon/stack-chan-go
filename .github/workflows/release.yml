@@ -1,15 +1,18 @@
 name: Build Stack-chan Community release images
 
 on:
-  push:
-    tags:
-      - "v*.*.*-R*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -19,9 +22,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag }}
       - name: Validate release and series branch
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           npm --prefix firmware run check:release -- "$TAG"
@@ -36,7 +40,7 @@ jobs:
       - name: Build and validate both CoreS3 images
         working-directory: ./firmware
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -eo pipefail
           source "$HOME/.local/share/xs-dev-export.sh"
@@ -49,6 +53,6 @@ jobs:
         with:
           name: stack-chan-community-images
           path: |
-            ./internal/release-packages/StackChan-Community-${{ github.ref_name }}.bin
-            ./internal/release-packages/StackChan-Community-${{ github.ref_name }}-app.bin
+            ./internal/release-packages/StackChan-Community-${{ inputs.tag }}.bin
+            ./internal/release-packages/StackChan-Community-${{ inputs.tag }}-app.bin
           if-no-files-found: error

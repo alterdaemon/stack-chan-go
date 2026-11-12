@@ -122,6 +122,28 @@ cancellation was requested for all four runs.
   this trigger-only change. Existing successful manual build/test evidence above
   is retained. Local firmware build commands and release assets are unchanged.
 
+## Manual workflow enforcement, 2026-11-12
+
+[Run 43319782620](https://github.com/alterdaemon/stack-chan-go/actions/runs/43319782620)
+was triggered by a push of `v2.1.0-R4` at `02e6d65d`. Build and Bundle were
+already manual-only; the separate release-image workflow still watched release
+tags. The reported run was cancelled.
+
+All six current workflow files now use only `workflow_dispatch`. Release-image
+builds require an existing `tag` input, check out that tag and retain its release
+and series-branch checks. The repository also enforces the active
+[Manual workflow runs only policy](https://github.com/alterdaemon/stack-chan-go/settings/actions/rules/13530)
+for all workflow paths, allowing only `workflow_dispatch`. That repository rule
+also blocks automatic events from old tagged workflow definitions. The project
+instructions require manual-only workflows and an explicit request for each run.
+
+- Local/static: all workflow YAML parsed with duplicate-key checks; manual-only
+  triggers, unchanged unrelated jobs and release tag/input/artifact wiring passed
+  focused assertions. Whitespace and workspace contract checks passed.
+- GitHub configuration: policy `13530` was read back as active with all workflows
+  included and only `workflow_dispatch` allowed. No workflow was dispatched and
+  no firmware, simulator, device or live-API test was run for this change.
+
 ## 2.1 R4
 
 Conversation state lighting and speaking head gestures, based on source
