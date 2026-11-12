@@ -7,34 +7,6 @@ on:
         description: Publish the website after a successful main build
         type: boolean
         default: false
-  push:
-    branches:
-      - main
-      - "v*-mod"
-    paths:
-      - "firmware/**"
-      - "web/**"
-      - "**/*.kicad_sch"
-      - "**/*.kicad_pcb"
-      - "schematics/**/*.kibot.yaml"
-      - ".github/scripts/**"
-      - ".github/actions/setup/action.yml"
-      - ".github/workflows/bundle.yml"
-      - ".github/workflows/cloudflare-preview.yml"
-  pull_request:
-    branches:
-      - main
-      - "v*-mod"
-    paths:
-      - "firmware/**"
-      - "web/**"
-      - "**/*.kicad_sch"
-      - "**/*.kicad_pcb"
-      - "schematics/**/*.kibot.yaml"
-      - ".github/scripts/**"
-      - ".github/actions/setup/action.yml"
-      - ".github/workflows/bundle.yml"
-      - ".github/workflows/cloudflare-preview.yml"
 
 permissions:
   contents: read

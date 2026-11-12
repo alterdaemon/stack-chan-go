@@ -91,6 +91,21 @@ SDK setup, versions, release tags and published images are unchanged.
 - No device was flashed. Hosted compilation and simulator/browser checks do not
   establish physical-device or live-API performance.
 
+## Manual GitHub Actions, 2026-11-12
+
+The maintainer requested manual execution only for Build and Bundle. Their push
+and pull-request triggers were removed; both retain `workflow_dispatch` and their
+existing jobs. The README badge follows manual Bundle runs on `main`. The final
+documentation push had started both workflows on both current branches;
+cancellation was requested for all four runs.
+
+- Local/static: YAML parsing, manual-only trigger assertions and comparison of
+  the remaining workflow configuration against HEAD passed. `git diff --check`
+  and the workspace contract passed.
+- No additional GitHub build, simulator, device or live-API run was started for
+  this trigger-only change. Existing successful manual build/test evidence above
+  is retained. Local firmware build commands and release assets are unchanged.
+
 ## 2.1 R4
 
 Conversation state lighting and speaking head gestures, based on source

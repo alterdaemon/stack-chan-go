@@ -1,6 +1,6 @@
 # stack-chan-go (community-mod)
 
-[![Firmware build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml/badge.svg?branch=main)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml?query=branch%3Amain)
+[![Firmware build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml?query=branch%3Amain%20event%3Aworkflow_dispatch)
 
 A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.

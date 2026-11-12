@@ -1,40 +1,6 @@
 name: Build Stack-chan Firmware
 
 on:
-  push:
-    branches:
-      - main
-      - "v*-mod"
-    paths:
-      - "CHANGELOG-MOD.md"
-      - "docs/mod/**"
-      - ".changeset/config.json"
-      - ".github/workflows/release.yml"
-      - "firmware/**"
-      - "web/**"
-      - "docs/specs/**"
-      - "docs/operations/visual-programming-validation.md"
-      - "docs/operations/visual-programming-acceptance.md"
-      - ".github/actions/setup/action.yml"
-      - ".github/workflows/build.yml"
-      - "lefthook.yml"
-  pull_request:
-    branches:
-      - main
-      - "v*-mod"
-    paths:
-      - "CHANGELOG-MOD.md"
-      - "docs/mod/**"
-      - ".changeset/config.json"
-      - ".github/workflows/release.yml"
-      - "firmware/**"
-      - "web/**"
-      - "docs/specs/**"
-      - "docs/operations/visual-programming-validation.md"
-      - "docs/operations/visual-programming-acceptance.md"
-      - ".github/actions/setup/action.yml"
-      - ".github/workflows/build.yml"
-      - "lefthook.yml"
   workflow_dispatch:
 
 permissions:
