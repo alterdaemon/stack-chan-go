@@ -33,7 +33,23 @@ close and ordinary-motion ownership guards remain in place.
   same connection. A 150 ms feedback acknowledgement succeeds; an ordinary
   unanswered read still expires after 120 ms. Existing real-timer gesture,
   cancellation, preemption and baseline-return checks pass.
-- CoreS3 release build and independent image verification: pending.
+- CoreS3 release build: SDK-activated
+  `npm run build:m5stackchan_cores3 -- --mode=release` passed in a fresh short-path
+  worktree under `/var/tmp`, including embedded Settings generation and automatic
+  app/full packaging. An earlier `/tmp` attempt exhausted its filesystem during
+  packaging; another attempt received SIGTERM with no identified cause. Only the
+  final clean run establishes release-build success.
+- Independent image verification passed: ESP32-S3 identity, ESP image checksums
+  and appended hashes, supported partition layout and flash offsets, app bounds,
+  embedded ELF hash, matching build/app/full bytes, and erased unused gaps.
+  The application is 8,597,744 bytes, SHA-256
+  `64af784f30d2411bac727a774985e941b29ec7f72f78e817abfbebcfe89107cd`;
+  the full image is 16,777,216 bytes, SHA-256
+  `e42a5be6c3005cbf0ef20929a92b5199cd8b578d3c66db184c8df4f6c5872626`.
+  Changed feedback/protocol bytecode and committed firmware/web input trees were
+  verified. At the maintainer's explicit request, this pair replaces the local R4
+  pair; the previous pair was privately archived and hash-verified. Published
+  assets and tags were not changed.
 - Physical-device and live-API checks: not run; no device was flashed. The
   original device-side triggering error and the adequacy of 200 ms on hardware
   remain unmeasured. Raw evidence is retained privately.
