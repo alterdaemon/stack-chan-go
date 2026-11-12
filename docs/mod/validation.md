@@ -22,8 +22,10 @@ Focused repairs update those mappings, imports, test setup and the sample
 capability access. The periodic-motion allocation checks still cover polling and
 its fixed handlers; the signature parser now accepts callback-typed parameters.
 The README badge follows the existing firmware Bundle workflow on `main`.
-Workflow triggers, local build scripts, SDK setup, versions, release tags and
-published images are unchanged.
+The manual Bundle form has a `deploy-website` checkbox, false by default;
+website publication still requires a successful manual build on `main` and now
+also requires that explicit selection. Build event filters, local build scripts,
+SDK setup, versions, release tags and published images are unchanged.
 
 - Local/static: `npm run test:unit` passed 752 tests and nine packaging
   regressions; `npm run check:architecture` passed all 76 checks;

@@ -2,6 +2,11 @@ name: Bundle Stack-chan Firmware
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy-website:
+        description: Publish the website after a successful main build
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -203,7 +208,8 @@ jobs:
     needs: build
     if: >-
       github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/main'
+      github.ref == 'refs/heads/main' &&
+      inputs.deploy-website
     runs-on: ubuntu-latest
     env:
       PAGES_CHANNEL: release
