@@ -12,6 +12,11 @@ headed `### <product-version>` for the requested tag.
 
 ## Unreleased
 
+Remove automatic release/prerelease publication from tag CI. Require manual
+workflow dispatch for Pages deployments; remove automatic Cloudflare preview
+and close-page triggers. Branch, tag and PR builds retain their verification
+artifacts. Publication requires an explicit user request.
+
 Release impact: none. Consolidate documentation and release notes, isolate fork
 tools, configure `main` instead of `develop`, and archive obsolete local worktrees.
 Firmware behavior, product versions, release images and release tags are unchanged.
@@ -39,9 +44,9 @@ implementation repository's tracked paths, firmware versions and release images.
 
 ### 2.1.0-R2
 
-Release impact: patch. Repair local interruption on main without importing
-experimental rate/AEC changes. Queue renderer flush on its peer owner; silence
-and discard old output on the audio task and reset Pitch. Mini handles server
+Release impact: patch. Promote the selected R8 16 kHz/FD2 profile into the
+unpublished R2, retaining the production interruption repair. Queue renderer
+flush on its peer owner; silence and discard old output on the audio task and reset Pitch. Mini handles server
 speech-start/output-clear once per turn and preserves the session after an
 idle-cancel race. Live uses caller/assistant source intervals to invalidate
 overlapping old output while preserving later replies after delayed captions.
@@ -49,6 +54,14 @@ Bound On-mode queues and enable the vendor stale-render drop policy. Return one
 cancelled result for interrupted accepted tools without obsolete continuation.
 Restore the documented 0.5 Mini VAD default; per-session overrides support
 diagnostic comparisons without changing saved settings.
+
+Use 16 kHz I2S, direct Opus output and Pitch in both modes and interruption
+settings; close restores the amplifier baseline and releases the decoder-rate
+override. On uses FD2, temporary 6 dB ADC gain with saturating digital restoration,
+AEC bypass after a 200 ms silent-reference tail, and 200 ms mouth updates. Off
+retains the microphone gate, original gain and 100 ms mouth updates. Allow
+Wi-Fi/LwIP allocations in PSRAM. Preserve saved settings, web search, task layout
+and non-chat audio behavior; omit other experimental prototypes.
 
 Native delayed-render/capture/Pitch and protocol regressions pass; the new
 protocol tests fail against the R1 core. Probes now observe local output silence

@@ -1,4 +1,4 @@
-name: Release Stack-chan Community
+name: Build Stack-chan Community release images
 
 on:
   push:
@@ -52,26 +52,3 @@ jobs:
             ./internal/release-packages/StackChan-Community-${{ github.ref_name }}.bin
             ./internal/release-packages/StackChan-Community-${{ github.ref_name }}-app.bin
           if-no-files-found: error
-
-  publish:
-    needs: build-release-assets
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: stack-chan-community-images
-          path: ./release-assets
-      - name: Publish Community prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          image="release-assets/StackChan-Community-$TAG"
-          node firmware/scripts/validate-release.mjs "$TAG" --notes > "$RUNNER_TEMP/release-notes.md"
-          gh release create "$TAG" "$image.bin" "$image-app.bin" \
-            --verify-tag --title "Stack-chan Community $TAG" \
-            --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease --latest=false

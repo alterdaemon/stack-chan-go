@@ -176,7 +176,7 @@ test('start, acknowledged mute and close reuse Conversation and release only aft
   assert.deepEqual(f.events, [
     'audio acquired',
     'radio acquired',
-    'amp 48000',
+    'amp 16000',
     'native closing',
     'native closed',
     'amp 24000',

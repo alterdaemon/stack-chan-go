@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 typedef struct {} xsMachine;
+#define modLog(...) ((void)0)
 #define xsmcVars(...) ((void)0)
 #define xsmcSetNewObject(...) ((void)0)
 #define xsmcSetInteger(...) ((void)0)
@@ -31,6 +32,7 @@ void vTaskPrioritySet(void *, UBaseType_t);
 int xTaskCreatePinnedToCore(void (*)(void *), const char *, unsigned, void *, unsigned, void *, int);
 
 typedef int esp_err_t;
+typedef void *i2c_master_dev_handle_t;
 #define ESP_ERR_NO_MEM 1
 #define ESP_ERR_INVALID_SIZE 2
 #define MALLOC_CAP_SPIRAM 1

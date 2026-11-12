@@ -87,9 +87,9 @@ export class LiveSession {
       // The CoreS3 SDK amplifier has a setter but no sample-rate getter.
       // Return it to the SDK's 24 kHz baseline after native audio has stopped.
       stage = 'audio'
-      site = 'amp_48k'
+      site = 'amp_16k'
       entry.ampChanged = true
-      this.amp.sampleRate = 48000
+      this.amp.sampleRate = 16000
       stage = 'configuration'
       site = 'session_options'
       // Frame the configured persona as Mini's dialogue task, including its first greeting.

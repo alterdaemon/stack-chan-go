@@ -94,11 +94,30 @@ the release build and image checks. Publish only the two validated BINs from
 one build. Preserve existing images outside Git. Documentation/CI cleanup does
 not advance the firmware version.
 
-The release workflow extracts the exact version section from `CHANGELOG-MOD.md`.
+Tag CI only builds images and stores verification artifacts. It never creates
+or publishes a release or prerelease. Pages deployments require manual workflow
+dispatch; Cloudflare preview publication has no automatic trigger. Any public
+publication requires an explicit user request. Pushing code or tags does not
+authorize it.
+
+The release-note tool extracts the exact version section from `CHANGELOG-MOD.md`.
 The application descriptor keeps the independent Moddable/host API compatibility
 version used by MOD loading.
 
-## R2 interruption behavior
+## R2 audio and interruption behavior
+
+R2 promotes the selected R8 profile: 16 kHz I2S, Opus output and Pitch in both
+voice modes with Interruption On or Off. On uses FD low-cost AEC with filter
+length 2, temporary 6 dB analogue microphone gain with digital restoration, and
+AEC bypass after 200 ms of exactly silent aligned reference. Off keeps its
+microphone gate, without AEC or microphone-gain changes. On mouth updates use
+200 ms; Off retains 100 ms. Wi-Fi/LwIP may allocate in PSRAM.
+
+These audio-rate changes last for the chat session: close restores the normal
+24 kHz amplifier baseline and subsequent non-chat Opus keeps its requested rate.
+16 kHz reduces high-frequency playback bandwidth; FD2 covers a shorter echo
+history than FD4. Web search and saved settings remain available. This promotion
+adds no WebSocket or other experimental transport.
 
 R2 invalidates queued local playback in both voice modes. Mini handles server
 speech-start/output-clear events. Live uses timestamped caller fragments with
@@ -111,8 +130,9 @@ With **Interruption Off**, microphone samples are gated during playback and unti
 the existing 500 ms received-silence gate clears: voice interruption is unavailable.
 On keeps capture and AEC active. Explicit microphone mute remains separate.
 Live caption delivery can lag speech; event-to-PCM-silence timing does not prove
-physical speech-onset latency. The user performs physical verification of R2 and
-the repaired experimental R8. No physical usability claim follows from unit tests.
+physical speech-onset latency. The user performs physical verification of the
+amended R2. No physical usability claim follows from unit tests. Historical
+combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
 The local R2 pair is `StackChan-Community-v2.1.0-R2-app.bin` and
 `StackChan-Community-v2.1.0-R2.bin`. Preserve supported-layout settings by writing

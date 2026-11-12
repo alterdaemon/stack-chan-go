@@ -1,5 +1,6 @@
 import { requests } from 'realtimeConversation/http'
 import { transports } from 'realtimeConversation/transport'
+import { samples } from 'io-performance'
 import config from 'mc/config'
 import Modules from 'modules'
 import { LiveSession } from 'openai-live-session'
@@ -19,8 +20,12 @@ async function run() {
   const buttons = new Map(),
     balloons = []
   let acquired = 0,
-    released = 0
+    released = 0,
+    mouth = 0
   const robot = {
+    setMouthOpen(value) {
+      mouth = value
+    },
     audio: {
       acquireExclusive() {
         acquired++
@@ -53,8 +58,25 @@ async function run() {
     }
     assert(false, `startup did not reach ${message}`)
   }
+  async function checkMouth(interval) {
+    for (let i = 0; samples.length < 4 && i < 100; i++) await new Promise((resolve) => Timer.set(resolve, 20))
+    equal(samples.length, 4, 'mouth timer samples playback levels')
+    for (let i = 1; i < samples.length; i++) {
+      const elapsed = samples[i] - samples[i - 1]
+      assert(elapsed >= interval - 30 && elapsed <= interval + 100, `mouth interval ${elapsed}/${interval}`)
+    }
+    assert(mouth > 0, 'playback levels animate the mouth')
+  }
+  async function checkMouthStopped() {
+    const count = samples.length
+    await new Promise((resolve) => Timer.set(resolve, 250))
+    equal(samples.length, count, 'closed session has no mouth timer')
+    equal(mouth, 0, 'close restores mouth')
+    samples.length = 0
+  }
   button.callback()
-  await waitFor('GPT-Live connected')
+  await waitFor('GPT-Live 1 connected')
+  await checkMouth(100)
   equal(acquired, 1, 'host audio acquired')
   equal(transports[0].options.bargeIn, false, 'missing saved preference keeps native interruption off')
   equal(requests.length, 1, 'one signaling request')
@@ -67,17 +89,19 @@ async function run() {
   else equal(session.delegation.responses.tool_choice, undefined, 'baseline has no tools')
   trace(`verified config ${JSON.stringify({ model: session.model, delegation: session.delegation })}\n`)
   button.callback()
-  await waitFor('GPT-Live stopped')
+  await waitFor('GPT-Live 1 stopped')
   equal(released, 1, 'host audio released')
+  await checkMouthStopped()
   equal(globalThis.amp.sampleRate, 24000, 'host audio rate restored')
   Preference.set('openailive', 'backendModel', 'saved-backend')
   Preference.set('openailive', 'reasoningEffort', 'none')
   Preference.set('openailive', 'bargeIn', '1')
   balloons.length = 0
   button.callback()
-  await waitFor('GPT-Live connected')
+  await waitFor('GPT-Live 1 connected')
   equal(requests.length, 2, 'new start creates a fresh signaling request')
   equal(transports[1].options.bargeIn, true, 'saved opt-in reaches the native transport')
+  await checkMouth(200)
   for (let i = 0; i < 50; i++) transports[1].callback({ type: 'bargeIn' })
   equal(transports[1].sent.length, 0, 'unclassified speech must not inject stop instructions')
   const next = JSON.parse(requests[1].init.body).session
@@ -85,8 +109,9 @@ async function run() {
   equal(next.delegation.responses.reasoning.effort, 'none', 'none is an explicit effort, not a missing preference')
   equal(next.model, session.model, 'voice model is unchanged')
   button.callback()
-  await waitFor('GPT-Live stopped')
+  await waitFor('GPT-Live 1 stopped')
   equal(released, 2, 'restarted session releases host audio')
+  await checkMouthStopped()
   // Exercise the real one-shot XS Timer, protocol and ownership with a short
   // configured interval; Node tests cover the exact default 60-second boundary.
   const states = []
@@ -114,7 +139,7 @@ async function run() {
   await live.start()
   const resumed = JSON.parse(requests[3].init.body).session
   equal(resumed.input[0].content[0].text, 'Order 42.', 'new signaling request carries RAM context')
-  equal(globalThis.amp.sampleRate, 48000, 'resume reacquires audio')
+  equal(globalThis.amp.sampleRate, 16000, 'resume reacquires audio')
   await live.stop()
   equal(released, 4, 'resumed session releases host audio')
   equal(globalThis.amp.sampleRate, 24000, 'standby and explicit stop restore host rate')

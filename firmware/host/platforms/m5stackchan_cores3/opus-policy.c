@@ -3,6 +3,9 @@
 #include "esp_opus_enc.h"
 #include "esp_audio_dec_reg.h"
 #include "esp_opus_dec.h"
+#include <stdatomic.h>
+static atomic_uint chatDecodeRate;
+void stackchanOpusDecodeRate(unsigned rate) { atomic_store(&chatDecodeRate, rate); }
 static esp_audio_dec_ops_t originalDecoder, configuredDecoder;
 static esp_audio_enc_ops_t original, configured;
 int stackchanOpusOriginalComplexity = -1, stackchanOpusOriginalBitrate = -1, stackchanOpusOriginalMode = -1;
@@ -27,6 +30,8 @@ static esp_audio_err_t openMonoDecoder(void *options, uint32_t size, void **hand
   // count through the standard decoder info, instead of decoding two outputs
   // and converting them to mono in the renderer.
   config.channel = 1;
+  unsigned rate = atomic_load(&chatDecodeRate);
+  if (rate) config.sample_rate = rate;
   return originalDecoder.open(&config, size, handle);
 }
 int stackchanInstallOpusPolicy(void) {

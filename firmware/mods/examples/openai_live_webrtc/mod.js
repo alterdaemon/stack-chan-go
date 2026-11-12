@@ -171,10 +171,13 @@ export function onContextCreated(robot) {
     onState(state, detail) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
       if (state === 'connected' && mouthTimer === undefined && levels && robot.setMouthOpen) {
-        mouthTimer = Timer.repeat(() => {
-          const level = levels.levels().playbackLevel ?? 0
-          updateMouth(Math.min(10, Math.round(level / 200)) / 10)
-        }, 100)
+        mouthTimer = Timer.repeat(
+          () => {
+            const level = levels.levels().playbackLevel ?? 0
+            updateMouth(Math.min(10, Math.round(level / 200)) / 10)
+          },
+          session.settings.bargeIn ? 200 : 100,
+        )
       } else if (state !== 'connected') {
         if (mouthTimer !== undefined) Timer.clear(mouthTimer)
         mouthTimer = undefined

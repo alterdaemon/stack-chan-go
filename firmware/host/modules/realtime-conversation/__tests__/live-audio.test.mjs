@@ -27,6 +27,7 @@ for (const [fixture, title] of [
         'esp_timer.h',
         'esp_webrtc.h',
         'driver/i2s_std.h',
+        'driver/i2c_master.h',
         'esp_heap_caps.h',
         'esp_ae_rate_cvt.h',
         'audio_render.h',

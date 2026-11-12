@@ -9,7 +9,7 @@ typedef struct { unsigned samples; } Tone;
 static size_t tone(void *context, int16_t *output, size_t count) {
     Tone *t = context;
     for (size_t i = 0; i < count; i++, t->samples++)
-        output[i] = (int16_t)(8000 * sin(2 * 3.141592653589793 * 220 * t->samples / 48000));
+        output[i] = (int16_t)(8000 * sin(2 * 3.141592653589793 * 220 * t->samples / 16000));
     return count;
 }
 void xs_live_pitch_probe(xsMachine *the) {
@@ -18,18 +18,18 @@ void xs_live_pitch_probe(xsMachine *the) {
     int err = livePitchOpen(&p, semitones);
     if (err) xsUnknownError("pitch open failed: %d", err);
     Tone source = {0};
-    int16_t output[480], previous = 0;
+    int16_t output[160], previous = 0;
     unsigned crossings = 0;
     int64_t maxUs = 0;
     for (unsigned block = 0; block < 300; block++) {
         LivePitchResult result;
         int64_t start = esp_timer_get_time();
-        if (p) err = livePitchRender(p, tone, &source, output, 480, &result);
-        else tone(&source, output, 480);
+        if (p) err = livePitchRender(p, tone, &source, output, 160, &result);
+        else tone(&source, output, 160);
         int64_t elapsed = esp_timer_get_time() - start;
         if (elapsed > maxUs) maxUs = elapsed;
         if (err) break;
-        for (unsigned i = 0; i < 480; i++) {
+        for (unsigned i = 0; i < 160; i++) {
             if (block >= 200 && previous <= 0 && output[i] > 0) crossings++;
             previous = output[i];
         }

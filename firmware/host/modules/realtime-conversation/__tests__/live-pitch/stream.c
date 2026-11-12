@@ -10,7 +10,7 @@ static float selectedPitch;
 typedef struct { int16_t data[4096]; unsigned count; } Fake;
 int esp_ae_sonic_open(esp_ae_sonic_cfg_t *config, esp_ae_sonic_handle_t *out) {
     assert(config->channel == 1 && config->bits_per_sample == 16);
-    assert(config->sample_rate == 48000);
+    assert(config->sample_rate == 16000);
     *out = calloc(1, sizeof(Fake)); opens++;
     return *out ? 0 : ESP_AE_ERR_MEM_LACK;
 }
@@ -28,13 +28,13 @@ int esp_ae_sonic_process(esp_ae_sonic_handle_t handle, esp_ae_sonic_in_data_t *i
     if (failure == 5) { out->out_num = out->needed_num + 1; return 0; }
     // Alternate partial consumption with output from the internal cache. Delay
     // output by two blocks, exercising Sonic's buffering and unconsumed input.
-    unsigned available = f->count > 960 ? f->count - 960 : 0;
+    unsigned available = f->count > 320 ? f->count - 320 : 0;
     if (!available) {
         in->consume_num = in->num < 137 ? in->num : 137;
         assert(f->count + in->consume_num <= 4096);
         memcpy(f->data + f->count, in->samples, in->consume_num * 2);
         f->count += in->consume_num;
-        available = f->count > 960 ? f->count - 960 : 0;
+        available = f->count > 320 ? f->count - 320 : 0;
     }
     out->out_num = available < out->needed_num ? available : out->needed_num;
     memcpy(out->samples, f->data, out->out_num * 2);
@@ -68,14 +68,14 @@ int main(void) {
     assert(fabsf(up * selectedPitch - 1.0f) < 0.0001f);
     assert(fabsf(up / selectedPitch - 2.0f) < 0.0001f);
     Source source = {.limit = 2000};
-    int16_t output[480];
+    int16_t output[160];
     unsigned position = 0, received = 0;
     bool missing = false;
     for (unsigned block = 0; block < 30; block++) {
         LivePitchResult result;
-        assert(!livePitchRender(p, readSource, &source, output, 480, &result));
+        assert(!livePitchRender(p, readSource, &source, output, 160, &result));
         received += result.received; missing |= result.missing;
-        for (unsigned i = 0; i < 480; i++, position++)
+        for (unsigned i = 0; i < 160; i++, position++)
             assert(output[i] == (int16_t)(position < source.limit ? 1 + position % 10000 : 0));
     }
     assert(missing && received == source.received && received == source.limit);
@@ -83,11 +83,11 @@ int main(void) {
     // next output must contain only the next source, without closing Sonic.
     source = (Source){.limit = 2000};
     LivePitchResult resetResult;
-    assert(!livePitchRender(p, readSource, &source, output, 480, &resetResult));
+    assert(!livePitchRender(p, readSource, &source, output, 160, &resetResult));
     assert(!livePitchReset(p));
     source = (Source){0};
-    assert(!livePitchRender(p, readSource, &source, output, 480, &resetResult));
-    for (unsigned i = 0; i < 480; i++) assert(output[i] == 0);
+    assert(!livePitchRender(p, readSource, &source, output, 160, &resetResult));
+    for (unsigned i = 0; i < 160; i++) assert(output[i] == 0);
     failure = 6;
     assert(livePitchReset(p));
     failure = 0;
@@ -97,10 +97,10 @@ int main(void) {
     assert(!livePitchOpen(&p, 2));
     source = (Source){0};
     LivePitchResult result;
-    assert(!livePitchRender(p, readSource, &source, output, 480, &result));
-    for (unsigned i = 0; i < 480; i++) assert(output[i] == 0);
+    assert(!livePitchRender(p, readSource, &source, output, 160, &result));
+    for (unsigned i = 0; i < 160; i++) assert(output[i] == 0);
     for (failure = 2; failure <= 5; failure++)
-        assert(livePitchRender(p, readSource, &source, output, 480, &result) != 0);
+        assert(livePitchRender(p, readSource, &source, output, 160, &result) != 0);
     livePitchClose(p);
     failure = 1;
     assert(livePitchOpen(&p, 3) && !p);

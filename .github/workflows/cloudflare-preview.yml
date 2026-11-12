@@ -11,14 +11,6 @@ on:
         description: Closed-page Cloudflare deployment ID to retain
         required: true
         type: string
-  workflow_run:
-    workflows:
-      - Bundle Stack-chan Firmware
-    types:
-      - completed
-  pull_request_target:
-    types:
-      - closed
 
 permissions: {}
 

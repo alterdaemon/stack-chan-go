@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PITCH_BLOCK 480
+#define PITCH_BLOCK 160
 struct LivePitch {
     esp_ae_sonic_handle_t sonic;
     int16_t input[PITCH_BLOCK];
@@ -20,7 +20,7 @@ int livePitchOpen(LivePitch **out, int semitones)
     if (!semitones) return 0;
     LivePitch *p = calloc(1, sizeof(*p));
     if (!p) return ESP_AE_ERR_MEM_LACK;
-    esp_ae_sonic_cfg_t config = {.sample_rate = 48000, .channel = 1, .bits_per_sample = 16};
+    esp_ae_sonic_cfg_t config = {.sample_rate = 16000, .channel = 1, .bits_per_sample = 16};
     int err = esp_ae_sonic_open(&config, &p->sonic);
     if (!err) err = esp_ae_sonic_set_speed(p->sonic, 1.0f);
     if (!err) err = esp_ae_sonic_set_pitch(p->sonic, powf(2.0f, semitones / 12.0f));

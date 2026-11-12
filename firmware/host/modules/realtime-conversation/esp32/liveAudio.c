@@ -10,9 +10,10 @@
 #include "esp_webrtc.h"
 #include "liveAudio.h"
 #include "livePitch.h"
+#include "liveEcho.h"
+#include "liveCodec.h"
 #include "driver/i2s_std.h"
 #include "esp_heap_caps.h"
-#include "esp_ae_rate_cvt.h"
 #include "audio_render.h"
 #include "esp_aec.h"
 #include "freertos/FreeRTOS.h"
@@ -77,15 +78,17 @@ static LiveAudio *activeAudio;
 static atomic_bool quiesceAudio;
 extern esp_err_t stackchanMediaAdapter(void);
 extern int stackchanInstallOpusPolicy(void);
+extern void stackchanOpusDecodeRate(unsigned rate);
 
 /* The board codec is configured before capture. This module owns BOTH I2S
  * directions for the entire session; do not open device.audio at the same time.
  * Three 10 ms DMA buffers separate a submitted sample from the capture clock.
  * AEC receives the software-volume-adjusted samples, including silence. */
-#define BLOCK 480
+#define LIVE_RATE 16000
+#define BLOCK (LIVE_RATE / 100)
 #define DMA_BLOCKS 3
 #define CAPTURE_BYTES 6400
-#define PLAYBACK_BYTES 19200
+#define PLAYBACK_BYTES (LIVE_RATE * 2 / 5)
 
 struct LiveAudio {
 	esp_capture_audio_src_if_t source;
@@ -95,8 +98,9 @@ struct LiveAudio {
 	i2s_chan_handle_t tx, rx;
 	StreamBufferHandle_t input, output;
 
-	esp_ae_rate_cvt_handle_t resampler;
 	aec_handle_t *aec;
+    LiveEcho echo;
+    LiveCodec codec;
     LivePitch *pitch;
 	bool bargeIn;
     UBaseType_t dspPriority;
@@ -157,6 +161,7 @@ static esp_capture_err_t sourceStart(esp_capture_audio_src_if_t *s)
 	LiveAudio *a = (LiveAudio *)s;
 	a->pts = 0;
 	a->cleanOffset = a->chunk * 2;
+    liveEchoReset(&a->echo);
 	atomic_store(&a->reading, true);
 	return ESP_CAPTURE_ERR_OK;
 }
@@ -179,7 +184,9 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 					// Close keeps the source clock and FIFO drain alive, but only
 					// forwards silence. Its AEC state will be released after teardown.
 					memset(clean, 0, a->chunk * 2);
-				} else {
+                } else if (!liveEchoNeedsAEC(&a->echo, ref, a->chunk)) {
+                    memcpy(clean, mic, a->chunk * sizeof(int16_t));
+                } else {
 					// Capture DSP precedes HTTPS and normal XS work.
 					// I2S remains independent and never waits for this processing.
 					UBaseType_t priority = uxTaskPriorityGet(NULL);
@@ -194,6 +201,8 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 #endif
 					vTaskPrioritySet(NULL, priority);
 				}
+                if (!atomic_load(&a->quiesced))
+                    liveEchoListeningLevel(clean, a->chunk, a->codec.captureGainQ10);
 				captureStats(a, mic, ref, clean);
 				a->cleanOffset = 0;
 			}
@@ -225,7 +234,7 @@ static esp_capture_err_t sourceStop(esp_capture_audio_src_if_t *s)
 static audio_render_handle_t renderInit(void *cfg, int size) { return *(LiveAudio **)cfg; }
 static int renderOpen(audio_render_handle_t h, av_render_audio_frame_info_t *info)
 {
-	return (info->sample_rate == 48000 && info->channel == 1 && info->bits_per_sample == 16) ? 0 : -1;
+	return (info->sample_rate == LIVE_RATE && info->channel == 1 && info->bits_per_sample == 16) ? 0 : -1;
 }
 static int renderWrite(audio_render_handle_t h, av_render_audio_frame_t *frame)
 {
@@ -242,12 +251,12 @@ static int renderWrite(audio_render_handle_t h, av_render_audio_frame_t *frame)
 static int renderLatency(audio_render_handle_t h, uint32_t *ms)
 {
 	LiveAudio *a = h;
-	*ms = xStreamBufferBytesAvailable(a->output) / 96 + DMA_BLOCKS * 10;
+	*ms = xStreamBufferBytesAvailable(a->output) / (LIVE_RATE / 500) + DMA_BLOCKS * 10;
 	return 0;
 }
 static int renderInfo(audio_render_handle_t h, av_render_audio_frame_info_t *info)
 {
-	*info = (av_render_audio_frame_info_t){.sample_rate = 48000, .channel = 1, .bits_per_sample = 16};
+	*info = (av_render_audio_frame_info_t){.sample_rate = LIVE_RATE, .channel = 1, .bits_per_sample = 16};
 	return 0;
 }
 static int renderClose(audio_render_handle_t h) { return 0; }
@@ -370,8 +379,7 @@ static void audioTask(void *ctx)
 			delay = (delay + 1) % (BLOCK * DMA_BLOCKS);
 		}
 		uint32_t count = BLOCK;
-		err = esp_ae_rate_cvt_process(a->resampler, pair, BLOCK, converted, &count);
-		if (err) { atomic_store(&a->error, err); break; }
+		memcpy(converted, pair, BLOCK * 4);
 #ifdef MODDEF_STACKCHAN_LIVE_PROBE
         extern void stackchanProbeInput(int16_t *samples, unsigned count, unsigned playbackLevel);
         stackchanProbeInput(converted, count, playbackLevel);
@@ -434,9 +442,11 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->bargeIn = bargeIn;
 	a->chunk = 160;
 	if (bargeIn) {
+        a->stage = "codec_gain";
+        if ((err = liveCodecOpen(&a->codec, 6))) return err;
 		a->stage = "aec_create";
 		aec_config_t config = {.mic_num = 1, .ref_num = 1, .out_num = 1,
-			.filter_length = 4, .sample_rate = 16000,
+			.filter_length = 2, .sample_rate = 16000,
 			.caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
 			// ESP-SR's default FD level provides stronger residual echo suppression.
 			.mode = AEC_MODE_FD_LOW_COST, .nlp_level = AEC_NLP_LEVEL_AGGR};
@@ -450,11 +460,6 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->buffers = heap_caps_aligned_calloc(16, BLOCK * (8 + DMA_BLOCKS) + a->chunk * (bargeIn ? 5 : 3), sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 	if (!a->buffers) return ESP_ERR_NO_MEM;
 	if (bargeIn) a->aecFrame = a->buffers + BLOCK * (8 + DMA_BLOCKS) + a->chunk * 2;
-	esp_ae_rate_cvt_cfg_t rate = {.src_rate = 48000, .dest_rate = 16000, .channel = 2,
-		.bits_per_sample = 16, .complexity = 2, .perf_type = ESP_AE_RATE_CVT_PERF_TYPE_SPEED};
-	a->stage = "resampler_open";
-	err = esp_ae_rate_cvt_open(&rate, &a->resampler);
-	if (err) return err;
 	i2s_chan_config_t channel = I2S_CHANNEL_DEFAULT_CONFIG(
 		MODDEF_AUDIOOUT_I2S_NUM,
 		I2S_ROLE_MASTER);
@@ -465,7 +470,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	err = i2s_new_channel(&channel, &a->tx, &a->rx);
 	if (err) return err;
 	i2s_std_config_t config = {
-		.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(48000),
+		.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(LIVE_RATE),
 		.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
 		.gpio_cfg = {.mclk = MODDEF_AUDIOOUT_I2S_MCK_PIN,
 			.bclk = MODDEF_AUDIOOUT_I2S_BCK_PIN, .ws = MODDEF_AUDIOOUT_I2S_LR_PIN,
@@ -507,6 +512,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	 * returns WRONG_STATE. Accept that known return only for this setter. */
 	err = av_render_set_fixed_frame_info(a->player, &info);
 	if (err && err != ESP_MEDIA_ERR_WRONG_STATE) return err;
+    stackchanOpusDecodeRate(LIVE_RATE);
 	provider->capture = a->capture;
 	provider->player = a->player;
   portENTER_CRITICAL(&audioLock);
@@ -532,13 +538,14 @@ void liveAudioClose(LiveAudio *a)
 	if (a->capture) esp_capture_close(a->capture);
 	if (a->player) av_render_close(a->player);
 	if (a->render) audio_render_free_handle(a->render);
+    stackchanOpusDecodeRate(0);
 	while (a->taskStarted && !atomic_load(&a->done)) vTaskDelay(pdMS_TO_TICKS(10));
     livePitchClose(a->pitch);
 	if (a->rxEnabled) i2s_channel_disable(a->rx);
 	if (a->txEnabled) i2s_channel_disable(a->tx);
 	if (a->rx) i2s_del_channel(a->rx);
 	if (a->tx) i2s_del_channel(a->tx);
-	if (a->resampler) esp_ae_rate_cvt_close(a->resampler);
+    if (liveCodecClose(&a->codec)) modLog("Live codec restoration failed");
 	if (a->aec) aec_destroy(a->aec);
 	if (a->input) audioStreamDelete(a->input);
 	if (a->output) audioStreamDelete(a->output);

@@ -1,6 +1,7 @@
 #include "../../esp32/liveAudio.c"
 #include <assert.h>
 #include <pthread.h>
+#include <stdio.h>
 
 struct Stream {
     bool playback;
@@ -16,7 +17,25 @@ static atomic_uint blocks, writes, dspCalls, submitted, priorityChanges;
 static unsigned permittedBlocks;
 static _Thread_local unsigned taskPriority;
 static const unsigned uiPriority = 6, ioPriority = 20, sourcePriority = 15;
-static bool delayDsp, delayedPlayback;
+static bool delayDsp, delayedPlayback, referencePause, interruptPlayback, interruptRecovery, restoreGain;
+static atomic_int outputHistory[100000];
+
+static int playbackAt(unsigned sample) {
+    if (interruptRecovery) {
+        unsigned block = sample / 160;
+        // A 300 ms packet gap, followed by late old audio, must stay muted.
+        // The cancelled stream then ends without encoded silence. A later
+        // response must play in this same audio session.
+        if ((block >= 40 && block < 70) || (block >= 80 && block < 140)) return 0;
+        if (block >= 140) return 800;
+    }
+    return referencePause && sample / 160 >= 40 && sample / 160 < 100 ? 0 : 400;
+}
+
+static int referenceAt(unsigned sample) {
+    unsigned delay = DMA_BLOCKS * BLOCK;
+    return sample < delay ? 0 : atomic_load(&outputHistory[sample - delay]);
+}
 
 UBaseType_t uxTaskPriorityGet(void *task) { assert(!task); return taskPriority; }
 void vTaskPrioritySet(void *task, UBaseType_t priority) {
@@ -32,7 +51,9 @@ int av_render_flush(av_render_handle_t player) { assert(false); return 0; }
 size_t xStreamBufferReceive(StreamBufferHandle_t stream, void *data, size_t bytes, unsigned wait) {
     if (stream->playback) {
         assert(taskPriority == ioPriority && !wait);
-        for (size_t i = 0; i < bytes / 2; i++) ((int16_t *)data)[i] = 400;
+        if (interruptRecovery && !playbackAt(atomic_load(&blocks) * 160)) return 0;
+        for (size_t i = 0; i < bytes / 2; i++)
+            ((int16_t *)data)[i] = playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 16000));
         return bytes;
     }
     assert(taskPriority == sourcePriority && pthread_equal(pthread_self(), consumer));
@@ -70,9 +91,14 @@ size_t xStreamBufferSend(StreamBufferHandle_t stream, const void *data, size_t b
 }
 int i2s_channel_write(i2s_chan_handle_t channel, const void *data, size_t bytes,
                       size_t *written, uint32_t timeout) {
-    assert(taskPriority == ioPriority && bytes == BLOCK * 4);
+    assert(taskPriority == ioPriority && bytes == BLOCK * 2 * 2);
     const int16_t *samples = data;
-    for (unsigned i = 0; i < BLOCK * 2; i++) assert(samples[i] == (atomic_load(&session->quiesced) ? 0 : (session->pitch ? 100 : 200)));
+
+    for (unsigned i = 0; i < BLOCK * 2; i++)
+        assert(samples[i] == ((atomic_load(&session->quiesced) || atomic_load(&session->yieldOutput)) ? 0 :
+            playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 8000)) / (session->pitch ? 4 : 2)));
+    for (unsigned i = 0; i < 160; i++)
+        atomic_store(&outputHistory[atomic_load(&blocks) * 160 + i], samples[i * (LIVE_RATE / 8000)]);
     pthread_mutex_lock(&lock);
     atomic_fetch_add(&writes, 1);
     pthread_cond_broadcast(&changed);
@@ -82,13 +108,13 @@ int i2s_channel_write(i2s_chan_handle_t channel, const void *data, size_t bytes,
 }
 int i2s_channel_read(i2s_chan_handle_t channel, void *data, size_t bytes,
                      size_t *received, uint32_t timeout) {
-    assert(taskPriority == ioPriority && bytes == BLOCK * 4);
+    assert(taskPriority == ioPriority && bytes == BLOCK * 2 * 2);
     pthread_mutex_lock(&lock);
     while (atomic_load(&blocks) >= permittedBlocks && !atomic_load(&session->stopping))
         pthread_cond_wait(&changed, &lock);
     unsigned block = atomic_fetch_add(&blocks, 1);
     for (unsigned i = 0; i < BLOCK; i++) {
-        int16_t sample = 1000 + ((block * BLOCK + i) / 3) % 113;
+        int16_t sample = 1000 + ((block * BLOCK + i) / (LIVE_RATE / 16000)) % 113;
         ((int16_t *)data)[i * 2] = ((int16_t *)data)[i * 2 + 1] = sample;
     }
     *received = bytes;
@@ -96,21 +122,12 @@ int i2s_channel_read(i2s_chan_handle_t channel, void *data, size_t bytes,
     pthread_mutex_unlock(&lock);
     return 0;
 }
-int esp_ae_rate_cvt_process(esp_ae_rate_cvt_handle_t handle, int16_t *input,
-                          uint32_t count, int16_t *output, uint32_t *produced) {
-    assert(taskPriority == ioPriority);
-    *produced = count / 3;
-    for (unsigned i = 0; i < *produced; i++) {
-        output[i * 2] = input[i * 6];
-        output[i * 2 + 1] = input[i * 6 + 1];
-    }
-    return 0;
-}
 int livePitchReset(LivePitch *pitch) { return 0; }
 int livePitchRender(LivePitch *pitch, LivePitchRead read, void *context,
                     int16_t *output, size_t count, LivePitchResult *result) {
     assert(taskPriority == ioPriority && pitch->semitones);
     size_t received = read(context, output, count);
+    memset(output + received, 0, (count - received) * sizeof(int16_t));
     for (unsigned i = 0; i < count; i++) output[i] /= 2;
     *result = (LivePitchResult){.received = received, .missing = received < count};
     return 0;
@@ -122,7 +139,7 @@ void aec_process(const aec_handle_t *aec, int16_t *mic, int16_t *ref, int16_t *c
     assert(!((uintptr_t)mic % 16) && !((uintptr_t)ref % 16) && !((uintptr_t)clean % 16));
     if (delayDsp && !atomic_load(&dspCalls)) {
         // The mouth meter must already follow I2S before capture DSP finishes.
-        assert(atomic_load(&session->playbackLevel) == (atomic_load(&session->quiesced) ? 0 : (session->pitch ? 100 : 200)));
+        assert(atomic_load(&session->playbackLevel) == ((atomic_load(&session->quiesced) || atomic_load(&session->yieldOutput)) ? 0 : (session->pitch ? 100 : 200)));
         assert(!atomic_load(&session->referenceLevel));
         // Hold DSP while the independent I2S task advances 100 ms of virtual
         // audio. The bounded FIFO must retain every paired microphone frame.
@@ -136,10 +153,10 @@ void aec_process(const aec_handle_t *aec, int16_t *mic, int16_t *ref, int16_t *c
         delayedPlayback = true;
         pthread_mutex_unlock(&lock);
     }
-    unsigned start = atomic_load(&dspCalls) * aec->count;
+    unsigned start = atomic_load(&session->captured);
     for (unsigned i = 0; i < aec->count; i++) {
         assert(mic[i] == 1000 + (start + i) % 113);
-        int reference = atomic_load(&session->quiesced) || start + i < DMA_BLOCKS * BLOCK / 3 ? 0 : (session->pitch ? 100 : 200);
+        int reference = referenceAt(start + i);
         assert(ref[i] == reference);
         clean[i] = mic[i] - ref[i];
     }
@@ -159,6 +176,7 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
         .aec = interruption ? &aec : NULL, .pitch = semitones ? &pitch : NULL,
         .bargeIn = interruption, .chunk = interruption ? aec.count : 160,
         .dspPriority = uiPriority + 1};
+    if (restoreGain) audio.codec.captureGainQ10 = 2048;
     size_t samples = BLOCK * (8 + DMA_BLOCKS) + audio.chunk * (interruption ? 5 : 3);
     audio.buffers = aligned_alloc(16, samples * sizeof(int16_t));
     assert(audio.buffers);
@@ -167,6 +185,7 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     atomic_store(&audio.volume, 512);
     atomic_store(&audio.muted, mute);
     session = &audio;
+    activeAudio = &audio;
     consumer = pthread_self();
     delayDsp = delay;
     delayedPlayback = false;
@@ -174,9 +193,16 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     permittedBlocks = 0;
     atomic_store(&blocks, 0); atomic_store(&writes, 0); atomic_store(&dspCalls, 0);
     atomic_store(&submitted, 0); atomic_store(&priorityChanges, 0);
+    for (unsigned i = 0; i < 100000; i++) atomic_store(&outputHistory[i], 0);
     assert(!sourceStart(&audio.source));
     atomic_store(&quiesceAudio, quiesce);
     liveAudioMute(&audio, mute);
+    if (interruptPlayback) {
+        bool accepted = liveAudioRequestInterrupt();
+        assert(accepted == (interruption && !mute && !quiesce));
+        if (accepted) assert(!liveAudioFlushOutput(&audio));
+    }
+    assert(atomic_load(&audio.yieldOutput) == (interruptPlayback && interruption && !mute));
     assert(atomic_load(&audio.quiesced) == quiesce);
     assert(atomic_load(&audio.reading) && !atomic_load(&audio.stopping));
     assert(!pthread_create(&clockThread, NULL, runClock, &audio));
@@ -191,8 +217,12 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
         assert(taskPriority == sourcePriority && frame.pts == total / 16);
         for (unsigned i = 0; i < count; i++) {
             unsigned index = total + i;
-            int reference = quiesce || index < DMA_BLOCKS * BLOCK / 3 ? 0 : (semitones ? 100 : 200);
+            int reference = referenceAt(index);
             int expected = interruption && !mute && !quiesce ? 1000 + index % 113 - reference : 0;
+            if (restoreGain && interruption) expected *= 2;
+            if (captured[i] != expected)
+                fprintf(stderr, "capture mismatch rate=%u index=%u On=%d actual=%d expected=%d\n",
+                    LIVE_RATE, index, interruption, captured[i], expected);
             assert(captured[i] == expected);
         }
         total += count;
@@ -205,11 +235,20 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     assert(atomic_load(&audio.done) && !atomic_load(&audio.error));
     assert(!atomic_load(&audio.overruns));
     assert(atomic_load(&submitted) >= total && atomic_load(&audio.sourceSamples) == total);
-    assert(atomic_load(&dspCalls) == (interruption && !quiesce ? total / aec.count : 0));
+    if (interruption && !quiesce && (referencePause || (interruptPlayback && !mute)))
+        assert(atomic_load(&dspCalls) > 0 && atomic_load(&dspCalls) < total / aec.count);
+    else assert(atomic_load(&dspCalls) == (interruption && !quiesce ? total / aec.count : 0));
     assert(atomic_load(&priorityChanges) == atomic_load(&dspCalls) * 2);
     assert(delayedPlayback == (interruption && delay && !quiesce));
+    if (interruptRecovery && interruption) {
+        assert(!atomic_load(&audio.yieldOutput));
+        assert(!atomic_load(&outputHistory[75 * 160]));
+        assert(atomic_load(&outputHistory[145 * 160]) == (semitones ? 200 : 400));
+        assert(atomic_load(&audio.audibleMs) > 500);
+    }
     assert(sourceRead(&audio.source, &(esp_capture_stream_frame_t){.data = input.data, .size = 320})
         == ESP_CAPTURE_ERR_NOT_SUPPORTED);
+    activeAudio = NULL;
     free(audio.buffers);
 }
 int main(void) {
@@ -221,5 +260,35 @@ int main(void) {
     }
     run(true, 0, true, true, false);
     run(true, 3, true, true, false);
+    referencePause = true;
+    run(true, 0, false, true, false);
+    run(true, 6, false, true, false);
+    run(true, 0, true, true, false);
+    referencePause = false;
+    interruptPlayback = true;
+    run(true, 3, false, true, false);
+    run(true, 0, true, true, false);
+    interruptRecovery = true;
+    run(true, 0, false, true, false);
+    run(true, 3, false, true, false);
+    interruptRecovery = false;
+    restoreGain = true;
+    run(true, 0, false, true, false);
+    restoreGain = false;
+    LiveEcho echo;
+    int16_t quiet[512] = {0};
+    liveEchoReset(&echo);
+    for (unsigned i = 0; i < 7; i++) assert(liveEchoNeedsAEC(&echo, quiet, 512));
+    assert(!liveEchoNeedsAEC(&echo, quiet, 512));
+    int16_t levels[] = {2000, -2000, 32767, -32768};
+    liveEchoListeningLevel(levels, 4, 2048);
+    assert(levels[0] == 4000 && levels[1] == -4000 && levels[2] == 32767 && levels[3] == -32768);
+    liveEchoListeningLevel(levels, 4, 182000);
+    assert(levels[0] == 32767 && levels[1] == -32768 && levels[2] == 32767 && levels[3] == -32768);
+    quiet[511] = 1;
+    assert(liveEchoNeedsAEC(&echo, quiet, 512));
+    quiet[511] = 0;
+    for (unsigned i = 0; i < 7; i++) assert(liveEchoNeedsAEC(&echo, quiet, 512));
+    assert(!liveEchoNeedsAEC(&echo, quiet, 512));
     return 0;
 }

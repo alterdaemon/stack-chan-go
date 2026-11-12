@@ -14,9 +14,11 @@
     "realtimeConversation": "../../../../../host/modules/realtime-conversation/realtimeConversation",
     "realtimeConversation/core": "../../../../../host/modules/realtime-conversation/core",
     "realtimeConversation/tools": "../../../../../host/modules/realtime-conversation/tools",
+    "realtimeConversation/web-search": "../../../../../host/modules/realtime-conversation/web-search",
     "realtimeConversation/transport": "./transport",
     "realtimeConversation/http": "./http",
     "network-power": "./network-power",
+    "io-performance": "./levels",
     "preference": "./preference"
   }
 }
