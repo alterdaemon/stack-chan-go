@@ -132,6 +132,10 @@ on its native owner task; the audio task discards old PCM and resets Pitch.
 Interrupted accepted searches return a cancelled result without resuming the old
 answer. Mini uses the documented 0.5 server-VAD default.
 
+R3 with Interruption On requests far-field input filtering for both Realtime
+models before server VAD and verifies it before enabling microphone input.
+The published R2 images do not contain this fix.
+
 With **Interruption Off**, microphone samples are gated during playback and until
 the existing 500 ms received-silence gate clears: voice interruption is unavailable.
 On keeps capture and AEC active. Explicit microphone mute remains separate.

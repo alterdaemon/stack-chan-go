@@ -482,16 +482,60 @@ test('Mini rejects an acknowledged configuration that still omits its system pro
   assert.equal(f.closed, 1)
   assert.equal(f.timers.size, 0)
 })
-test('Mini accepts a complete initial configuration without an unnecessary update', async () => {
-  const f = fixture()
+test('Mini waits for far-field filtering before enabling interruption input', async () => {
+  const f = fixture({ bargeIn: true })
   const connecting = f.c.connect()
   await f.signal()
-  f.message({ type: 'session.created', session: { ...(await requestedSession(f)), id: 'sess_test' } })
+  const requested = await requestedSession(f)
+  const unfiltered = { ...requested, id: 'sess_test', audio: { input: { ...requested.audio.input } } }
+  delete unfiltered.audio.input.noise_reduction
+  f.message({ type: 'session.created', session: unfiltered })
+  assert.equal(f.c.state, 'connecting')
+  assert.equal(f.mute, true)
+  assert.equal(f.sent.length, 1)
+  assert.deepEqual(f.sent[0].session.audio.input.noise_reduction, { type: 'far_field', strength: 1 })
+  f.message({ type: 'session.updated', session: { ...requested, ...f.sent[0].session, id: 'sess_test' } })
   await connecting
   assert.equal(f.c.state, 'connected')
   assert.equal(f.mute, false)
-  assert.deepEqual(f.sent, [])
   await f.c.close()
+})
+for (const noise of [undefined, null, { type: 'near_field', strength: 1 }, { type: 'far_field', strength: 0.5 }]) {
+  test(`Mini rejects an interruption filter acknowledgement of ${JSON.stringify(noise)}`, async () => {
+    const f = fixture({ bargeIn: true })
+    const connecting = f.c.connect()
+    const outcome = connecting.then(
+      () => 'connected',
+      (error) => error.code,
+    )
+    await f.signal()
+    const requested = await requestedSession(f)
+    const wrong = {
+      ...requested,
+      id: 'sess_test',
+      audio: { input: { ...requested.audio.input, noise_reduction: noise } },
+    }
+    f.message({ type: 'session.created', session: wrong })
+    f.message({ type: 'session.updated', session: wrong })
+    await flush()
+    assert.equal(await outcome, 'configuration_mismatch')
+    assert.equal(f.mute, true)
+    assert.equal(f.closed, 1)
+    assert.equal(f.timers.size, 0)
+  })
+}
+test('Mini accepts a complete initial configuration without an unnecessary update', async () => {
+  for (const bargeIn of [false, true]) {
+    const f = fixture({ bargeIn })
+    const connecting = f.c.connect()
+    await f.signal()
+    f.message({ type: 'session.created', session: { ...(await requestedSession(f)), id: 'sess_test' } })
+    await connecting
+    assert.equal(f.c.state, 'connected')
+    assert.equal(f.mute, false)
+    assert.deepEqual(f.sent, [])
+    await f.c.close()
+  }
 })
 function searchReply() {
   return {
@@ -540,6 +584,7 @@ test('both Realtime models use multipart WebRTC, server VAD and supported tools 
     assert.equal(session.model, model ?? 'gpt-realtime-2.1-mini')
     assert.equal(session.instructions, 'Use Polish.')
     assert.equal(session.audio.output.voice, 'cedar')
+    assert.deepEqual(session.audio.input.noise_reduction, bargeIn ? { type: 'far_field', strength: 1 } : undefined)
     const turn = session.audio.input.turn_detection
     assert.equal(turn.type, 'server_vad')
     assert.equal(turn.create_response, true)
@@ -551,6 +596,7 @@ test('both Realtime models use multipart WebRTC, server VAD and supported tools 
     assert.equal(session.delegation, undefined)
     assert.deepEqual(f.starts, [{ bargeIn, pitch: 2, realtime: true }])
     assert.equal(f.setup[0].type, 'session.update')
+    assert.deepEqual(f.setup[0].session.audio.input.noise_reduction, session.audio.input.noise_reduction)
     assert.equal(f.setup[0].session.audio.input.turn_detection.interrupt_response, bargeIn)
     assert.equal(f.c.state, 'connected')
     await f.c.setMuted(true)

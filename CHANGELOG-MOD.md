@@ -17,6 +17,7 @@ headed `### <product-version>` for the requested tag.
 Release impact: minor.
 
 - Add GPT-Realtime 2.1 as a third conversation choice alongside GPT-Live 1 and Realtime Mini, sharing Realtime voices, web search and interruption controls.
+- Filter Realtime microphone input with far-field noise reduction before server VAD when Interruption is On; verify the filter acknowledgement before enabling input, retaining the 0.5 threshold and voice interruption.
 
 ### 2.1.0-R2
 

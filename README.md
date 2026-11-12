@@ -19,6 +19,8 @@ search-cancellation fixes.
 R3 adds GPT-Realtime 2.1 as the third conversation choice. Both Realtime models
 share the saved Realtime voice, web search and interruption controls. Model
 selection takes effect on the next manual start.
+With Interruption On, both Realtime models use far-field input filtering before
+server VAD and verify it before enabling microphone input.
 
 ## What this fork adds
 

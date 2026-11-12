@@ -446,6 +446,66 @@ R2 maintainer confirmation, 2026-11-12: the maintainer stated that physical veri
 
 R2 publication, 2026-11-12: published the explicitly requested regular Latest release at `https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2`. The immutable tag points to `42e2790e786ff585c7db8b3eb09c1dcef71e1966`, including the maintainer's confirmation; firmware/web inputs match validated build `d46614ed` exactly. Both uploaded assets were downloaded and their sizes and SHA-256 hashes matched the retained build identity; public release/asset URLs, type, Latest selection and description were verified. GitHub returned no Actions runs or commit checks, so no remote CI pass is claimed. Local validation and the maintainer's physical confirmation are recorded above. R2 description formatting follows the preceding releases; installation text matches R1 apart from BIN filenames, with the same one-line platform-specific PORT explanation added to all three releases. The R2 changelog contains behavior changes only; administrative notes and Unreleased were removed at the user's request. No firmware rebuild, reflash or published-tag move accompanied these documentation edits.
 
+## Realtime echo filtering: R3
+
+2026-11-12. Request `audio.input.noise_reduction` with `type: far_field` and
+`strength: 1` for both Realtime models with Interruption On, in both call creation and
+startup correction. Keep the microphone muted until the server acknowledges the
+filter, instructions and VAD configuration. Retain the 0.5 server-VAD threshold
+and genuine voice interruption. [OpenAI's client-event reference](https://developers.openai.com/api/reference/resources/realtime/client-events)
+documents input filtering before VAD and its intended reduction of false speech
+detections.
+
+Local/static verification: the six selected regression checks failed against the
+old implementation as expected. After the patch, all 46 Realtime protocol tests
+passed. The focused command below passed all 142 Node test-runner cases, including
+the native audio harnesses; the legacy core file also reported its 30 internal
+checks passing. Biome check passed for both changed JavaScript files.
+
+```sh
+# From firmware/, with TMPDIR and PYTHONPYCACHEPREFIX under workspace internal/:
+node --test --test-reporter=spec host/modules/realtime-conversation/__tests__/*.test.mjs mods/examples/openai_live_webrtc/*.test.mjs
+./node_modules/.bin/biome check host/modules/realtime-conversation/core.js host/modules/realtime-conversation/__tests__/realtime.test.mjs
+```
+
+Browser/live-API controls used the real Conversation core over WebRTC, generated
+speech, an archived echo residual and an explicit silent output sink. With the
+old code, the two echo-only controls produced one and three false speech starts,
+local flushes and server output clears. Diagnostic far-field filtering produced
+zero in both repetitions. Two quieter-stop controls mixed speech at -12 dB into
+the same echo and each produced one interruption after that speech began, with
+no extra interruption. A 0.7-threshold alternative suppressed the echo-only
+fixture but its mixed-speech control produced an additional false interruption;
+it was not selected.
+
+Final browser/live-API verification exercised the patched Mini core without policy
+overrides in four WebRTC sessions. Both echo-only repetitions had zero false
+speech starts, local flushes, server output clears or replacement responses.
+Both quieter-stop repetitions detected exactly one interruption, 1,309.0 and
+1,280.9 ms after the mixture began (speech starts at 1,000 ms), with no extra
+interruption. All four sessions retained normal opening/stop/question detection,
+acknowledged far-field strength 1 and VAD threshold 0.5, stayed connected, reported
+no API errors and completed HTTP 200 hangup. Source hashes, event identities and
+automated assertions are retained in the private `fix-verification.json` record.
+
+Scope: the echo fixture is seconds 2-8 of the archived FD2, 30 ms reference-delay,
+9 dB microphone-gain component recording, digitally restored before replay.
+Current firmware uses 6 dB microphone gain. The quieter-stop mixture is synthetic
+post-AEC input, not a physical double-talk recording. These tests establish the
+reproduced false-VAD path and the tested filter's behavior, not the exact cause
+of the reported physical incident or protection in every acoustic environment.
+No device, physical speaker, saved preferences or OpenSpec change was touched.
+Initial patch verification built no firmware image and installed nothing.
+The requested R2 rebuild was cancelled before image creation or replacement.
+The fix is retained in R3. Its protocol/session tests, Biome check of the two
+changed JavaScript files and `npm run check:release -- v2.1.0-R3` passed before
+committing the fix. Private probe sources, fixture hashes
+and event evidence are retained under
+`internal/work/realtime-stop-probes-20261112/`.
+The workspace contract and whitespace checks passed. The task-downloaded browser
+runtime was removed; reusable probes and evidence were retained.
+
+
 ## R3 Realtime model choice
 
 R3 adds GPT-Realtime 2.1 (`gpt-realtime-2.1`) beside Live and Mini. The saved
@@ -453,7 +513,7 @@ R3 adds GPT-Realtime 2.1 (`gpt-realtime-2.1`) beside Live and Mini. The saved
 normalizes to the existing Realtime lifecycle. Both Realtime choices share the
 saved Realtime voice, prompt framing/acknowledgement, search, interruption and
 cleanup. No native audio implementation or saved settings migration is added.
-The source worktree also retains the separately developed R2 input-filter fix.
+The source worktree also retains the separately developed input-filter fix above.
 
 Local/static checks on 2026-11-12: `npm run test:unit` from `firmware/` passed
 716 tests and nine packaging tests; `npm run lint`, `npm run format`,

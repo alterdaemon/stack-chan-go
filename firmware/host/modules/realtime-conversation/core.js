@@ -327,9 +327,7 @@ export default class Conversation {
           model: options.model,
           instructions: options.instructions,
           audio: {
-            input: {
-              turn_detection: this.#turnDetection(),
-            },
+            input: this.#realtimeInput(),
             output: { voice: options.voice },
           },
           tools: this.#tools?.definitions ?? [],
@@ -486,12 +484,14 @@ export default class Conversation {
             throw new ConversationError('Missing session ID', 'invalid_session', 'events')
           this.#sessionId = message.session.id
           const turn = message.session.audio?.input?.turn_detection
+          const noise = message.session.audio?.input?.noise_reduction
           if (
             turn?.type !== this.#turnDetection().type ||
             turn.threshold !== this.#turnDetection().threshold ||
             turn.eagerness !== this.#turnDetection().eagerness ||
             turn.create_response !== true ||
             turn.interrupt_response !== this.#options.bargeIn ||
+            (this.#options.bargeIn && (noise?.type !== 'far_field' || noise.strength !== 1)) ||
             message.session.instructions !== this.#options.instructions
           ) {
             if (message.type === 'session.updated')
@@ -503,9 +503,7 @@ export default class Conversation {
                 type: 'realtime',
                 instructions: this.#options.instructions,
                 audio: {
-                  input: {
-                    turn_detection: this.#turnDetection(),
-                  },
+                  input: this.#realtimeInput(),
                 },
               },
             })
@@ -627,6 +625,13 @@ export default class Conversation {
     }
   }
 
+  #realtimeInput() {
+    return {
+      // Filter residual echo before server VAD can cancel the current reply.
+      ...(this.#options.bargeIn ? { noise_reduction: { type: 'far_field', strength: 1 } } : {}),
+      turn_detection: this.#turnDetection(),
+    }
+  }
   #turnDetection() {
     const configured = this.#options.turnDetection
     return {
