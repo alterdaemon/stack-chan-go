@@ -6,6 +6,35 @@ cleanup. The [changelog](../../CHANGELOG-MOD.md) owns revision history;
 the [guide](README.md) owns current instructions. Raw logs, credentials and device
 backups remain private outside Git.
 
+## GitHub Actions repair, 2026-11-12
+
+Initial manual runs used source `8223b161`:
+[Build](https://github.com/alterdaemon/stack-chan-go/actions/runs/43309920645)
+and [Bundle](https://github.com/alterdaemon/stack-chan-go/actions/runs/43310983686).
+All six hardware release builds passed, including the M5StackChan CoreS3 ABI
+check. The complete workflows failed: WASM lacked the debug API and Live option
+module mappings; lint found three import-order errors; architecture checks
+misclassified event-driven motion callbacks and rejected a debug test fixture;
+that fixture also failed at runtime. The sample Live MOD used the obsolete flat
+LED capability instead of `robot.lighting.led`.
+
+Focused repairs update those mappings, imports, test setup and the sample
+capability access. The periodic-motion allocation checks still cover polling and
+its fixed handlers; the signature parser now accepts callback-typed parameters.
+The README badge follows the existing firmware Bundle workflow on `main`.
+Workflow triggers, local build scripts, SDK setup, versions, release tags and
+published images are unchanged.
+
+- Local/static: `npm run test:unit` passed 752 tests and nine packaging
+  regressions; `npm run check:architecture` passed all 76 checks;
+  `npx biome ci . --error-on-warnings` passed with three existing informational
+  findings. `git diff --check` passed.
+- XS simulator: after the retained runtime wrapper's `--check`, SDK-activated
+  `npm run test:moddable --` passed the debug-log control, Live startup and Live
+  startup-baseline manifests through the same Xvfb/D-Bus wrapper.
+- The repaired workflows still require a GitHub Actions run. These local results
+  do not establish WASM/browser or hosted-build success. No device was flashed.
+
 ## 2.1 R4
 
 Conversation state lighting and speaking head gestures, based on source

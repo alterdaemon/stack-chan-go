@@ -67,7 +67,7 @@ function isTestOrArchitectureTarget(value: string): boolean {
 
 function extractMethodBlocks(source: string, methodName: string): string[] {
   const blocks: string[] = []
-  const pattern = new RegExp(`${methodName}\\([^)]*\\)(?:\\s*:[^{]+)?\\s*\\{`, 'g')
+  const pattern = new RegExp(`${methodName}\\((?:[^()]|\\([^()]*\\))*\\)(?:\\s*:[^{]+)?\\s*\\{`, 'g')
   let match: RegExpExecArray | null = pattern.exec(source)
   while (match) {
     const open = source.indexOf('{', match.index)
@@ -210,20 +210,22 @@ test('periodic motion hot paths reuse fixed state and callbacks', () => {
   const updatePoseBlocks = extractMethodBlocks(controller, 'updatePose')
 
   assert.equal(updatePoseBlocks.length, 1, 'MotionController should have one updatePose hot path')
+  // Speaking-motion acquisition is event-driven; these checks cover polling and its fixed handlers.
+  const periodicController = controller.slice(controller.indexOf('  updatePose('))
   assert.doesNotMatch(controller, /Vector3\.rotate/, 'MotionController should avoid allocating Vector3.rotate')
   assert.doesNotMatch(
     controller,
     /Rotation\.fromVector3/,
     'MotionController should avoid allocating Rotation.fromVector3',
   )
-  assert.doesNotMatch(controller, /getRotation\(\s*\(/, 'MotionController should reuse getRotation callback')
-  assert.doesNotMatch(controller, /setTorque\(true,\s*\(/, 'MotionController should reuse setTorque callback')
+  assert.doesNotMatch(periodicController, /getRotation\(\s*\(/, 'MotionController should reuse getRotation callback')
+  assert.doesNotMatch(periodicController, /setTorque\(true,\s*\(/, 'MotionController should reuse setTorque callback')
   assert.doesNotMatch(
-    controller,
+    periodicController,
     /applyRotation\([^,\n]+,\s*[^,\n]+,\s*\(/,
     'MotionController should reuse applyRotation callback',
   )
-  assert.doesNotMatch(controller, /Timer\.set\(\s*\(/, 'MotionController should reuse Timer callback')
+  assert.doesNotMatch(periodicController, /Timer\.set\(\s*\(/, 'MotionController should reuse Timer callback')
 
   for (const block of updatePoseBlocks) {
     assert.doesNotMatch(block, /\bnew\b/, 'updatePose should not allocate objects')

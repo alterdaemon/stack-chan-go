@@ -1,6 +1,6 @@
 # stack-chan-go (community-mod)
 
-[![Build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/build.yml/badge.svg)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/build.yml)
+[![Firmware build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml/badge.svg?branch=main)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml?query=branch%3Amain)
 
 A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.

@@ -177,7 +177,7 @@ export function onContextCreated(robot) {
     onState(state, detail) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
       if (state === 'connecting') {
-        headLed = robot.led?.head
+        headLed = robot.lighting?.led?.head
         try {
           headLed?.off()
         } catch {

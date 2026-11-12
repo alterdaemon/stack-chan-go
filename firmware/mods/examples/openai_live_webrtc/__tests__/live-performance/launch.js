@@ -1,6 +1,6 @@
-import { showStartupSplash } from 'startup-splash'
 import { onContextCreated as defaults } from 'app-default-behavior/on-context-created'
 import { onContextCreated as probe } from 'live-probe'
+import { showStartupSplash } from 'startup-splash'
 
 export function onLaunch() {
   showStartupSplash()

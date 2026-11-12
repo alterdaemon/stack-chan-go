@@ -1,13 +1,13 @@
 // One bounded, paired device series. All overrides stay in RAM.
 
 import Resource from 'Resource'
-import Preference from 'preference'
-import config from 'mc/config'
 import Conversation from 'realtimeConversation/core'
 import fetch from 'realtimeConversation/http'
 import Transport from 'realtimeConversation/transport'
 import Performance from 'io-performance'
+import config from 'mc/config'
 import { onContextCreated as installLive } from 'openai-live-integrated'
+import Preference from 'preference'
 import Timer from 'timer'
 
 const wait = (ms) => new Promise((resolve) => Timer.set(resolve, ms))

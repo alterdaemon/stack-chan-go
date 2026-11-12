@@ -35,7 +35,7 @@ async function run() {
     released = 0,
     mouth = 0
   const robot = {
-    led: { head: { on: (...rgb) => colors.push(rgb.join(',')), off: () => colors.push('off') } },
+    lighting: { led: { head: { on: (...rgb) => colors.push(rgb.join(',')), off: () => colors.push('off') } } },
     setMouthOpen(value) {
       mouth = value
     },

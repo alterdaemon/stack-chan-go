@@ -1,7 +1,11 @@
 {
-  "include": ["$(MODDABLE)/examples/manifest_base.json"],
+  "include": [
+    "$(MODDABLE)/examples/manifest_base.json",
+    "../../manifest.json",
+    "../../../testing/manifest.json"
+  ],
   "modules": {
-    "main": "./main",
+    "main": "./control.test",
     "device-debug/core": "../../core"
   }
 }

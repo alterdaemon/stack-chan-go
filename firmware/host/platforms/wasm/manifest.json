@@ -15,6 +15,7 @@
     "../../modules/input/manifest_wasm.json",
     "../../modules/util/manifest.json",
     "../../modules/preferences/manifest_wasm.json",
+    "../../modules/debug-log/manifest.json",
     "../../app/manifest_typings.json"
   ],
   "modules": {
