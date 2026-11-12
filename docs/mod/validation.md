@@ -66,6 +66,23 @@ feedback hardware is M5StackChan CoreS3.
   motion, and device CPU/memory/timing overhead are unmeasured. Simulator and
   host results do not establish these physical outcomes.
 
+Maintainer acceptance, 2026-11-12: the maintainer reported that R4 "seems to work
+fine" and requested publication. This is maintainer confirmation, separate from
+the agent-run checks above. No mode-by-mode physical comparison or quantified
+audio, movement or device-overhead measurement was supplied.
+
+Release preparation reuses the validated R4 image pair: firmware and web trees
+are unchanged from the recorded build overlay. Repository renaming and release
+documentation do not change the built inputs or require another firmware build.
+Publication checks on 2026-11-12 reverified the recorded production input hashes,
+the retained ELF hash inside the application, bootloader/table bytes, ESP32-S3
+image checksums, flash offsets, partition bounds and every erased gap. Prior R3
+images are unchanged. `npm run check:release -- v2.1.0-R4`, the workspace contract
+and strict change validation passed. GitHub-rendered release Markdown was checked
+in the browser, including headings, lists, installation commands and the notice.
+The existing passing unit/native, XS, lint/format and release-build evidence above
+is reused for identical firmware/web inputs; those checks were not rerun.
+
 Cleanup: task-created short build worktrees and identified disposable simulator
 profiles were removed after retained-file hash checks.
 Release images, useful logs, source/image provenance, SDK configuration and build

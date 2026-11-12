@@ -4,7 +4,7 @@
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R4**. Standard hardware: M5StackChan CoreS3.
-The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3)**.
+The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -23,7 +23,7 @@ Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
-See the [R4 changelog](../../CHANGELOG-MOD.md#210-r4) for source changes and the [R3 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3) for the published stable release.
+See the [R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for changes and comparison links.
 
 Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
@@ -37,7 +37,7 @@ Upstream is
 - `origin`: this fork. `upstream`: the original repository, used for fetching.
   A separate local branch mirroring upstream is unnecessary.
 - There is no fork `develop` branch. Keep only the latest release tag per series:
-  currently `v2.0.1-r15` and `v2.1.0-R3`. Tags identify release builds;
+  currently `v2.0.1-r15` and `v2.1.0-R4`. Tags identify release builds;
   documentation commits do not move them. Archive a superseded tag privately.
 
 Local remotes disable automatic tag fetching so historical tags do not reappear:
@@ -75,7 +75,7 @@ under `internal/`. For temporary jobs, set `TMPDIR` to the absolute
 
 ## USB development diagnostics
 
-Normal R3 firmware includes detailed device diagnostics, **Off after every boot**.
+Current firmware includes detailed device diagnostics, **Off after every boot**.
 Enable them temporarily from a Linux/macOS host using Python 3 and the USB serial
 port. Close other serial monitors first. From the implementation repository root:
 
@@ -203,7 +203,7 @@ revision are rejected; identical repackaging is allowed.
 
 Local R4 builds produce `StackChan-Community-v2.1.0-R4-app.bin` and
 `StackChan-Community-v2.1.0-R4.bin` in `internal/release-packages/`. Download
-the preconfigured pair from the [R3 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3).
+the preconfigured pair from the [R4 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
 
 To package an existing release in the same environment:
 
@@ -230,7 +230,7 @@ version used by MOD loading.
 
 ## R2 audio and interruption behavior
 
-R3 retains this audio profile for all three conversation choices.
+R4 retains the R3 audio profile for all three conversation choices.
 
 R2 promotes the selected R8 profile: 16 kHz I2S, Opus output and Pitch in both
 voice modes with Interruption On or Off. On uses FD low-cost AEC with filter
@@ -284,23 +284,23 @@ verification of the amended R2 is complete and it is working. This confirmation
 is separate from unit-test results. Historical
 combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
-The published R3 release pair is `StackChan-Community-v2.1.0-R3-app.bin` and
-`StackChan-Community-v2.1.0-R3.bin`. Preserve supported-layout settings by writing
+The published R4 release pair is `StackChan-Community-v2.1.0-R4-app.bin` and
+`StackChan-Community-v2.1.0-R4.bin`. Preserve supported-layout settings by writing
 only the application:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R3-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R4-app.bin
 ```
 
 Full installation resets settings, MODs and storage:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R3.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R4.bin
 ```
 
 Use your device port: Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, macOS
 `/dev/cu.*`. See [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
-Do not write the full image at `0x10000`. Download the BINs from the [R3 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3).
+Do not write the full image at `0x10000`. Download the BINs from the [R4 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
 
 ## Historical R1 installation
 
