@@ -1,5 +1,6 @@
 import { requests } from 'realtimeConversation/http'
 import { transports } from 'realtimeConversation/transport'
+import Debug from 'device-debug'
 import { samples } from 'io-performance'
 import config from 'mc/config'
 import Modules from 'modules'
@@ -16,6 +17,14 @@ function equalConfig(actual, expected) {
 }
 
 async function run() {
+  const diagnosticEvents = []
+  const recorder = {
+    enabled: false,
+    emit(_component, event) {
+      diagnosticEvents.push(event)
+    },
+  }
+  Debug.install(recorder)
   globalThis.amp = {}
   const buttons = new Map(),
     balloons = []
@@ -93,6 +102,8 @@ async function run() {
   equal(released, 1, 'host audio released')
   await checkMouthStopped()
   equal(globalThis.amp.sampleRate, 24000, 'host audio rate restored')
+  equal(diagnosticEvents.length, 0, 'diagnostics Off leaves startup and close unrecorded')
+  recorder.enabled = true
   Preference.set('openailive', 'backendModel', 'saved-backend')
   Preference.set('openailive', 'reasoningEffort', 'none')
   Preference.set('openailive', 'bargeIn', '1')
@@ -112,6 +123,11 @@ async function run() {
   await waitFor('GPT-Live 1 stopped')
   equal(released, 2, 'restarted session releases host audio')
   await checkMouthStopped()
+  assert(
+    diagnosticEvents.includes('finish'),
+    'enabled diagnostics retain close while synchronous transport releases resources',
+  )
+  recorder.enabled = false
   // Exercise the real one-shot XS Timer, protocol and ownership with a short
   // configured interval; Node tests cover the exact default 60-second boundary.
   const states = []

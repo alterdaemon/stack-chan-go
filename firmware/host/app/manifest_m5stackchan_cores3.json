@@ -3,6 +3,7 @@
     "./manifest.json",
     "./docks/android-usb-audio/manifest.json",
     "../modules/usb-audio/manifest.json",
+    "../modules/debug-log/manifest_usb.json",
     "$(MODDABLE)/modules/data/xml/manifest.json"
   ],
   "modules": {

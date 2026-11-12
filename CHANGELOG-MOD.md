@@ -17,9 +17,12 @@ headed `### <product-version>` for the requested tag.
 Release impact: minor.
 
 - Add GPT-Realtime 2.1 as a third conversation choice alongside GPT-Live 1 and Realtime Mini, sharing Realtime voices, web search and interruption controls.
-- Filter Realtime microphone input with far-field noise reduction before server VAD when Interruption is On; verify the filter acknowledgement before enabling input, retaining the 0.5 threshold and voice interruption.
+- Filter Realtime microphone input with far-field noise reduction before server VAD when Interruption is On; verify the filter acknowledgement before enabling input and retain voice interruption.
+- Reduce Realtime post-AEC amplification by 8 dB during playback and its echo tail to suppress self-triggered answers; retain full listening sensitivity between answers and keep voice interruption active.
+- Add USB-only RAM audio trials for VAD, silence detection, noise filtering, speaker/capture gain and AEC suppression; acknowledge changes and restore defaults when diagnostics end without changing saved settings.
 - Fix Live answers remaining muted after interruption: resume continued speech without requiring a new turn, handle delayed overlapping captions and recover after 1.5 seconds of suppressed audible PCM. Preserve Realtime recovery and existing late-caption protection.
 - Remove an inactive automatic audio-drop flag; retain the smaller playback queues, backpressure and interruption flushing.
+- Add USB-controlled device diagnostics, disabled after every boot, with bounded RAM records for lifecycle, connectivity, safe failures and correlated voice-chat interruption events.
 
 ### 2.1.0-R2
 
@@ -153,7 +156,7 @@ Integrate the GPT-Live MOD into CoreS3 firmware and its drawer. Read AI token, c
 
 `main` contains current fork work. `v2.1.0-mod` follows the current series;
 `v2.0.1-mod` preserves the historical R15 line. Only the latest release tag per
-series is kept locally: `v2.0.1-r15` and `v2.1.0-R2`. Earlier tag references are
+series is kept locally: `v2.0.1-r15` and `v2.1.0-R3`. Earlier tag references are
 archived privately; their commits remain in history. Documentation commits do
 not move release tags.
 

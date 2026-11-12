@@ -18,6 +18,7 @@
     "sourceMap": true,
     "target": "es2024",
     "paths": {
+      "device-debug": ["./host/modules/debug-log/api.ts"],
       "media-player": [
         "./host/modules/audio/platforms/m5stackchan-cores3/media-player.ts"
       ],

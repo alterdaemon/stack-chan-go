@@ -5,6 +5,7 @@ import {
   shouldRetryBootWiFiAttempt,
 } from 'boot-network-recovery'
 import type { NetworkReadyResult } from 'capabilities'
+import Debug from 'device-debug'
 import { createLocalPeerCapability } from 'local-peer-capability'
 import type { LocalPeerCapability } from 'local-peer-types'
 import { localize } from 'localization'
@@ -88,12 +89,15 @@ async function startStoredWiFi(
   for (;;) {
     let lastReason = 'connection failed'
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      Debug.context('network', 'connecting')
+      if (Debug.enabled) Debug.event('network', 'attempt', { attempt, maxAttempts })
       options.onStatusChanged?.({
         attempt,
         maxAttempts,
         message: localize('splash.connecting', { attempt, maxAttempts }),
       })
       const result = await connectStoredWiFiOnce()
+      Debug.context('network', result.status)
       if (result.status !== 'failed') {
         return result
       }

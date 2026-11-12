@@ -30,6 +30,8 @@ function credentials(
 function installBareSpecifierPackages(): void {
   const modulesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const hostRoot = resolve(modulesRoot, '..')
+  writeAliasPackage(hostRoot, 'device-debug', resolve(modulesRoot, 'debug-log/api.js'), { hasDefaultExport: true })
+  writeAliasPackage(modulesRoot, 'device-debug', resolve(modulesRoot, 'debug-log/api.js'), { hasDefaultExport: true })
   writeAliasPackage(modulesRoot, 'consts', resolve(modulesRoot, 'preferences/consts.js'))
   writeAliasPackage(
     modulesRoot,

@@ -18,6 +18,12 @@ static unsigned permittedBlocks;
 static _Thread_local unsigned taskPriority;
 static const unsigned uiPriority = 6, ioPriority = 20, sourcePriority = 15;
 static bool delayDsp, delayedPlayback, referencePause, interruptPlayback, interruptRecovery, restoreGain;
+static bool realtimeMode;
+static unsigned testCaptureTrim = 1024, testSpeakerTrim = 1024, lastNlp;
+int aec_set_nlp_level(const aec_handle_t *aec, unsigned value) {
+    assert(pthread_equal(pthread_self(), consumer));
+    assert(value <= 2); lastNlp = value; return value;
+}
 static atomic_int outputHistory[100000];
 
 static int playbackAt(unsigned sample) {
@@ -96,7 +102,7 @@ int i2s_channel_write(i2s_chan_handle_t channel, const void *data, size_t bytes,
 
     for (unsigned i = 0; i < BLOCK * 2; i++)
         assert(samples[i] == ((atomic_load(&session->quiesced) || atomic_load(&session->yieldOutput)) ? 0 :
-            playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 8000)) / (session->pitch ? 4 : 2)));
+            playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 8000)) / (session->pitch ? 4 : 2) * testSpeakerTrim / 1024));
     for (unsigned i = 0; i < 160; i++)
         atomic_store(&outputHistory[atomic_load(&blocks) * 160 + i], samples[i * (LIVE_RATE / 8000)]);
     pthread_mutex_lock(&lock);
@@ -174,7 +180,7 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     aec_handle_t aec = {.count = 512};
     LiveAudio audio = {.input = &input, .output = &output,
         .aec = interruption ? &aec : NULL, .pitch = semitones ? &pitch : NULL,
-        .bargeIn = interruption, .chunk = interruption ? aec.count : 160,
+        .bargeIn = interruption, .realtime = realtimeMode, .chunk = interruption ? aec.count : 160,
         .dspPriority = uiPriority + 1};
     if (restoreGain) audio.codec.captureGainQ10 = 2048;
     size_t samples = BLOCK * (8 + DMA_BLOCKS) + audio.chunk * (interruption ? 5 : 3);
@@ -215,11 +221,25 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
         esp_capture_stream_frame_t frame = {.data = (uint8_t *)captured, .size = count * 2};
         assert(!sourceRead(&audio.source, &frame));
         assert(taskPriority == sourcePriority && frame.pts == total / 16);
+        unsigned gainFrame = (unsigned)-1;
+        bool echoWindow = false;
         for (unsigned i = 0; i < count; i++) {
             unsigned index = total + i;
             int reference = referenceAt(index);
             int expected = interruption && !mute && !quiesce ? 1000 + index % 113 - reference : 0;
-            if (restoreGain && interruption) expected *= 2;
+            unsigned gain = restoreGain && interruption ? 2048 : 1024;
+            if (realtimeMode && interruption) {
+                unsigned start = index / aec.count * aec.count;
+                if (gainFrame != start) {
+                    gainFrame = start;
+                    echoWindow = start < 3200;
+                    for (unsigned s = start > 3200 ? start - 3200 : 0; s < start + aec.count; s++)
+                        if (referenceAt(s)) echoWindow = true;
+                }
+                if (echoWindow) gain = gain * 408 / 1024;
+            }
+            gain = gain * testCaptureTrim / 1024;
+            expected = expected * gain / 1024;
             if (captured[i] != expected)
                 fprintf(stderr, "capture mismatch rate=%u index=%u On=%d actual=%d expected=%d\n",
                     LIVE_RATE, index, interruption, captured[i], expected);
@@ -275,6 +295,27 @@ int main(void) {
     restoreGain = true;
     run(true, 0, false, true, false);
     restoreGain = false;
+    assert(!stackchanAudioDebugSet(DEBUG_TUNE_SPEAKER, 512)); testSpeakerTrim = 512;
+    assert(!stackchanAudioDebugSet(DEBUG_TUNE_CAPTURE, 512)); testCaptureTrim = 512;
+    assert(!stackchanAudioDebugSet(DEBUG_TUNE_NLP, 2));
+    run(true, 0, false, true, false);
+    assert(lastNlp == 2);
+    assert(stackchanAudioDebugSet(DEBUG_TUNE_CAPTURE, 0) == -1);
+    assert(stackchanAudioDebugSet(DEBUG_TUNE_SPEAKER, 1025) == -1);
+    assert(stackchanAudioDebugSet(DEBUG_TUNE_NLP, 3) == -1);
+    assert(!stackchanAudioDebugSet(DEBUG_TUNE_RESET, 0));
+    testSpeakerTrim = testCaptureTrim = 1024;
+    run(true, 0, false, true, false);
+    assert(lastNlp == AEC_NLP_LEVEL_AGGR);
+    realtimeMode = true;
+    referencePause = true;
+    restoreGain = true;
+    run(true, 0, false, true, false);
+    run(true, 3, false, true, false);
+    run(true, 0, true, true, false);
+    referencePause = false;
+    run(false, 0, false, false, false);
+    realtimeMode = referencePause = restoreGain = false;
     LiveEcho echo;
     int16_t quiet[512] = {0};
     liveEchoReset(&echo);

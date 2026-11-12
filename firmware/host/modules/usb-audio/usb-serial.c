@@ -219,6 +219,13 @@ void xs_stackchan_usb_serial_constructor(xsMachine *the)
 		.rx_buffer_size = STACKCHAN_USB_RX_RING_BYTES,
 		.tx_buffer_size = STACKCHAN_USB_TX_RING_BYTES,
 	};
+	if (xsmcArgc >= 4) {
+		xsIntegerValue receive = xsmcToInteger(xsArg(2)), transmit = xsmcToInteger(xsArg(3));
+		if (receive < 256 || receive > STACKCHAN_USB_RX_RING_BYTES || transmit < 2048 || transmit > STACKCHAN_USB_TX_RING_BYTES)
+			xsRangeError("invalid USB serial buffer sizes");
+		config.rx_buffer_size = receive;
+		config.tx_buffer_size = transmit;
+	}
 	uint8_t occupied;
 	uint8_t format;
 	xsIntegerValue maxWriteBytes;
@@ -233,7 +240,7 @@ void xs_stackchan_usb_serial_constructor(xsMachine *the)
 	if (kIOFormatBuffer != format)
 		xsRangeError("unsupported USB serial format");
 	maxWriteBytes = xsmcToInteger(xsArg(1));
-	if ((maxWriteBytes <= 0) || (maxWriteBytes > (STACKCHAN_USB_TX_RING_BYTES / 2)))
+	if ((maxWriteBytes <= 0) || (maxWriteBytes > (config.tx_buffer_size / 2)))
 		xsRangeError("invalid maximum USB serial write size");
 	builtinInitializeTarget(the);
 

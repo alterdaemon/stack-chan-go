@@ -85,6 +85,7 @@ typedef struct { unsigned mic_num, ref_num, out_num, filter_length, sample_rate,
 aec_handle_t *aec_create_from_config(aec_config_t *);
 int aec_get_chunksize(aec_handle_t *);
 void aec_process(const aec_handle_t *, int16_t *, int16_t *, int16_t *);
+int aec_set_nlp_level(const aec_handle_t *, unsigned);
 void aec_destroy(aec_handle_t *);
 
 typedef int esp_capture_err_t;

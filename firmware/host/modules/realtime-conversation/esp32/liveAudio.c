@@ -9,6 +9,7 @@
 #include "io-performance.h"
 #include "esp_webrtc.h"
 #include "liveAudio.h"
+#include "../../debug-log/debug-log.h"
 #include "livePitch.h"
 #include "liveEcho.h"
 #include "liveCodec.h"
@@ -76,6 +77,28 @@ static void audioStreamDelete(StreamBufferHandle_t handle) {
 static portMUX_TYPE audioLock = portMUX_INITIALIZER_UNLOCKED;
 static LiveAudio *activeAudio;
 static atomic_bool quiesceAudio;
+static atomic_uint diagnosticSpeaker = 1024, diagnosticCapture = 1024, diagnosticNlp = AEC_NLP_LEVEL_AGGR;
+int stackchanAudioDebugSet(unsigned parameter, unsigned value) {
+    switch (parameter) {
+      case DEBUG_TUNE_RESET:
+        atomic_store(&diagnosticSpeaker, 1024); atomic_store(&diagnosticCapture, 1024);
+        atomic_store(&diagnosticNlp, AEC_NLP_LEVEL_AGGR); return 0;
+      case DEBUG_TUNE_SPEAKER:
+        if (value > 1024) return -1;
+        atomic_store(&diagnosticSpeaker, value); return 0;
+      case DEBUG_TUNE_CAPTURE:
+        if (value < 45 || value > 1024) return -1;
+        atomic_store(&diagnosticCapture, value); return 0;
+      case DEBUG_TUNE_NLP:
+        if (value > 2) return -1;
+        atomic_store(&diagnosticNlp, value); return 0;
+      default: return -1;
+    }
+}
+unsigned stackchanAudioDebugGet(unsigned parameter) {
+    return parameter == DEBUG_TUNE_SPEAKER ? atomic_load(&diagnosticSpeaker) :
+      parameter == DEBUG_TUNE_CAPTURE ? atomic_load(&diagnosticCapture) : atomic_load(&diagnosticNlp);
+}
 extern esp_err_t stackchanMediaAdapter(void);
 extern int stackchanInstallOpusPolicy(void);
 extern void stackchanOpusDecodeRate(unsigned rate);
@@ -117,6 +140,7 @@ struct LiveAudio {
 	bool taskStarted, txEnabled, rxEnabled;
 	uint32_t pts;
 	int chunk;
+    unsigned appliedNlp;
 	int16_t *aecFrame;
 	size_t cleanOffset;
 	_Atomic(const char *) stage;
@@ -181,11 +205,17 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 				// Paired, planar frames arrive through the existing input FIFO.
 				if (readInput(a, (uint8_t *)mic, a->chunk * 4) != a->chunk * 4)
 					return ESP_CAPTURE_ERR_NOT_SUPPORTED;
+                unsigned nlp = atomic_load(&diagnosticNlp);
+                if (nlp != a->appliedNlp) {
+                    aec_set_nlp_level(a->aec, nlp);
+                    a->appliedNlp = nlp;
+                }
+                bool echoActive = liveEchoNeedsAEC(&a->echo, ref, a->chunk);
 				if (atomic_load(&a->quiesced)) {
 					// Close keeps the source clock and FIFO drain alive, but only
 					// forwards silence. Its AEC state will be released after teardown.
 					memset(clean, 0, a->chunk * 2);
-                } else if (!liveEchoNeedsAEC(&a->echo, ref, a->chunk)) {
+                } else if (!echoActive) {
                     memcpy(clean, mic, a->chunk * sizeof(int16_t));
                 } else {
 					// Capture DSP precedes HTTPS and normal XS work.
@@ -202,8 +232,14 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 #endif
 					vTaskPrioritySet(NULL, priority);
 				}
-                if (!atomic_load(&a->quiesced))
-                    liveEchoListeningLevel(clean, a->chunk, a->codec.captureGainQ10);
+                if (!atomic_load(&a->quiesced)) {
+                    unsigned gain = a->codec.captureGainQ10 ? a->codec.captureGainQ10 : 1024;
+                    // Realtime VAD otherwise hears amplified residual speaker
+                    // speech as a new turn. Retain full gain while listening.
+                    if (a->realtime && echoActive) gain = gain * 408 / 1024;
+                    liveEchoListeningLevel(clean, a->chunk,
+                        (uint64_t)gain * atomic_load(&diagnosticCapture) / 1024);
+                }
 				captureStats(a, mic, ref, clean);
 				a->cleanOffset = 0;
 			}
@@ -217,7 +253,10 @@ static esp_capture_err_t sourceRead(esp_capture_audio_src_if_t *s, esp_capture_s
 	if (offset != frame->size) return ESP_CAPTURE_ERR_NOT_SUPPORTED;
     bool gated = atomic_load(&a->muted) || atomic_load(&a->quiesced) || (!a->bargeIn && atomic_load(&a->outputIdleMs) < 500);
     if (gated) memset(frame->data, 0, frame->size);
-	else liveAudioTransformCapture((int16_t *)frame->data, frame->size / 2);
+	else {
+        if (!a->aec) liveEchoListeningLevel((int16_t *)frame->data, frame->size / 2, atomic_load(&diagnosticCapture));
+        liveAudioTransformCapture((int16_t *)frame->data, frame->size / 2);
+    }
 #ifdef MODDEF_STACKCHAN_LIVE_PROBE
     extern void stackchanProbeCaptureOutput(const int16_t *samples, unsigned count);
     stackchanProbeCaptureOutput((int16_t *)frame->data, frame->size / 2);
@@ -316,8 +355,9 @@ static void audioTask(void *ctx)
         }
         portENTER_CRITICAL(&audioLock);
         if (request && request == atomic_load(&a->resumeRequest) &&
-            request == atomic_load(&a->interruptFlushed) && request == atomic_load(&a->interruptRequest))
-            atomic_store(&a->yieldOutput, false);
+            request == atomic_load(&a->interruptFlushed) && request == atomic_load(&a->interruptRequest)) {
+            if (atomic_exchange(&a->yieldOutput, false)) stackchanDebugTransition(DEBUG_OUTPUT_RECOVER, request, 0, 0);
+        }
         portEXIT_CRITICAL(&audioLock);
 		/* Non-blocking dequeue: the clock must keep running between utterances. */
         size_t got;
@@ -355,11 +395,13 @@ static void audioTask(void *ctx)
             if (audible && !a->realtime) yieldedAudible += 10;
             if (yieldedQuiet >= 500 || (!a->realtime && yieldedAudible >= LIVE_YIELD_AUDIBLE_MS)) {
                 portENTER_CRITICAL(&audioLock);
-                if (request == atomic_load(&a->interruptRequest)) atomic_store(&a->yieldOutput, false);
+                if (request == atomic_load(&a->interruptRequest) && atomic_exchange(&a->yieldOutput, false))
+                    stackchanDebugTransition(DEBUG_OUTPUT_RECOVER, request, 1, 0);
                 portEXIT_CRITICAL(&audioLock);
             }
         }
 		unsigned volume = atomic_load(&a->volume);
+        volume = volume * atomic_load(&diagnosticSpeaker) / 1024;
         unsigned playbackLevel = 0;
         bool quiesced = atomic_load(&a->quiesced) || atomic_load(&a->yieldOutput);
 		for (int i = BLOCK - 1; i >= 0; i--) {
@@ -454,7 +496,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 			.filter_length = 2, .sample_rate = 16000,
 			.caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
 			// ESP-SR's default FD level provides stronger residual echo suppression.
-			.mode = AEC_MODE_FD_LOW_COST, .nlp_level = AEC_NLP_LEVEL_AGGR};
+			.mode = AEC_MODE_FD_LOW_COST, .nlp_level = atomic_load(&diagnosticNlp)};
+        a->appliedNlp = config.nlp_level;
 		a->aec = aec_create_from_config(&config);
 		if (!a->aec) return ESP_ERR_NO_MEM;
 		a->chunk = aec_get_chunksize(a->aec);
@@ -531,7 +574,12 @@ void liveAudioStop(LiveAudio *a)
   bool first = !atomic_exchange(&a->stopping, true);
 	atomic_store(&a->reading, false);
   // A renderer without a decoded frame has no render task to flush.
-  if (first && a->player && atomic_load(&a->renderActive)) av_render_flush(a->player);
+  if (first) stackchanDebugTransition(DEBUG_AUDIO_STOP, atomic_load(&a->interruptRequest), 0, 0);
+  if (first && a->player && atomic_load(&a->renderActive)) {
+      stackchanDebugTransition(DEBUG_FLUSH_BEGIN, atomic_load(&a->interruptRequest), 1, 0);
+      int flushResult = av_render_flush(a->player);
+      stackchanDebugTransition(DEBUG_FLUSH_END, atomic_load(&a->interruptRequest), 1, flushResult);
+  }
 }
 void liveAudioClose(LiveAudio *a)
 {
@@ -579,6 +627,7 @@ bool liveAudioRequestInterrupt(void) {
         atomic_store(&activeAudio->yieldOutput, true);
         atomic_store(&activeAudio->discardOutput, true);
         atomic_fetch_add(&activeAudio->interruptRequest, 1);
+        stackchanDebugTransition(DEBUG_INTERRUPT, atomic_load(&activeAudio->interruptRequest), 0, 0);
         requested = true;
     }
     portEXIT_CRITICAL(&audioLock);
@@ -586,17 +635,22 @@ bool liveAudioRequestInterrupt(void) {
 }
 void liveAudioResumeOutput(void) {
     portENTER_CRITICAL(&audioLock);
-    if (activeAudio) atomic_store(&activeAudio->resumeRequest, atomic_load(&activeAudio->interruptRequest));
+    if (activeAudio) {
+        atomic_store(&activeAudio->resumeRequest, atomic_load(&activeAudio->interruptRequest));
+        stackchanDebugTransition(DEBUG_RESUME, atomic_load(&activeAudio->interruptRequest), 0, 0);
+    }
     portEXIT_CRITICAL(&audioLock);
 }
 int liveAudioFlushOutput(LiveAudio *a) {
     if (!a || atomic_load(&a->stopping)) return 0;
     unsigned request = atomic_load(&a->interruptRequest);
     if (request == atomic_load(&a->interruptFlushed)) return 0;
+    stackchanDebugTransition(DEBUG_FLUSH_BEGIN, request, 0, 0);
     int err = 0;
     if (a->player && atomic_load(&a->renderActive)) err = av_render_flush(a->player);
     if (!err) atomic_store(&a->interruptFlushed, request);
     else a->stage = "render_flush";
+    stackchanDebugTransition(DEBUG_FLUSH_END, request, 0, err);
     return err;
 }
 void liveAudioVolume(LiveAudio *a, unsigned volume) { if (a) atomic_store(&a->volume, volume); }

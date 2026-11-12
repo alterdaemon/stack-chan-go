@@ -4,7 +4,7 @@
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R3**. Standard hardware: M5StackChan CoreS3.
-The published stable release is **[2.1.0-R2](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2)**.
+The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -21,7 +21,7 @@ Upstream is
 - `origin`: this fork. `upstream`: the original repository, used for fetching.
   A separate local branch mirroring upstream is unnecessary.
 - There is no fork `develop` branch. Keep only the latest release tag per series:
-  currently `v2.0.1-r15` and `v2.1.0-R2`. Tags identify release builds;
+  currently `v2.0.1-r15` and `v2.1.0-R3`. Tags identify release builds;
   documentation commits do not move them. Archive a superseded tag privately.
 
 Local remotes disable automatic tag fetching so historical tags do not reappear:
@@ -57,6 +57,83 @@ under `internal/`. For temporary jobs, set `TMPDIR` to the absolute
 `internal/tmp/` path after creating it; direct Python bytecode to
 `internal/python-cache/` with `PYTHONPYCACHEPREFIX`.
 
+## USB development diagnostics
+
+Normal R3 firmware includes detailed device diagnostics, **Off after every boot**.
+Enable them temporarily from a Linux/macOS host using Python 3 and the USB serial
+port. Close other serial monitors first. From the implementation repository root:
+
+```sh
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command status
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --duration 180 --output internal/work/debug-session.jsonl
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command off
+```
+
+Choose a unique private output path with an existing parent directory. On macOS
+select the appropriate `/dev/cu.*` port. The capture tool sends `diag on`, renews
+the 30-second lease every 10 seconds and sends `diag off` on exit; reboot,
+detected USB disconnect or lease expiry disables recording. `diag status` reports
+state, running application ELF hash and record-loss counters. Connecting USB or
+requesting status alone does not enable detailed logs. The tool does not flash
+firmware or manipulate DTR/RTS/reset lines.
+
+Records cover general application/network transitions, memory snapshots and
+instrumented safe errors, plus Live/Realtime response, tool and playback
+interruption events. They exclude credentials, prompts, transcripts, search
+queries/results and raw audio. Logs remain in bounded RAM/USB output; the host
+file retains the capture. Device timestamps and sequence/correlation IDs identify
+events; host timestamps only identify receipt. Missing records make the affected
+causal sequence inconclusive.
+
+For temporary audio trials, add `--interactive --duration 1800` to capture and
+enter commands in that same process. Keep one owner of the USB port. For example:
+
+```text
+diag set speaker 0
+diag set speaker 1
+diag set capture -12
+diag set nlp 2
+diag set vad 0.6
+diag set silence 1000
+diag set noise near_field
+diag reset
+diag status
+```
+
+Wait for a `set` control record with `phase: applied` before each trial. A
+failure reports a safe error code. All values remain in RAM; reset, diagnostics
+Off, disconnect, lease expiry and reboot restore defaults. Speaker is a 0-1
+multiplier of normal volume, capture is a -27-0 dB trim, and NLP is 0/1/2
+(normal/aggressive/very aggressive), applied on the capture owner. Realtime-only
+controls are VAD 0.1-0.95, silence 200-2000 integer milliseconds and noise
+`far_field`/`near_field`/`off`. They use acknowledged input-only session updates;
+they do not create responses, inject instructions or change Interruption On.
+Status reports available effective trial values. No per-trial installation is
+needed after installing this support; earlier R3 images may lack it.
+Capture aborts on unexpected Off or lost control acknowledgements. A sustained
+500 ms USB disconnect disables trials; short monitor indications do not.
+Rebooting discards trials: reconnect USB and reapply them after changing model.
+Model selection itself is not currently a USB trial command.
+
+To investigate repeated answers, keep Interruption On and the microphone on.
+First say “Hello, are you there?” once and stay silent for ten seconds. Next set
+speaker to zero and repeat once: silence from the speaker is expected, while the
+trace counts responses and speech detections. Reset and repeat the normal-volume
+control. Then compare one input/AEC parameter at a time. Once a candidate stops
+false turns, restore audible output and verify an intentional spoken interruption,
+a long question and both Realtime models. Report the observed outcome for each
+trial; a passing silent-speaker control identifies playback dependence rather
+than proving a particular AEC defect.
+
+Detailed recording and sampling are inactive while Off; the USB command listener
+still uses bounded resources. Enabled records are queued and USB writes are
+nonblocking; overflow drops records with counters. Performance and physical
+audio effects must be measured under the workload being investigated. The primary
+UART console is retained; secondary USB console mirroring is disabled to avoid
+competing FIFO writers. XS debug builds retain debugger ownership. Diagnostic control is unavailable while the
+binary Android USB dock owns the port; do not send console commands into that
+stream. Initial supported target: M5StackChan CoreS3.
+
 ## Build
 
 Use the existing Moddable/ESP-IDF environment, with `ESP_WEBRTC_SOLUTION` set,
@@ -82,8 +159,8 @@ Builds and packaging do not flash a device. Different contents under an existing
 revision are rejected; identical repackaging is allowed.
 
 Local R3 builds produce `StackChan-Community-v2.1.0-R3-app.bin` and
-`StackChan-Community-v2.1.0-R3.bin` in `internal/release-packages/`. R3 is not yet
-published; the public installation commands below still refer to released R2.
+`StackChan-Community-v2.1.0-R3.bin` in `internal/release-packages/`. Download
+the preconfigured pair from the [R3 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3).
 
 To package an existing release in the same environment:
 
@@ -134,6 +211,11 @@ answer. Mini uses the documented 0.5 server-VAD default.
 
 R3 with Interruption On requests far-field input filtering for both Realtime
 models before server VAD and verifies it before enabling microphone input.
+Realtime also reduces post-AEC amplification by 8 dB during playback and the
+existing 200 ms echo tail, restoring full listening gain afterward. USB capture
+trim is additional to this production profile; reset restores that profile.
+Its normal VAD threshold remains 0.5; USB diagnostics can temporarily test other
+input parameters without saving them.
 The published R2 images do not contain this fix.
 
 R3 Live resumes on the first advancing assistant caption starting at or after
@@ -159,23 +241,23 @@ verification of the amended R2 is complete and it is working. This confirmation
 is separate from unit-test results. Historical
 combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
-The published R2 release pair is `StackChan-Community-v2.1.0-R2-app.bin` and
-`StackChan-Community-v2.1.0-R2.bin`. Preserve supported-layout settings by writing
+The published R3 release pair is `StackChan-Community-v2.1.0-R3-app.bin` and
+`StackChan-Community-v2.1.0-R3.bin`. Preserve supported-layout settings by writing
 only the application:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R2-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R3-app.bin
 ```
 
 Full installation resets settings, MODs and storage:
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R2.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R3.bin
 ```
 
 Use your device port: Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, macOS
 `/dev/cu.*`. See [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
-Do not write the full image at `0x10000`. Download the BINs from the [R2 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2).
+Do not write the full image at `0x10000`. Download the BINs from the [R3 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3).
 
 ## Historical R1 installation
 

@@ -13,6 +13,7 @@
 #include "media_lib_os.h"
 #include "esp_heap_caps.h"
 #include "liveAudio.h"
+#include "../../debug-log/debug-log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -54,7 +55,8 @@ extern int stackchanRealtimeCodecInit(void);
 static void fail(LiveTransport *t, int code)
 {
 	int expected = 0;
-	atomic_compare_exchange_strong(&t->failure, &expected, code ? code : -1);
+	if (atomic_compare_exchange_strong(&t->failure, &expected, code ? code : -1))
+		stackchanDebugTransition(DEBUG_TRANSPORT_FAILURE, 0, code, 0);
 }
 static int enqueue(LiveTransport *t, int type, const void *data, int size)
 {
@@ -104,6 +106,7 @@ static int onEvent(esp_webrtc_event_t *event, void *ctx)
 	LiveTransport *t = ctx;
 	if (atomic_load(&t->stopping)) return 0;
 	atomic_store(&t->lastPeerEvent, event->type);
+	stackchanDebugTransition(DEBUG_PEER_EVENT, 0, event->type, 0);
 	if (event->type < 32) atomic_fetch_or(&t->peerEvents, 1U << event->type);
 	if (event->type == ESP_WEBRTC_EVENT_DATA_CHANNEL_CONNECTED) {
 		esp_peer_data_channel_cfg_t cfg = {.type = ESP_PEER_DATA_CHANNEL_RELIABLE, .ordered = true, .label = "oai-events"};

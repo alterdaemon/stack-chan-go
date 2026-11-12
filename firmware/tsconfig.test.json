@@ -11,6 +11,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "paths": {
+      "device-debug": ["./host/modules/debug-log/api.ts"],
       "piu/MC": [
         "./node_modules/@moddable/typings/piu/MC.d.ts"
       ],

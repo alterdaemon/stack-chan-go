@@ -1,5 +1,6 @@
 {
   "include": [
+    "../debug-log/manifest.json",
     "./portable/manifest.json",
     "$(MODDABLE)/modules/data/base64/manifest.json",
     "$(MODDABLE)/modules/data/text/decoder/manifest.json"

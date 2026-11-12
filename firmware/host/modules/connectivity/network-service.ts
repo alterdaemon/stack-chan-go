@@ -1,3 +1,4 @@
+import Debug from 'device-debug'
 import WiFi from 'ecma-wifi'
 import config from 'mc/config'
 import { initializeWiFiPowerPolicy, reapplyWiFiPowerPolicy } from 'network-power'
@@ -5,6 +6,7 @@ import {
   NetworkConnectionState,
   NetworkConnectionStateMachine,
   type NetworkConnectionState as NetworkConnectionStateValue,
+  networkConnectionStateToName,
 } from 'network-state'
 import Time from 'time'
 import Timer from 'timer'
@@ -271,6 +273,9 @@ export class NetworkService {
 
   #transition(event: Parameters<NetworkConnectionStateMachine['transition']>[0], reason?: string): NetworkState {
     const state = this.#stateMachine.transition(event)
+    Debug.context('network', networkConnectionStateToName(state))
+    if (Debug.enabled)
+      Debug.event('network', 'transition', { type: event.type, state: networkConnectionStateToName(state) })
     this.#handleStateChanged(state, reason)
     return state
   }

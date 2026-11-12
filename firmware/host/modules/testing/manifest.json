@@ -1,4 +1,5 @@
 {
+  "include": ["../debug-log/manifest.json"],
   "modules": {
     "testing/assert": "./assert",
     "testing/fakes/ChatAudioIO": "./fakes/ChatAudioIO",

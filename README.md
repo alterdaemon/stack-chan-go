@@ -12,9 +12,8 @@ Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
 The current 2.1.0 series also incorporates upstream 2.1.0.
 
 Current source firmware: **2.1.0-R3**, for **M5StackChan CoreS3**.
-The published stable release is **[2.1.0-R2](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2)**.
-R2 combines the selected R8 16 kHz/FD2 audio profile with local interruption and
-search-cancellation fixes.
+The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3)**.
+Preconfigured application-only and full BINs are available in that release.
 
 R3 adds GPT-Realtime 2.1 as the third conversation choice. Both Realtime models
 share the saved Realtime voice, web search and interruption controls. Model
@@ -24,7 +23,13 @@ R3 also fixes Live playback staying muted after interruption, including continue
 answers and delayed captions. A Live-only fallback recovers after 1.5 seconds of
 suppressed audible PCM; Realtime keeps its existing recovery behavior.
 With Interruption On, both Realtime models use far-field input filtering before
-server VAD and verify it before enabling microphone input.
+server VAD and verify it before enabling microphone input. Realtime reduces
+post-AEC amplification by 8 dB during playback and the echo tail, retaining full
+listening gain afterward and keeping spoken interruption available.
+
+R3 includes device debugging controlled through USB, Off after every boot.
+USB also supports temporary audio trials without changing saved settings.
+See [USB diagnostics](docs/mod/README.md#usb-development-diagnostics) for capture commands and limits.
 
 ## What this fork adds
 

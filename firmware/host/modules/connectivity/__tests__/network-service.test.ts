@@ -11,6 +11,7 @@ import NTP, { resetNTP } from './fakes/ntp.js'
 /** Map Moddable bare imports to local Node test doubles. */
 function installBareSpecifierPackages(): void {
   const modulesRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  writeAliasPackage(modulesRoot, 'device-debug', resolve(modulesRoot, 'debug-log/api.js'), { hasDefaultExport: true })
   for (const name of ['network-power', 'wifi-power-policy']) {
     writeAliasPackage(modulesRoot, name, resolve(modulesRoot, `connectivity/${name}.js`))
   }

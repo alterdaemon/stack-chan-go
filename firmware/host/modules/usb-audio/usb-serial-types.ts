@@ -14,6 +14,8 @@ export function isUSBSerialOutputFullError(error: unknown): error is USBSerialOu
 
 export type USBSerialOptions = {
   format?: 'buffer'
+  receiveBufferBytes?: number
+  transmitBufferBytes?: number
   target?: unknown
   onReadable?(this: USBSerialIO, bytes: number): void
   onWritable?(this: USBSerialIO): void

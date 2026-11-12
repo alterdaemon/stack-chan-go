@@ -625,3 +625,251 @@ Logs, source/image provenance, effective SDK configuration and build symbols are
 retained under `internal/work/r3-live-interruption-recovery/`. The task-owned
 short checkout and compiler cache were removed after retained-file hash checks.
 No device, settings, tag, remote release or experimental image was modified.
+
+## R3 USB diagnostics and Realtime recurrence investigation
+
+2026-11-12. Add a general component recorder with USB-only `diag status`,
+`diag on`, `diag keepalive` and `diag off`. It starts Off, holds no saved setting,
+expires after 30 seconds without renewal and disables on detected disconnect.
+The host capture tool renews every 10 seconds and sends Off on exit. Detailed
+records exclude prompts, transcripts, tool arguments/results, credentials and
+audio. Native callbacks enqueue compact transitions; JSON formatting and USB
+output run outside media callbacks. The diagnostic FIFO is bounded to 4,096
+characters and the native ring to 32 records, with loss counters. The binary
+dock and XS debugger retain exclusive USB ownership. This normal firmware
+profile disables secondary USB console mirroring, retaining the primary UART
+console and UI/error handling.
+
+Local/static checks from `firmware/`: `npm run test:unit` passed 731 Node/native
+tests and nine packaging tests after the VAD regression below. The real native
+recorder queue is exercised with 40,000 concurrent producer events under
+address/undefined-behavior sanitizers; bounded loss, ordering, default Off and
+disable are checked. The host tool passed a pseudo-terminal on/keepalive/off/
+status test, console filtering and private-file mode 0600. Lint/format, the
+six-target manifest check, R3 release metadata and project contract passed.
+Temporary/cache paths remain under workspace `internal/`.
+
+XS simulator: debug-log control and USB bridge I/O manifests passed using a real
+private Xvfb/xauth/D-Bus runtime under `internal/work/xs-simulator-runtime/`.
+The harness extracts pinned, hash-verified official Debian packages locally;
+it does not install host packages or use the old fake `xvfb-run` shim. These are
+simulator passes, not hardware audio-quality measurements.
+
+The initial normal R3 diagnostic build passed the managed release wrapper in a
+short checkout at implementation `d87ffefa` with a recorded source overlay.
+Independent validation checked supported ESP32-S3 layout and write/erase bounds,
+same-build bootloader/table, matching application/full bytes and erased gaps.
+Application: 8,580,128 bytes, SHA-256
+`1bde23fb8e4c980ce78c1b652d4a759e7027b08676e9b3cebd5c7b8d0120ee39`.
+Full image: 16,777,216 bytes, SHA-256
+`046c97a229cf0d3274726c0bc89cb45852207b07d3c4474550b83fe3463d3714`.
+This first image still uses the previous 0.5 On threshold. Source-overlay
+hashes distinguish it from subsequent diagnostic-control builds.
+
+Physical installation backed up both non-application flash regions privately,
+validated the live partition table, wrote only the application at `0x10000`,
+verified the complete application and reread protected regions unchanged before
+reset. Bootloader, partition table, NVS, PHY, xs and storage were not written.
+Running ELF identity was
+`bc1c83a27f6f304d97188f844225a7d52bc61f98d7a01c4cba2f557b97b80c77`.
+Real USB status confirmed Off after boot; enable/renew/capture/Off worked, and a
+separate no-renewal test confirmed Off by 33.2 seconds. Network stayed connected
+and the user exercised the ordinary conversation UI. Earlier image pairs and
+non-application backups remain in private archives.
+
+The user reported repeated answers during a ten-minute Mini/Interruption On
+capture. Its 632 records have no sequence gaps and both loss counters stay zero.
+There are 21 distinct input commits and 21 distinct response creations: 14
+completed responses and seven cancelled responses. Every cancellation reports
+`turn_detected` after a new `input_audio_buffer.speech_started`. Native flush
+requests advance once each from 1 through 21. No provider error, tool event or
+outgoing response-control request is recorded. In one chain, at 17:48:46.978
+Europe/Warsaw a speech-start event precedes cancellation at 17:48:47.104;
+the replacement starts at 17:48:50.725, another speech-start arrives at
+17:48:51.713 and cancellation follows at 17:48:52.334, before a third response
+starts at 17:48:52.773. This establishes new detected input turns as the
+cancellation/replacement mechanism. It does not establish the acoustic origin
+of those turns: this privacy-preserving trace contains no waveform. The physical
+trace is Mini only; the user's report also covers the full model.
+
+Silent local live-API controls replayed an archived FD2/6 dB component recording
+with its 27 dB digital restoration, far-field strength 1 and equivalent input
+across both Realtime models. These WebSocket controls disable automatic output
+and isolate VAD. The echo-only segment (recording seconds 12-17) produced one
+false speech start per model at thresholds 0.5 and 0.55. Thresholds 0.6, 0.65
+and 0.7 suppressed it. Both 0.5 and 0.7 retained the normal-level near-only speech trigger.
+At an additional -12 dB, 0.7 lost the near-only control and was rejected;
+0.6 retained it, detecting 448 ms later than 0.5. Both 0.5 and 0.6 detected the
+synthetic quieter-speech/echo mixture at the same input timestamp. The recorded
+physical double-talk clean channel produced no speech start at either tested
+threshold; it is not evidence of successful physical double-talk retention.
+No device microphone or speaker was opened by these local probes.
+
+A temporary 0.6-default candidate passed 113 focused conversation/native tests
+after three regressions failed before that candidate. Its ordinary browser
+WebRTC echo replay did not reproduce the false trigger at either 0.5 or 0.6,
+so it was not retained as a production default or claimed as the device fix.
+Both models retained a quieter synthetic spoken-stop control over WebRTC.
+Normal defaults remain unchanged while the USB RAM trials compare actual-device
+behavior. The user subsequently reported that muting the microphone while the
+robot speaks stops the repeats. This supports the input-trigger path; the
+speaker-muted control isolates playback dependence.
+
+The user's authorized extension reuses this OpenSpec change and adds validated
+USB RAM trials for speaker/capture trim, AEC NLP and Realtime VAD/silence/noise.
+Updates preserve Interruption On and saved preferences, and restore on reset or
+diagnostic-session end. The host capture supports interactive commands through
+its existing serial owner. Input-only session updates are serialized and await
+acknowledgement; no prompt or response request is injected by tuning.
+
+XS startup checks exposed additional stack use from diagnostic payloads. The
+unchanged baseline passed; the initial instrumented version overflowed the
+simulator's 384-slot stack. Disabled paths now skip the helper and payloads, and
+metadata is assembled incrementally. The integration fixture now uses 1,024
+slots, matching the independently verified normal firmware creation setting.
+Both baseline/configured startup manifests then passed with diagnostics Off and
+enabled, including synchronous transport close. No device stack increase was
+made. Final RAM-tuning verification and physical correction acceptance remain
+to be recorded below; no fix is established by these simulator checks.
+
+Private source/build identities, captures, causal analysis and probe results are
+under `internal/work/usb-debug-r3-20261112/`; prior replay tooling is under
+`internal/work/realtime-stop-probes-20261112/`. Diagnostics were confirmed Off
+after the incident capture. No release was published or tag moved.
+
+The RAM-control build passed 737 full Node/native tests and nine packaging
+tests, 71 focused control/native/protocol tests, lint/format, all six manifests
+and R3 metadata. Actual XS startup Off/On and asynchronous USB control passed
+in the private Xvfb runtime. Its app was 8,589,248 bytes, SHA-256
+`fa0c135e59ce89010c0255ed63677fc52838c96673834395e4e2a7e882b95ca6`;
+full image SHA-256
+`541ef7a08644406cfb7e2b342832c9b56f26f3fb842e748f693e7f05349dbef5`.
+App-only installation verified all backed-up non-app bytes unchanged. USB
+status confirmed default Off and running ELF
+`9bca63b66954a68ec86ee1614c41dc2689b0d5c43f2258a3d68e65c3881c590b`.
+Native NLP/speaker/capture commands and a connected Realtime VAD update
+received applied acknowledgements on the physical robot.
+
+In `device-tuning-01.jsonl`, NLP 2 still allowed repeated speech detections and
+responses. With speaker trim zero, microphone and interruption remained active
+and a greeting produced one response with no immediate feedback turns. The
+normal-volume VAD 0.6 trial also reproduced repeated answers and is rejected
+as the permanent repair. A -12 dB capture trial lost its diagnostic session
+before the user's test: default gain was restored, so that reported failure
+does not evaluate the requested gain. The first host reader failed to flag
+this unexpected Off. Subsequent gain trials require uninterrupted enabled
+status; no gain repair is accepted from that invalid trial.
+
+The control follow-up reports disable reasons, confirms a USB disconnect only
+after 500 ms of continuous indication, and makes the host abort on unexpected
+Off or lost control acknowledgements. This protects against transient USB
+monitor indications without extending the 30-second host lease. A metadata
+collision between the capture identifier and capture trim is corrected to
+`captureDb`. Eleven recorder/native tests passed, including sustained versus
+transient disconnect and capture-ID preservation. Three host pseudo-terminal
+lifecycle cases passed: unexpected Off fails, requested Off exits normally,
+and ordinary bounded capture exits normally. Physical verification of this
+follow-up and permanent acoustic repair remain pending.
+
+Confirmed physical gain trials: `device-tuning-02.jsonl` retained -12 dB and
+the maintainer reported one answer, with intermittent failure to stop. At
+-6 dB, the maintainer confirmed stop works without extra answers on Mini.
+Switching models involved a device restart, which discarded trials. USB was
+reconnected, -6 dB reapplied and acknowledged, and the full-model trial in
+`device-tuning-03.jsonl` was then independently confirmed to stop without extra
+answers. Its trace identifies `gpt-realtime-2.1`, Interruption On, original VAD
+0.5 and NLP 1. These are physical/live-API RAM trials, not the installed
+production correction.
+
+The localized correction applies that 6 dB reduction only during Realtime
+reference-active processing and the existing 200 ms tail; listening afterward
+retains full restoration. Live and Off remain on their existing gain paths.
+The new actual-native-audio regression failed before the correction (first
+Realtime sample 2000 versus expected 1001) and passed afterward under ASan/UBSan.
+Its independent reference-history oracle checks echo/tail and silent-listening
+frames across encoder reads, delayed processing, mute and Pitch, while the
+existing Live/Off and interruption tests remain in the same harness. An initial
+oracle scanned history per sample and exceeded the harness timeout; caching
+that calculation per frame corrected the test. Another fixture setup left a
+silent-reference interval active for an Off-only check; resetting that fixture
+state corrected its expectation. These were test repairs. The complete updated
+unit suite passes 739 Node/native cases and nine packaging cases; lint/format
+also passed. Final production-path installation/acceptance remains pending.
+
+Subsequent recurrence invalidated -6 dB as a complete repair: the maintainer
+reported rarer repeated answers, and `device-tuning-04.jsonl` confirms renewed
+speech detections/cancelled responses while -6 dB remained acknowledged and
+enabled (for example 18:27:04 and 18:27:29 UTC). Native input overruns remained
+zero at those transitions. The preceding short successful trials are not
+proof that -6 dB prevents recurrence.
+
+The echo-window -6 dB candidate was already being installed when that report
+arrived. Its independently validated app is 8,589,280 bytes, SHA-256
+`169d8c6eca87a9551e0ac33054ba6dad6323e86e99cf4558ab180b82217575b6`;
+full image SHA-256
+`709d3b60dd50053d9109640149a0fde68712e3fdcba4326b72ca2fd74b31f88c`.
+App-only verification and protected-region rereads passed. Running ELF is
+`67f6a1307f0ac1876a665424533d89789f4034cc4593bc8516c9812e44dd65cd`;
+boot status confirms diagnostics Off and captureDb 0. An additional USB -2 dB
+trial is acknowledged in `device-gain8-01.jsonl`, giving approximately -8 dB
+during playback and -2 dB during quiet listening. The requested -8 dB trial
+is still under evaluation; no complete repair is claimed at this point.
+
+The maintainer confirmed no repetitions and reliable stop in the acknowledged
+-8 dB playback trial. The production echo-window multiplier is changed from
+513/1024 (about -6 dB) to 408/1024 (about -8 dB), with no further policy change.
+The same native frame/tail regression is rerun for the selected value.
+Extended physical observation and installation of this selected default remain
+pending; no claim of universal acoustic immunity follows from the short trial.
+
+Selected -8 dB R3 completed the managed release build. App: 8,589,280 bytes,
+SHA-256 `563bc1618a0b3899267030042a54c0b2bc6574da9b005d34cd3d8692bb9bae10`.
+Full: 16,777,216 bytes, SHA-256
+`c5e9f8a40514a11636eb089ead1d59486c79ec76ac24c16a85b094bbecb7695f`.
+Same-build app/full/boot/table, erased gaps, supported S3 layout, image metadata
+and sector-rounded app bounds independently passed. Application-only install
+verified the app and all backed-up non-application bytes unchanged. USB confirms
+running ELF `d7bf3f559a5adf998a056612a6783e66447d3b45e33bb4130c4e2b7909e7a8d2`,
+diagnostics Off and additional captureDb 0. The selected correction is built in
+and requires no enabled logger or USB trim. The maintainer explicitly accepted
+-8 dB and requested release; a separate post-install acoustic/model matrix was
+not repeated. The native frame oracle and shared Realtime path cover the default
+change; physical acceptance refers to the preceding acknowledged playback trial.
+
+Final local/static checks: `npm run test:unit` passes 739 Node/native cases and
+nine packaging tests on the selected source; lint/format and
+`npm run check:release -- v2.1.0-R3` pass. The earlier six-target manifest and
+actual XS startup/control/I/O checks remain applicable; no manifest or XS change
+followed them apart from the already checked recorder disconnect logic.
+
+Physical USB backpressure/lease check on the selected image passed. With the
+normal application active, three initial Off samples had median free heap
+6,991,959 B and internal 56,355 B; enabled before flooding was 6,991,903/56,299 B.
+An unread endpoint received 1,200 status commands over 3.839 s, caused 90 counted
+drops and stayed enabled after draining. Heap afterward was 6,983,731 B. With
+native speaker/capture/NLP trials active and no renewals, status confirmed Off
+by 30.666 s, reason lease_expired, speaker 1, captureDb 0 and NLP 1. Free heap
+then was 6,989,195 B, internal 56,227 B. These are observed heap snapshots, not a
+CPU benchmark, controlled old/new acoustic comparison or a zero-overhead claim.
+The earlier comparable full-model idle status on the first controls image was
+6,999,695 B free/56,547 B internal; varying session histories prevent attributing
+that difference to instrumentation. Native delayed-audio tests establish frame
+continuity under concurrent work; user trials establish audible stop/reply
+behavior. UI latency and calibrated end-to-end audio distortion were not measured.
+Useful evidence stays private under internal/work/usb-debug-r3-20261112.
+
+The USB physical check also captured ongoing conversation activity after the
+flood: captured samples advanced from 2,378,752 at device 243,586.237 ms to
+2,894,848 at 275,873.546 ms (about 15,985 samples/s against the 16 kHz source).
+Rendered samples advanced from 2,339,360 to 2,850,080; input overruns remained
+zero. Underrun counts rose from 65 to 73 around the intervening interruption
+activity, so this is progress evidence, not proof of glitch-free output. The
+probe injected no speech or requests to make the robot talk. USB was left Off
+with all additional trials reset.
+
+Read-only completion review checked the diagnostic field whitelist, enabled-only
+payload guards, bounded nonblocking output, capture ownership and reset/error
+paths, and the shared Realtime-only gain branch. The gain change preserves the
+existing I2S/reference order, sample timing, buffers, Live and Off branches.
+Remaining measurement limits are stated above; no zero-overhead, calibrated
+audio-quality or universal recurrence guarantee is claimed.

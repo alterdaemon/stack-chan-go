@@ -16,7 +16,10 @@ const nativeSetFormat = native('xs_stackchan_usb_serial_set_format')
 export default class USBSerial extends Native('xs_stackchan_usb_serial_destructor') implements USBSerialIO {
   constructor(options: USBSerialOptions = {}) {
     super()
-    nativeConstruct.call(this, options, USB_SERIAL_MAX_WRITE_BYTES)
+    const receiveBytes = options.receiveBufferBytes ?? 32 * 1024
+    const transmitBytes = options.transmitBufferBytes ?? 16 * 1024
+    const maximumWrite = options.transmitBufferBytes === undefined ? USB_SERIAL_MAX_WRITE_BYTES : transmitBytes / 2 - 16
+    nativeConstruct.call(this, options, Math.min(USB_SERIAL_MAX_WRITE_BYTES, maximumWrite), receiveBytes, transmitBytes)
   }
 
   close(): void {

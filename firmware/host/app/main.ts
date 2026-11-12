@@ -8,6 +8,7 @@ import { type BootWiFiStatus, startHostBootServices } from 'boot-services'
 import type { StackchanContext } from 'capabilities'
 import { createStackchanContext, getHostDeviceEnvironment } from 'compose'
 import { DOMAIN } from 'consts'
+import Debug from 'device-debug'
 import { type StackchanDockRuntime, startStackchanDock } from 'dock'
 import { prepareExperimentalMiniApps, registerExperimentalMiniApps } from 'experimental-mini-app-loader'
 import { initializeLocalization } from 'localization'
@@ -107,6 +108,14 @@ async function main() {
   let phase: StartupPhase = 'initialization'
   try {
     dockRuntime = startStackchanDock(Modules, loadModConfig())
+    if (!dockRuntime && Modules.has('device-debug/service')) {
+      try {
+        ;(Modules.importNow('device-debug/service') as () => void)()
+      } catch {
+        trace('[debug] USB diagnostic service unavailable\n')
+      }
+    }
+    Debug.context('application', phase)
     if (dockRuntime) trace('[main] Stackchan Dock started\n')
     installPlatformInputBridge()
     initializeLocalization(loadPreferences(DOMAIN.ui).language)
@@ -117,6 +126,7 @@ async function main() {
     // Launch behaviors run before startHostBootServices so the splash screen is
     // visible while network setup blocks.
     phase = 'launch'
+    Debug.context('application', phase)
     const launch = await prepareAppLaunch(appBehaviors, prepareExperimentalMiniApps)
     trace(`[main] onLaunch shouldCreateContext=${launch.shouldCreateContext}\n`)
     if (!launch.shouldCreateContext) {
@@ -129,6 +139,7 @@ async function main() {
     const experimentalMiniApps = launch.prepared
 
     phase = 'network'
+    Debug.context('application', phase)
     const bootServices = startHostBootServices({
       wifi: {
         onStatusChanged: showWiFiConnectionStatus,
@@ -138,6 +149,7 @@ async function main() {
     const networkReady = await bootServices.connectivity.network.ready
     trace(`[main] network ready: ${networkReady.status}\n`)
     phase = 'context'
+    Debug.context('application', phase)
     const preferences = loadPreferenceConfig()
     const ownedDock = dockRuntime
     context = createStackchanContext(preferences, {
@@ -149,6 +161,7 @@ async function main() {
       ],
     })
     phase = 'behavior'
+    Debug.context('application', phase)
     ownedDock?.onContextCreated(context)
     registerExperimentalMiniApps(experimentalMiniApps, context.ui.miniApps)
     trace('[main] app context created\n')
@@ -157,8 +170,11 @@ async function main() {
       config: preferences,
     })
     trace('[main] app behaviors ready\n')
+    Debug.context('application', 'ready')
     installModManagerShortcut()
   } catch (error) {
+    if (Debug.enabled) Debug.event('application', 'failure', { phase, kind: startupErrorClass(error) })
+    Debug.context('application', 'error')
     // A newer/disposed view during async cleanup owns its screen. Do not
     // replace it with an older startup attempt's failure.
     const failedApplication = globalEnv.application

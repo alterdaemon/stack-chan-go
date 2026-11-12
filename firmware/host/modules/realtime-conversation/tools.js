@@ -95,6 +95,7 @@ export default class ToolRunner {
   }
 
   async #execute(response, call) {
+    this.#diagnose('start', response, call)
     const cancellations = new Set()
     const cancelWork = () => {
       for (const cancel of cancellations) {
@@ -122,11 +123,13 @@ export default class ToolRunner {
       finish = resolve
     })
     const cancelExecution = () => {
+      this.#diagnose('cancel', response, call)
       cancelWork()
       finish({ error: 'tool_cancelled' })
     }
     response.waits.add(cancelExecution)
     timer = this.#platform.setTimeout(() => {
+      this.#diagnose('timeout', response, call)
       timedOut = true
       cancelWork()
       finish({ error: 'tool_timeout' })
@@ -145,10 +148,12 @@ export default class ToolRunner {
       }
       try {
         const value = await execute(args, context)
+        this.#diagnose('result', response, call, value)
         const output = typeof value === 'string' ? value : JSON.stringify(value)
         if (typeof output !== 'string' || output.length > 8192) return { error: 'invalid_tool_output' }
         return { output }
       } catch {
+        this.#diagnose('failure', response, call, { error: 'tool_execution_failed' })
         return { error: 'tool_execution_failed' }
       }
     })
@@ -229,5 +234,16 @@ export default class ToolRunner {
     this.cancelPending()
     this.#tools.clear()
     this.#seen.clear()
+  }
+
+  #diagnose(event, response, call, result) {
+    if (!this.#platform.debug?.enabled) return
+    this.#platform.debug.event('tool', event, {
+      response_id: response.id,
+      call_id: call.callId,
+      tool: call.name,
+      errorCode: result?.error,
+      status: result?.status,
+    })
   }
 }

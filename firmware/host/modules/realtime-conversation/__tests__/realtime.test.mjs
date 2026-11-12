@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LiveSession } from '../../../../mods/examples/openai_live_webrtc/session.js'
+import { safeFields } from '../../debug-log/core.js'
 import ToolRunner from '../tools.js'
 import { summarizeWebSearchResponse } from '../web-search.js'
 
@@ -13,6 +14,137 @@ const { default: Conversation } = await import(`data:text/javascript,${encodeURI
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve()
 }
+
+for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
+  test(`${model} USB tuning preserves the active response and interruption, acknowledges and restores input`, async () => {
+    let tuner,
+      unregistered = 0
+    const debug = {
+      enabled: true,
+      event() {},
+      registerTuner(_owner, value) {
+        tuner = value
+      },
+      unregisterTuner() {
+        unregistered++
+      },
+    }
+    const f = fixture({ model, bargeIn: true }, debug)
+    await f.connect()
+    f.message({ type: 'response.created', response: { id: 'resp_active' } })
+    const resumes = f.resumed
+    const baseline = f.setup[0].session.audio.input
+    const ack = () =>
+      f.message({ type: 'session.updated', session: { audio: { input: f.sent.at(-1).session.audio.input } } })
+    let settled = false
+    const change = tuner.set('vad', 0.6).then(() => {
+      settled = true
+    })
+    assert.equal(f.sent.length, 1)
+    assert.equal(f.sent[0].type, 'session.update')
+    assert.equal(f.sent[0].session.audio.input.turn_detection.threshold, 0.6)
+    assert.equal(f.sent[0].session.audio.input.turn_detection.interrupt_response, true)
+    await flush()
+    assert.equal(settled, false)
+    ack()
+    await change
+    assert.equal(tuner.snapshot().threshold, 0.6)
+    const noise = tuner.set('noise', 'off')
+    ack()
+    await noise
+    const reset = tuner.reset()
+    await flush()
+    ack()
+    await reset
+    assert.deepEqual(f.sent.at(-1).session.audio.input.noise_reduction, baseline.noise_reduction)
+    assert.equal(tuner.snapshot().threshold, baseline.turn_detection.threshold)
+    assert.equal(f.resumed, resumes)
+    assert.equal(f.interrupted, 0)
+    assert.ok(f.sent.every((m) => m.type === 'session.update' && m.session.instructions === undefined))
+    const pending = tuner.set('silence', 1000).catch((e) => e.code)
+    await f.c.close()
+    assert.equal(await pending, 'closed')
+    assert.equal(unregistered, 1)
+  })
+  test(`${model} rejected and timed-out USB trials leave the call connected`, async () => {
+    let tuner
+    const f = fixture(
+      { model, bargeIn: true },
+      {
+        enabled: true,
+        event() {},
+        registerTuner(_owner, value) {
+          tuner = value
+        },
+      },
+    )
+    await f.connect()
+    const rejected = tuner.set('vad', 0.6).catch((e) => e.code)
+    f.message({ type: 'error', error: { code: 'invalid_value', event_id: f.sent.at(-1).event_id } })
+    assert.equal(await rejected, 'invalid_value')
+    const timeout = tuner.set('vad', 0.6).catch((e) => e.code)
+    ;[...f.timers].find((t) => t.ms === 5000).fn()
+    assert.equal(await timeout, 'command_timeout')
+    assert.equal(f.c.state, 'connected')
+    assert.equal(f.sent.filter((m) => m.type === 'response.create').length, 0)
+    await f.c.close()
+  })
+}
+
+for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
+  test(`${model} diagnostics correlate accepted, duplicate and stale interruptions without changing policy`, async () => {
+    const records = []
+    const debug = {
+      enabled: true,
+      event: (component, event, fields) => records.push({ component, event, ...safeFields(fields) }),
+    }
+    const f = fixture({ model, bargeIn: true }, debug)
+    await f.connect()
+    f.message({ type: 'response.created', response: { id: 'resp_old' } })
+    f.message({ type: 'input_audio_buffer.speech_started', item_id: 'item_caller', audio_start_ms: 1234 })
+    f.message({ type: 'output_audio_buffer.cleared', response_id: 'resp_old' })
+    f.message({
+      type: 'response.done',
+      response: { id: 'resp_old', status: 'cancelled', status_details: { type: 'cancelled', reason: 'turn_detected' } },
+    })
+    f.message({ type: 'response.created', response: { id: 'resp_new' } })
+    f.message({ type: 'output_audio_buffer.cleared', response_id: 'resp_old' })
+    assert.equal(f.interrupted, 1)
+    assert.equal(records.filter((r) => r.event === 'interrupt.accept').length, 1)
+    assert.equal(records.filter((r) => r.event === 'interrupt.ignore').length, 2)
+    assert.ok(records.some((r) => r.item_id === 'item_caller' && r.audio_start_ms === 1234))
+    assert.ok(records.some((r) => r.response_id === 'resp_old' && r.reason === 'turn_detected'))
+    assert.ok(records.some((r) => r.event === 'interrupt.ignore' && r.playbackResponse === 'resp_new'))
+    debug.enabled = false
+    const recorded = records.length
+    f.message({ type: 'input_audio_buffer.speech_started' })
+    assert.equal(f.interrupted, 2)
+    assert.equal(records.length, recorded)
+    await f.c.close()
+  })
+}
+
+test('diagnostics omit transcript, prompt, tool arguments and provider private messages', async () => {
+  const records = []
+  const f = fixture(
+    { bargeIn: true },
+    { enabled: true, event: (component, event, fields) => records.push({ component, event, ...safeFields(fields) }) },
+  )
+  await f.connect()
+  f.message({ type: 'response.output_audio_transcript.delta', delta: 'private-spoken-content' })
+  f.message({ type: 'error', error: { code: 'safe_code', message: 'sk-proj-private-error' } })
+  f.message({
+    type: 'response.function_call_arguments.done',
+    call_id: 'call_test',
+    name: 'search_web',
+    arguments: 'private-search-query',
+  })
+  const text = JSON.stringify(records)
+  for (const secret of ['private-spoken-content', 'sk-proj-private-error', 'private-search-query', 'Use Polish.'])
+    assert.equal(text.includes(secret), false)
+  assert.ok(records.some((r) => r.errorCode === 'safe_code'))
+  await f.c.close()
+})
 
 for (const protocol of ['live', 'realtime']) {
   for (const cancellation of ['local', 'server']) {
@@ -268,7 +400,7 @@ for (const turnDetection of [
     }
   })
 }
-function fixture(options = {}) {
+function fixture(options = {}, debug) {
   let callback,
     pendingSearch,
     pendingHangup,
@@ -297,6 +429,7 @@ function fixture(options = {}) {
       ...options,
     },
     {
+      debug,
       createTransport(fn) {
         callback = fn
         return {
@@ -664,6 +797,26 @@ test('both Realtime models use multipart WebRTC, server VAD and supported tools 
   }
   assert.equal(new Set(thresholds).size, 1)
 })
+
+for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
+  test(`${model} keeps input muted if the service acknowledges the wrong explicit On threshold`, async () => {
+    const f = fixture({ model, bargeIn: true, turnDetection: { type: 'server_vad', threshold: 0.6 } })
+    const outcome = f.c.connect().then(
+      () => 'connected',
+      (error) => error.code,
+    )
+    await f.signal()
+    f.message({ type: 'session.created', session: { id: 'sess_test' } })
+    const session = JSON.parse(JSON.stringify(f.sent.at(-1).session))
+    session.id = 'sess_test'
+    session.audio.input.turn_detection.threshold = 0.5
+    assert.equal(f.mute, true)
+    f.message({ type: 'session.updated', session })
+    assert.equal(await outcome, 'configuration_mismatch')
+    assert.equal(f.mute, true)
+    await f.c.close()
+  })
+}
 
 test('Realtime rejects unsupported explicit models before starting native transport', () => {
   for (const model of ['gpt-live-1', 'unsupported-model', '', 1]) assert.throws(() => fixture({ model }), TypeError)

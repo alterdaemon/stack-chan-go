@@ -1,5 +1,6 @@
 {
   "include": [
+    "../debug-log/manifest.json",
     "$(MODDABLE)/examples/manifest_base.json",
     "$(MODDABLE)/examples/manifest_typings.json",
     "$(MODDABLE)/modules/embedded/network/ntp/client/manifest.json",

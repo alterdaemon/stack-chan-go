@@ -5,14 +5,16 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
   return class Transport extends Base {
     #timer
     #callback
+    #debug
     #closing
     #resolveClose
     #released = false
     #finalStats
     #outgoing = []
     #outgoingBytes = 0
-    constructor(callback) {
+    constructor(callback, debug) {
       super()
+      this.#debug = debug
       this.#callback = callback
       binding('xs_live_transport_constructor').call(this)
       try {
@@ -70,6 +72,15 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
       while (this.#outgoing.length) {
         const { data, bytes } = this.#outgoing[0]
         if (!binding('xs_live_transport_send').call(this, data)) break
+        if (this.#debug?.enabled) {
+          const message = JSON.parse(data)
+          this.#debug.event('transport', 'send.accepted', {
+            type: message.type,
+            event_id: message.event_id,
+            response_id: message.response_id,
+            call_id: message.item?.call_id,
+          })
+        }
         this.#outgoing.shift()
         this.#outgoingBytes -= bytes
       }

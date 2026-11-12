@@ -6,6 +6,33 @@ import { createWebSearchTool } from 'realtimeConversation/web-search'
 
 const ENDPOINT = 'https://api.openai.com/v1/live/sessions'
 const REALTIME_ENDPOINT = 'https://api.openai.com/v1/realtime/calls'
+const DIAGNOSTIC_EVENTS = new Set([
+  'session.created',
+  'session.updated',
+  'session.started',
+  'session.closed',
+  'input_audio_buffer.speech_started',
+  'input_audio_buffer.speech_stopped',
+  'input_audio_buffer.committed',
+  'output_audio_buffer.started',
+  'output_audio_buffer.stopped',
+  'output_audio_buffer.cleared',
+  'response.created',
+  'response.done',
+  'response.completed',
+  'response.cancelled',
+  'response.failed',
+  'response.incomplete',
+  'response.function_call_arguments.done',
+  'response.output_item.done',
+  'error',
+  'session.input_audio.muted',
+  'session.input_audio.unmuted',
+  'session.delegation.created',
+  'conversation.item.created',
+  'conversation.item.added',
+  'conversation.item.done',
+])
 
 export class ConversationError extends Error {
   constructor(message, code, stage, status) {
@@ -48,6 +75,15 @@ function copyDelegation(value) {
   }
 }
 
+function trialInput(input) {
+  const t = input.turn_detection
+  const turn = { type: t.type, create_response: t.create_response, interrupt_response: t.interrupt_response }
+  for (const name of ['threshold', 'silence_duration_ms', 'prefix_padding_ms', 'eagerness'])
+    if (t[name] !== undefined) turn[name] = t[name]
+  const noise = input.noise_reduction
+  return { turn_detection: turn, noise_reduction: noise ? { type: noise.type, strength: noise.strength } : null }
+}
+
 export default class Conversation {
   #platform
   #options
@@ -71,6 +107,10 @@ export default class Conversation {
   #usage
   #result
   #stats
+  #trialBaseline
+  #trialCurrent
+  #trial
+  #trialDirty = false
   #tools
   #signaling
   #toolTimeout
@@ -448,13 +488,14 @@ export default class Conversation {
       }
       if (!message || typeof message.type !== 'string')
         throw new ConversationError('Invalid event', 'invalid_event', 'events')
+      if (this.#platform.debug?.enabled) this.#diagnose('receive', message)
       this.#tools?.receive(message)
       switch (message.type) {
         case 'input_audio_buffer.speech_started':
           if (this.#realtime && this.#options.bargeIn && !this.#muted && !this.#miniInterrupted) {
             this.#miniInterrupted = true
-            this.#interruptSpeech()
-          }
+            this.#interruptSpeech(message.type)
+          } else if (this.#platform.debug?.enabled) this.#diagnose('interrupt.ignore', message)
           break
         case 'output_audio_buffer.cleared':
           if (
@@ -465,8 +506,8 @@ export default class Conversation {
             (!message.response_id || !this.#playbackResponse || message.response_id === this.#playbackResponse)
           ) {
             this.#miniInterrupted = true
-            this.#interruptSpeech()
-          }
+            this.#interruptSpeech(message.type)
+          } else if (this.#platform.debug?.enabled) this.#diagnose('interrupt.ignore', message)
           break
         case 'response.created':
           if (this.#realtime) {
@@ -474,13 +515,30 @@ export default class Conversation {
             this.#playbackResponse = this.#activeResponse
             this.#continuationInFlight = false
             this.#miniInterrupted = false
+            if (this.#platform.debug?.enabled) this.#diagnose('output.resume', message)
             this.#transport.resumeOutput?.()
           }
           break
         case 'session.created':
         case 'session.updated':
           if (!this.#realtime) break
-          if (this.#ready) break
+          if (this.#ready) {
+            if (message.type === 'session.updated' && this.#trial) {
+              const actual = trialInput(message.session.audio.input)
+              if (JSON.stringify(actual) !== JSON.stringify(this.#trial.expected))
+                this.#rejectTrial(
+                  new ConversationError('Trial configuration mismatch', 'configuration_mismatch', 'tune'),
+                )
+              else {
+                const pending = this.#trial
+                this.#trial = undefined
+                this.#trialCurrent = actual
+                this.#cancelTimer(pending.timer)
+                pending.resolve()
+              }
+            }
+            break
+          }
           if (typeof message.session?.id !== 'string' || !message.session.id)
             throw new ConversationError('Missing session ID', 'invalid_session', 'events')
           this.#sessionId = message.session.id
@@ -511,6 +569,16 @@ export default class Conversation {
             break
           }
           this.#ready = true
+          this.#trialBaseline = this.#trialCurrent = trialInput(message.session.audio.input)
+          this.#platform.debug?.registerTuner?.(this, {
+            set: (name, value) => this.#setTrial(name, value),
+            reset: () => this.#resetTrial(),
+            snapshot: () => ({
+              threshold: this.#trialCurrent.turn_detection.threshold,
+              silence: this.#trialCurrent.turn_detection.silence_duration_ms,
+              noiseReduction: this.#trialCurrent.noise_reduction?.type ?? 'off',
+            }),
+          })
           this.#transport.setMuted(this.#muted)
           this.#cancelTimer(this.#connectTimer)
           this.#setState('connected')
@@ -578,6 +646,13 @@ export default class Conversation {
           break
         }
         case 'error': {
+          if (
+            this.#trial &&
+            (message.error?.event_id === this.#trial.id || message.error?.client_event_id === this.#trial.id)
+          ) {
+            this.#rejectTrial(new ConversationError('Trial rejected', message.error.code ?? 'tune_failed', 'tune'))
+            break
+          }
           // Automatic cancellation can win this race without losing a session.
           if (this.#realtime && message.error?.code === 'response_cancel_not_active') break
           if (message.error?.code === 'conversation_already_has_active_response') {
@@ -633,6 +708,65 @@ export default class Conversation {
       turn_detection: this.#turnDetection(),
     }
   }
+  #setTrial(name, value) {
+    if (this.#state !== 'connected' || !this.#realtime)
+      return Promise.reject(new ConversationError('No connected Realtime session', 'not_connected', 'tune'))
+    const input = JSON.parse(JSON.stringify(this.#trialCurrent))
+    if (
+      name === 'vad' &&
+      typeof value === 'number' &&
+      value >= 0.1 &&
+      value <= 0.95 &&
+      input.turn_detection.type === 'server_vad'
+    )
+      input.turn_detection.threshold = value
+    else if (
+      name === 'silence' &&
+      Number.isInteger(value) &&
+      value >= 200 &&
+      value <= 2000 &&
+      input.turn_detection.type === 'server_vad'
+    )
+      input.turn_detection.silence_duration_ms = value
+    else if (name === 'noise' && ['far_field', 'near_field', 'off'].includes(value))
+      input.noise_reduction = value === 'off' ? null : { type: value, strength: 1 }
+    else return Promise.reject(new ConversationError('Invalid trial parameter', 'invalid_parameter', 'tune'))
+    this.#trialDirty = true
+    return this.#updateTrial(input)
+  }
+  #updateTrial(input) {
+    if (this.#trial) return Promise.reject(new ConversationError('Trial pending', 'command_pending', 'tune'))
+    const pending = { ...deferred(), id: `trial_${++this.#eventID}`, expected: input }
+    this.#trial = pending
+    try {
+      pending.timer = this.#after(5000, () =>
+        this.#rejectTrial(new ConversationError('Trial acknowledgement timed out', 'command_timeout', 'tune')),
+      )
+      this.#send({ type: 'session.update', event_id: pending.id, session: { type: 'realtime', audio: { input } } })
+    } catch (error) {
+      this.#rejectTrial(error)
+    }
+    return pending.promise
+  }
+  async #resetTrial() {
+    if (!this.#trialDirty) return
+    if (this.#trial) {
+      try {
+        await this.#trial.promise
+      } catch {}
+    }
+    if (this.#state === 'connected' && this.#trialBaseline) {
+      await this.#updateTrial(this.#trialBaseline)
+      this.#trialDirty = false
+    }
+  }
+  #rejectTrial(error) {
+    const pending = this.#trial
+    if (!pending) return
+    this.#trial = undefined
+    this.#cancelTimer(pending.timer)
+    pending.reject(error)
+  }
   #turnDetection() {
     const configured = this.#options.turnDetection
     return {
@@ -644,7 +778,8 @@ export default class Conversation {
       interrupt_response: this.#options.bargeIn,
     }
   }
-  #interruptSpeech() {
+  #interruptSpeech(reason) {
+    if (this.#platform.debug?.enabled) this.#diagnose('interrupt.accept', { type: reason })
     this.#transport.interruptOutput?.()
     this.#tools?.cancelPending(true)
     this.#cancelTimer(this.#continuationTimer)
@@ -663,6 +798,7 @@ export default class Conversation {
         // Keep the caller's interruption latch after resume: late fragments
         // from that same caller turn must not cancel continued output again.
         this.#liveResumed = true
+        if (this.#platform.debug?.enabled) this.#diagnose('output.resume', { type: 'live.caller_finished' })
         this.#transport.resumeOutput?.()
       }
     } else {
@@ -685,16 +821,18 @@ export default class Conversation {
     ) {
       this.#liveInterrupted = true
       this.#liveResumed = false
-      this.#interruptSpeech()
+      this.#interruptSpeech('live.transcript_overlap')
     }
   }
   #send(message) {
+    if (this.#platform.debug?.enabled) this.#diagnose('send.queue', message)
     if (this.#realtime && message.type === 'response.create') {
       this.#continuation = message
       this.#continuationAttempts = 0
       this.#continueResponse()
       return
     }
+    if (this.#platform.debug?.enabled) this.#diagnose('send.attempt', message)
     this.#transport.send(JSON.stringify(message))
   }
   #continueResponse() {
@@ -706,6 +844,7 @@ export default class Conversation {
     this.#continuationInFlight = true
     this.#continuationAttempts++
     try {
+      if (this.#platform.debug?.enabled) this.#diagnose('send.attempt', message)
       this.#transport.send(JSON.stringify(message))
     } catch (error) {
       this.#fail(error)
@@ -729,6 +868,7 @@ export default class Conversation {
     this.#notify('onError', error)
   }
   #fail(error) {
+    if (this.#platform.debug?.enabled) this.#diagnose('failure', { type: 'error', error })
     if (this.#finishing || this.#result) return
     if (!(error instanceof ConversationError))
       error = new ConversationError(error?.message ?? 'Conversation failed', 'operation_failed', 'transport')
@@ -763,7 +903,11 @@ export default class Conversation {
   }
   async #finish(result, failed = false) {
     if (this.#finishing || this.#result) return
+    if (this.#platform.debug?.enabled)
+      this.#diagnose('finish', { type: 'local.close', response: { status_details: { reason: result.reason } } })
     this.#finishing = true
+    this.#platform.debug?.unregisterTuner?.(this)
+    this.#rejectTrial(new ConversationError('Session ended', 'closed', 'tune'))
     this.#tools?.close()
     this.#signalRequest?.cancel?.()
     this.#continuation = undefined
@@ -802,6 +946,7 @@ export default class Conversation {
   }
   #setState(state) {
     this.#state = state
+    if (this.#platform.debug?.enabled) this.#diagnose('state', { type: state })
     this.#notify('onStateChanged', state)
   }
   #notify(name, value) {
@@ -824,5 +969,57 @@ export default class Conversation {
   }
   #cancelTimer(timer) {
     if (this.#timers.delete(timer)) this.#platform.clearTimeout(timer)
+  }
+
+  #diagnose(event, envelope) {
+    const debug = this.#platform.debug
+    if (!debug?.enabled) return
+    try {
+      const message = envelope?.type === 'response.event' ? envelope.event : envelope
+      if (event === 'receive' && !DIAGNOSTIC_EVENTS.has(message?.type)) return
+      const response = message?.response
+      const error = message?.error ?? response?.status_details?.error
+      // Incremental assignment keeps this optional path within the XS stack
+      // budget even when a test transport delivers a close event synchronously.
+      const fields = {}
+      fields.type = message?.type
+      fields.event_id = message?.event_id
+      fields.response_id = response?.id ?? message?.response_id
+      fields.item_id = message?.item_id ?? message?.item?.id
+      fields.previous_item_id = message?.previous_item_id
+      fields.itemRole = message?.item?.role
+      fields.itemType = message?.item?.type
+      fields.call_id = message?.call_id ?? message?.item?.call_id
+      fields.connection_id = this.#realtime ? this.#callId : this.#sessionId
+      fields.tool = message?.name ?? message?.item?.name
+      fields.delegation_id = envelope?.delegation_id
+      fields.responseStatus = response?.status
+      fields.detailType = response?.status_details?.type
+      fields.reason = response?.status_details?.reason
+      fields.errorCode = error?.code
+      fields.status = error?.status
+      fields.client_event_id = error?.event_id ?? message?.client_event_id
+      fields.audio_start_ms = message?.audio_start_ms
+      fields.audio_end_ms = message?.audio_end_ms
+      fields.activeResponse = this.#activeResponse
+      fields.playbackResponse = this.#playbackResponse
+      fields.mode = this.#realtime ? 'realtime' : 'live'
+      fields.model = this.#options.model
+      fields.state = this.#state
+      fields.bargeIn = this.#options.bargeIn
+      fields.muted = this.#muted
+      fields.interrupted = this.#realtime ? this.#miniInterrupted : this.#liveInterrupted
+      fields.pending = this.#continuationInFlight
+      fields.attempt = this.#continuationAttempts
+      fields.vad = message?.session?.audio?.input?.turn_detection?.type
+      fields.threshold = message?.session?.audio?.input?.turn_detection?.threshold
+      fields.noiseReduction = message?.session?.audio?.input?.noise_reduction?.type
+      fields.strength = message?.session?.audio?.input?.noise_reduction?.strength
+      debug.event('conversation', event, fields)
+      if (event === 'interrupt.accept' || event === 'output.resume' || event === 'finish') {
+        const stats = this.#transport?.stats
+        if (stats) debug.event('audio', 'snapshot', stats)
+      }
+    } catch {}
   }
 }
