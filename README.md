@@ -52,7 +52,6 @@ Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
 - [Test results, performance evidence and limits](docs/mod/validation.md)
 - [Contributing](CONTRIBUTING.md)
 - [Fork releases](https://github.com/alterdaemon/stack-chan-mod/releases)
-- [Fork issues](https://github.com/alterdaemon/stack-chan-mod/issues)
 
 ## Upstream resources
 
@@ -66,6 +65,8 @@ project. The [upstream browser tools](https://stack-chan.github.io/stack-chan/we
 and installer serve upstream firmware. Use this fork's guide for Community images.
 
 ## License and attribution
+
+Fork modifications: Copyright © 2026 [alterdaemon](https://github.com/alterdaemon).
 
 Upstream history, credits and licenses are retained. See [LICENSE](LICENSE)
 and the provenance/license files beside third-party drivers and assets.

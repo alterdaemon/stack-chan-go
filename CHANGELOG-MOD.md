@@ -10,6 +10,10 @@ The fork started at upstream `v2.0.1`, commit
 This is the only source of fork release notes. Publication extracts the section
 headed `### <product-version>` for the requested tag.
 
+## Unreleased
+
+- Credit alterdaemon for fork modifications and remove the README's Fork issues link.
+
 ## 2.1.0
 
 ### 2.1.0-R3
