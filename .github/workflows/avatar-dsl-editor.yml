@@ -1,13 +1,6 @@
 name: Avatar DSL editor
 
 on:
-  pull_request:
-    paths:
-      - "web/**"
-      - "firmware/tools/avatar-dsl/**"
-      - "firmware/mods/examples/avatar-dsl/**"
-      - "firmware/host/modules/ui/components/face/avatar-native/**"
-      - ".github/workflows/avatar-dsl-editor.yml"
   workflow_dispatch:
 
 permissions:
