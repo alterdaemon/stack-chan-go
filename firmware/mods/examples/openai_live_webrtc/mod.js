@@ -1,5 +1,5 @@
 import Modules from 'modules'
-import { diagnostic, formatLiveError, LiveSession } from 'openai-live-session'
+import { diagnostic, formatLiveError, LiveSession, liveModelLabel } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
 import Timer from 'timer'
@@ -131,10 +131,10 @@ export function onContextCreated(robot) {
     if (liveButton) {
       if (notices[state]) liveButton.delegate('onLiveNotice', notices[state])
     } else {
-      const label = session.settings.mode === 'realtime' ? 'GPT-Realtime 2.1 Mini' : 'GPT-Live 1'
+      const label = liveModelLabel(session.settings.mode, session.settings.model)
       robot.ui.showBalloon(
         state === 'error'
-          ? formatLiveError(detail, session.settings.mode)
+          ? formatLiveError(detail, session.settings.mode, session.settings.model)
           : messages[state]?.replace('GPT-Live', label),
       )
     }

@@ -11,10 +11,14 @@ optimize performance, and keep the fork up to date and in sync with upstream.
 Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
 The current 2.1.0 series also incorporates upstream 2.1.0.
 
-Current source firmware: **2.1.0-R2**, for **M5StackChan CoreS3**.
+Current source firmware: **2.1.0-R3**, for **M5StackChan CoreS3**.
 The published stable release is **[2.1.0-R2](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2)**.
 R2 combines the selected R8 16 kHz/FD2 audio profile with local interruption and
 search-cancellation fixes.
+
+R3 adds GPT-Realtime 2.1 as the third conversation choice. Both Realtime models
+share the saved Realtime voice, web search and interruption controls. Model
+selection takes effect on the next manual start.
 
 ## What this fork adds
 
@@ -23,11 +27,11 @@ Compared with upstream **2.1.0**, the current CoreS3 firmware adds:
 | Area | What you get |
 | --- | --- |
 | Installation | Full and app-only BINs with chat MODs preconfigured. No local build needed. |
-| Voice chat | Built-in GPT-Live 1 and GPT-Realtime 2.1 Mini, started with the LIVE button. |
+| Voice chat | Built-in GPT-Live 1, GPT-Realtime 2.1 Mini and GPT-Realtime 2.1, started with the LIVE button. |
 | Settings | Bluetooth (BLE) or a password-protected Wi-Fi settings page. |
 | Voice controls | Saved voices, pitch, speaking style and optional interruption while the robot speaks. |
 | Conversation resume | GPT-Live idle standby with recent conversation memory. |
-| Web search | Search preconfigured for both conversation modes. |
+| Web search | Search preconfigured for all three conversation choices. |
 | Firmware fixes | Camera memory cleanup, audio/UI scheduling fixes and chat error recovery. |
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.

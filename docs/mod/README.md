@@ -3,7 +3,7 @@
 [Repository](https://github.com/alterdaemon/stack-chan-mod) ·
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
-Current product version: **2.1.0-R2**. Standard hardware: M5StackChan CoreS3.
+Current product version: **2.1.0-R3**. Standard hardware: M5StackChan CoreS3.
 The published stable release is **[2.1.0-R2](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
@@ -81,6 +81,10 @@ BINs. Debug/instrument/alternate-manifest builds do not publish these packages.
 Builds and packaging do not flash a device. Different contents under an existing
 revision are rejected; identical repackaging is allowed.
 
+Local R3 builds produce `StackChan-Community-v2.1.0-R3-app.bin` and
+`StackChan-Community-v2.1.0-R3.bin` in `internal/release-packages/`. R3 is not yet
+published; the public installation commands below still refer to released R2.
+
 To package an existing release in the same environment:
 
 ```sh
@@ -105,6 +109,8 @@ The application descriptor keeps the independent Moddable/host API compatibility
 version used by MOD loading.
 
 ## R2 audio and interruption behavior
+
+R3 retains this audio profile for all three conversation choices.
 
 R2 promotes the selected R8 profile: 16 kHz I2S, Opus output and Pitch in both
 voice modes with Interruption On or Off. On uses FD low-cost AEC with filter
@@ -135,7 +141,7 @@ verification of the amended R2 is complete and it is working. This confirmation
 is separate from unit-test results. Historical
 combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
-The R2 release pair is `StackChan-Community-v2.1.0-R2-app.bin` and
+The published R2 release pair is `StackChan-Community-v2.1.0-R2-app.bin` and
 `StackChan-Community-v2.1.0-R2.bin`. Preserve supported-layout settings by writing
 only the application:
 
@@ -195,8 +201,13 @@ setup lasts five minutes; BLE can also set/replace the password. HTTP Basic Auth
 does not encrypt LAN traffic. Passwords are not returned or logged; an empty
 password field preserves the saved value.
 
-OpenAI settings apply on the next LIVE start. Both modes share credentials,
-context, volume and local Pitch/Style; voices are saved independently.
-Auto disconnect applies only to GPT-Live. Mini stays connected during silence
-and uses the backend model/effort for its `search_web` Responses call.
+OpenAI settings apply on the next LIVE start. Conversation mode offers
+GPT-Live 1 (`gpt-live-1`), GPT-Realtime 2.1 Mini (`gpt-realtime-2.1-mini`) and
+GPT-Realtime 2.1 (`gpt-realtime-2.1`). All three share credentials, context,
+volume, local Pitch/Style and interruption controls. Live has its own saved voice;
+the two Realtime models share the saved Realtime voice. Existing saved Live/Mini
+choices retain their meaning. Auto disconnect applies only to GPT-Live. Both
+Realtime models stay connected during silence and use the backend model/effort
+for their `search_web` Responses call. Adding the full model does not establish
+better persona adherence.
 Repository cleanup does not rewrite saved preferences.

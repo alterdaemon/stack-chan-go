@@ -42,6 +42,7 @@ export function PreferencesPage() {
   const { t } = useI18n()
   const preferences = usePreferences()
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const realtime = ['realtime', 'realtime-full'].includes(preferences.values['openailive.mode'])
   const isDisabled = (name: PreferenceKey) =>
     !preferences.connected ||
     preferences.readOnly.has(name) ||
@@ -281,13 +282,14 @@ export function PreferencesPage() {
                 [
                   { value: 'live', label: 'GPT-Live 1', translate: false },
                   { value: 'realtime', label: 'GPT-Realtime 2.1 Mini', translate: false },
+                  { value: 'realtime-full', label: 'GPT-Realtime 2.1', translate: false },
                 ],
                 'モードは次回のLIVE開始時に適用されます。',
                 true
               )}
-              {preferences.values['openailive.mode'] === 'realtime' && (
+              {realtime && (
                 <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
-                  {t('Realtime Miniは無音でも接続を維持します。モデルと推論の強度は検索に使用します。')}
+                  {t('Realtimeは無音でも接続を維持します。モデルと推論の強度は検索に使用します。')}
                 </p>
               )}
               {inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
@@ -297,12 +299,13 @@ export function PreferencesPage() {
                 OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
               )}
               {selectField(
-                preferences.values['openailive.mode'] === 'realtime' ? 'openailive.realtimeVoice' : 'openailive.voice',
+                realtime ? 'openailive.realtimeVoice' : 'openailive.voice',
                 '声',
-                (preferences.values['openailive.mode'] === 'realtime'
-                  ? OPENAI_REALTIME_VOICES
-                  : OPENAI_LIVE_VOICES
-                ).map((value) => ({ value, label: value, translate: false }))
+                (realtime ? OPENAI_REALTIME_VOICES : OPENAI_LIVE_VOICES).map((value) => ({
+                  value,
+                  label: value,
+                  translate: false,
+                }))
               )}
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">
@@ -346,7 +349,7 @@ export function PreferencesPage() {
                 '発話中も音声を聞き取り、選択したモードで割り込みに対応します。初期設定は無効です。次回のLIVE開始時に適用されます。',
                 true
               )}
-              {preferences.values['openailive.mode'] !== 'realtime' && (
+              {!realtime && (
                 <>
                   {inputField({
                     name: 'openailive.standbySeconds',

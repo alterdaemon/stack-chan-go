@@ -637,7 +637,7 @@
   "ロボットが話さないと自動切断します。別モデルへの応答待ち中は停止します。初期値は60秒。次回のGPT-Live開始時に適用されます。": "Disconnect when the robot stops speaking. Pause while waiting for another model. Default: 60 seconds. Applies on the next GPT-Live start.",
   "会話モード": "Conversation mode",
   "モードは次回のLIVE開始時に適用されます。": "Mode applies on the next LIVE start.",
-  "Realtime Miniは無音でも接続を維持します。モデルと推論の強度は検索に使用します。": "Realtime Mini stays connected during silence. Model and thinking effort apply to search.",
+  "Realtimeは無音でも接続を維持します。モデルと推論の強度は検索に使用します。": "Realtime stays connected during silence. Model and thinking effort apply to search.",
   "声・ピッチ・話し方は次回のLIVE開始時に適用されます。": "Voice, pitch and style apply on the next LIVE start.",
   "発話中も音声を聞き取り、選択したモードで割り込みに対応します。初期設定は無効です。次回のLIVE開始時に適用されます。": "Listen during playback and handle interruptions in the selected mode. Default: Off. Applies on the next LIVE start.",
   "ファームウェアの起動に失敗しました": "Firmware startup failed",

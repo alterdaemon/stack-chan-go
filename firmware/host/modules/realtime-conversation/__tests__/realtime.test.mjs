@@ -520,10 +520,13 @@ function searchReply() {
       ),
   }
 }
-test('Mini uses multipart WebRTC, server VAD and only supported tool fields at either interruption setting', async () => {
+test('both Realtime models use multipart WebRTC, server VAD and supported tools at either interruption setting', async () => {
   const thresholds = []
-  for (const bargeIn of [false, true]) {
-    const f = fixture({ bargeIn, model: 'ignored-other-model', voice: 'cedar', pitch: 2 })
+  for (const [model, bargeIn] of [undefined, 'gpt-realtime-2.1-mini', 'gpt-realtime-2.1'].flatMap((model) => [
+    [model, false],
+    [model, true],
+  ])) {
+    const f = fixture({ bargeIn, model, voice: 'cedar', pitch: 2 })
     await f.connect()
     const request = f.requests[0]
     assert.equal(request.url, 'https://api.openai.com/v1/realtime/calls')
@@ -534,7 +537,7 @@ test('Mini uses multipart WebRTC, server VAD and only supported tool fields at e
     const session = JSON.parse(body.get('session'))
     assert.equal(body.get('sdp'), 'v=0\r\noffer')
     assert.ok(request.init.body.endsWith(`--${boundary}--\r\n`))
-    assert.equal(session.model, 'gpt-realtime-2.1-mini')
+    assert.equal(session.model, model ?? 'gpt-realtime-2.1-mini')
     assert.equal(session.instructions, 'Use Polish.')
     assert.equal(session.audio.output.voice, 'cedar')
     const turn = session.audio.input.turn_detection
@@ -560,7 +563,45 @@ test('Mini uses multipart WebRTC, server VAD and only supported tool fields at e
     assert.equal(f.timers.size, 0)
     assert.ok(f.requests.at(-1).url.endsWith('/rtc_test/hangup'))
   }
-  assert.equal(thresholds[1], thresholds[0])
+  assert.equal(new Set(thresholds).size, 1)
+})
+
+test('Realtime rejects unsupported explicit models before starting native transport', () => {
+  for (const model of ['gpt-live-1', 'unsupported-model', '', 1]) assert.throws(() => fixture({ model }), TypeError)
+})
+
+test('full Realtime gates prompt acknowledgement, cancels interrupted search and releases playback resources', async () => {
+  const f = fixture({ model: 'gpt-realtime-2.1', bargeIn: true })
+  const connecting = f.c.connect()
+  await f.signal()
+  f.message({ type: 'session.created', session: { id: 'sess_test' } })
+  assert.equal(f.c.state, 'connecting')
+  assert.equal(f.mute, true)
+  f.message({ type: 'session.updated', session: { ...f.sent.at(-1).session, id: 'sess_test' } })
+  await connecting
+  assert.equal(f.c.state, 'connected')
+  assert.equal(f.mute, false)
+  f.sent.splice(0)
+  let resolve
+  f.setSearch(
+    new Promise((done) => {
+      resolve = done
+    }),
+  )
+  f.call()
+  await flush()
+  assert.equal(f.requests[1].url, 'https://api.openai.com/v1/responses')
+  f.message({ type: 'input_audio_buffer.speech_started' })
+  f.message({ type: 'output_audio_buffer.cleared' })
+  assert.equal(f.searchCancelled, 1)
+  assert.ok(f.interrupted > 0)
+  resolve(searchReply())
+  await flush()
+  assert.equal(f.sent.length, 1)
+  assert.deepEqual(JSON.parse(f.sent[0].item.output), { error: 'tool_cancelled' })
+  await f.c.close()
+  assert.equal(f.closed, 1)
+  assert.equal(f.timers.size, 0)
 })
 test('delayed search leaves event processing responsive, sends sources once and then continues', async () => {
   const f = fixture()

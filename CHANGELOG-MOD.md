@@ -12,6 +12,12 @@ headed `### <product-version>` for the requested tag.
 
 ## 2.1.0
 
+### 2.1.0-R3
+
+Release impact: minor.
+
+- Add GPT-Realtime 2.1 as a third conversation choice alongside GPT-Live 1 and Realtime Mini, sharing Realtime voices, web search and interruption controls.
+
 ### 2.1.0-R2
 
 Release impact: patch.

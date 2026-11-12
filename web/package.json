@@ -1,6 +1,6 @@
 {
   "name": "stackchan-web",
-  "version": "2.1.0-R2",
+  "version": "2.1.0-R3",
   "type": "module",
   "description": "Stack-chan browser tools",
   "scripts": {

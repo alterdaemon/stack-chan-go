@@ -21,7 +21,8 @@ export function readLiveSettings(defaults, getPreference) {
   const backendModel = getPreference('openailive', 'backendModel')
   const reasoningEffort = getPreference('openailive', 'reasoningEffort')
   const bargeIn = getPreference('openailive', 'bargeIn')
-  const mode = getPreference('openailive', 'mode') === 'realtime' ? 'realtime' : 'live'
+  const savedMode = getPreference('openailive', 'mode')
+  const mode = savedMode === 'realtime' || savedMode === 'realtime-full' ? 'realtime' : 'live'
   const realtimeVoice = getPreference('openailive', 'realtimeVoice')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
@@ -47,7 +48,7 @@ export function readLiveSettings(defaults, getPreference) {
     mode,
     ...(mode === 'realtime'
       ? {
-          model: 'gpt-realtime-2.1-mini',
+          model: savedMode === 'realtime-full' ? 'gpt-realtime-2.1' : 'gpt-realtime-2.1-mini',
           voice: isLiveVoicePreference('openailive.realtimeVoice', realtimeVoice) ? realtimeVoice : 'marin',
         }
       : {}),

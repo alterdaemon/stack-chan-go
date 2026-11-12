@@ -1,6 +1,6 @@
 {
   "name": "stack-chan",
-  "version": "2.1.0-R2",
+  "version": "2.1.0-R3",
   "description": "A firmware of M5Stack Stack-chan module",
   "main": "host/app/main.ts",
   "scripts": {

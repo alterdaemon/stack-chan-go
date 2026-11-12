@@ -445,3 +445,54 @@ R2 maintainer confirmation, 2026-11-12: the maintainer stated that physical veri
 
 
 R2 publication, 2026-11-12: published the explicitly requested regular Latest release at `https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R2`. The immutable tag points to `42e2790e786ff585c7db8b3eb09c1dcef71e1966`, including the maintainer's confirmation; firmware/web inputs match validated build `d46614ed` exactly. Both uploaded assets were downloaded and their sizes and SHA-256 hashes matched the retained build identity; public release/asset URLs, type, Latest selection and description were verified. GitHub returned no Actions runs or commit checks, so no remote CI pass is claimed. Local validation and the maintainer's physical confirmation are recorded above. R2 description formatting follows the preceding releases; installation text matches R1 apart from BIN filenames, with the same one-line platform-specific PORT explanation added to all three releases. The R2 changelog contains behavior changes only; administrative notes and Unreleased were removed at the user's request. No firmware rebuild, reflash or published-tag move accompanied these documentation edits.
+
+## R3 Realtime model choice
+
+R3 adds GPT-Realtime 2.1 (`gpt-realtime-2.1`) beside Live and Mini. The saved
+`realtime` value still selects Mini; `realtime-full` selects the full model and
+normalizes to the existing Realtime lifecycle. Both Realtime choices share the
+saved Realtime voice, prompt framing/acknowledgement, search, interruption and
+cleanup. No native audio implementation or saved settings migration is added.
+The source worktree also retains the separately developed R2 input-filter fix.
+
+Local/static checks on 2026-11-12: `npm run test:unit` from `firmware/` passed
+716 tests and nine packaging tests; `npm run lint`, `npm run format`,
+`npm run check:manifest` (six targets), and
+`npm run check:release -- v2.1.0-R3` passed. From `web/`, `npm run typecheck`,
+`npm run test:legacy` (240 passed, two skipped),
+`npm run test:react -- --maxWorkers=2` (103 passed) and `npm run build` passed.
+The initial web check caught an unsupported test-query typing option, which was
+removed. A combined menu test exceeded its five-second deadline under concurrent
+load; separate Mini/full cases passed without increasing the timeout.
+
+The managed `npm run build -- --mode=release` passed in a temporary short-path
+checkout of source base `59d8566299fbecf4295ffef4557d092552602562` plus the recorded
+worktree overlay. The regular path first failed at the SDK shell argument limit.
+The successful build rebuilt the embedded Settings page and packaged both BINs.
+Independent checks confirmed chip, flash settings, partition entries, bounds,
+same-build bootloader/table/app correspondence and unused `0xFF` bytes. Esptool
+reported valid checksums/validation hashes. The first independent check wrongly
+required a table MD5 record; the effective SDK explicitly disables that record,
+as in R2, and the corrected check verifies that configuration and the full table.
+
+| R3 image | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Application | 8,565,920 | `dfb5f06d79017f4a0cf321cbf20564c139d068f869606f4ebee0a834027121d6` |
+| Full | 16,777,216 | `7b1a1b6ba19a1b719e1407ba5aca1b4dd8dd16c02c5ac384b98419ac121c24b3` |
+
+Installable images are in workspace `internal/release-packages/`; source overlay,
+compiled module hashes and image evidence are in
+`internal/work/r3-realtime-model-choice/`. The image includes the separately
+developed local R2 input-filter fix; its source overlay is explicit rather than
+represented as a clean commit build.
+
+The two XS startup manifests could not run: `xvfb-run` is missing from this shell,
+and the host portal is unavailable. They are NOT RUN. No physical-device or
+live-API test of this new option has been performed; local tests and compilation
+do not establish better persona adherence or acoustic performance. No device
+write, settings change, push, tag or publication occurred.
+
+Cleanup: the task-owned short checkout, compiler cache and simulator scratch
+were removed after image/source hash checks. Installable R3 images, build logs,
+source overlay and image evidence were retained. Pre-existing work and images
+were preserved.

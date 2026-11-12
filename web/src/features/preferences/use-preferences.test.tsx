@@ -6,6 +6,32 @@ import { type PreferenceKey } from '@/features/preferences/preference-model'
 import { type PreferenceClient, type PreferenceValue } from '@/services/preferences/ble-preference-client'
 
 describe('usePreferences', () => {
+  it('saves full Realtime without rewriting either saved voice and rejects unsupported modes', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => {
+      notify({ prop: 'openailive.mode', value: 'realtime' })
+      notify({ prop: 'openailive.voice', value: 'bossa' })
+      notify({ prop: 'openailive.realtimeVoice', value: 'cedar' })
+    })
+    act(() => result.current.update('openailive.mode', 'realtime-full'))
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({ _batch: { 'openailive.mode': 'realtime-full' } })
+    expect(result.current.values['openailive.voice']).toBe('bossa')
+    expect(result.current.values['openailive.realtimeVoice']).toBe('cedar')
+    send.mockClear()
+    act(() => result.current.update('openailive.mode', 'unsupported'))
+    await act(() => result.current.save())
+    expect(result.current.operation.status).toBe('error')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('edits the advertised standby timeout, validates it and forgets capability on reconnect', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})

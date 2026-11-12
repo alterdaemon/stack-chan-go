@@ -244,21 +244,23 @@ test('voice preferences survive reload and invalid saved values preserve firmwar
 
 test('mode and independent Realtime voice reload without changing saved Live voice', async () => {
   const { loadPreferences, preference } = await setup()
-  preference.resetPreference({
-    'openailive.mode': 'realtime',
-    'openailive.realtimeVoice': 'cedar',
-    'openailive.voice': 'bossa',
-  })
-  let result = loadPreferences(DOMAIN.openailive)
-  assert.equal(result.mode, 'realtime')
-  assert.equal(result.realtimeVoice, 'cedar')
-  assert.equal(result.voice, 'bossa')
+  for (const mode of ['realtime', 'realtime-full']) {
+    preference.resetPreference({
+      'openailive.mode': mode,
+      'openailive.realtimeVoice': 'cedar',
+      'openailive.voice': 'bossa',
+    })
+    const result = loadPreferences(DOMAIN.openailive)
+    assert.equal(result.mode, mode)
+    assert.equal(result.realtimeVoice, 'cedar')
+    assert.equal(result.voice, 'bossa')
+  }
   preference.resetPreference({
     'openailive.mode': 'unknown',
     'openailive.realtimeVoice': 'bossa',
     'openailive.voice': 'bossa',
   })
-  result = loadPreferences(DOMAIN.openailive)
+  const result = loadPreferences(DOMAIN.openailive)
   assert.equal(result.mode, 'live')
   assert.equal(result.realtimeVoice, 'marin')
   assert.equal(result.voice, 'bossa')

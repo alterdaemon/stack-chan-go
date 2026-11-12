@@ -129,7 +129,7 @@ export default class Conversation {
     if (options.mode !== undefined && options.mode !== 'live' && !this.#realtime) throw new TypeError('Invalid mode')
     if (this.#realtime && options.signaling) throw new TypeError('Realtime requires apiKey')
     this.#options = {
-      model: this.#realtime ? 'gpt-realtime-2.1-mini' : (options.model ?? 'gpt-live-1'),
+      model: options.model ?? (this.#realtime ? 'gpt-realtime-2.1-mini' : 'gpt-live-1'),
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
       pitch: options.pitch ?? 0,
@@ -145,6 +145,8 @@ export default class Conversation {
     }
     for (const name of ['model', 'instructions', 'voice'])
       if (typeof this.#options[name] !== 'string') throw new TypeError(`invalid ${name}`)
+    if (this.#realtime && !['gpt-realtime-2.1-mini', 'gpt-realtime-2.1'].includes(this.#options.model))
+      throw new TypeError('Invalid Realtime model')
     this.#platform = platform
     this.#toolTimeout = options.toolTimeout ?? (this.#realtime ? 50000 : undefined)
     if (options.tools !== undefined && !Array.isArray(options.tools)) throw new TypeError('Invalid tools')

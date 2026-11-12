@@ -62,7 +62,7 @@ declare module 'realtimeConversation' {
       acceptSession?(result: { session: { id: string }; [key: string]: unknown }): void
       hangup(input: { sessionId: string }): Promise<void>
     }
-    /** Live model override; Realtime always uses gpt-realtime-2.1-mini. */
+    /** Live model override; Realtime supports gpt-realtime-2.1-mini (default) or gpt-realtime-2.1. */
     model?: string
     voice?: string
     /** Local output pitch, integer semitones from -6 to 6. Zero bypasses DSP. */

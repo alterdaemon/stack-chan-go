@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatLiveError, LiveSession } from './session.js'
+import { formatLiveError, LiveSession, liveModelLabel } from './session.js'
 
 function deferred() {
   let resolve, reject
@@ -121,23 +121,41 @@ test('empty key and unavailable network never acquire audio or create a session'
   }
 })
 
-test('Mini frames the saved prompt once per start without changing settings or Live instructions', async () => {
-  const instructions = 'Answer briefly. Preserve Unicode: 🐢.\nUse the configured character.'
-  const settings = Object.freeze({ apiKey: 'test-only', mode: 'realtime', bargeIn: false, instructions })
-  const f = fixture({ settings })
-  await f.session.start()
-  const first = f.instances[0].options.instructions
-  assert.ok(first.includes(instructions))
-  assert.strictEqual(f.session.settings, settings)
-  await f.session.stop()
-  await f.session.start()
-  assert.equal(f.instances[1].options.instructions, first)
-  assert.equal(settings.instructions, instructions)
-  await f.session.stop()
-  f.session.settings = { ...settings, mode: 'live' }
-  await f.session.start()
-  assert.equal(f.instances[2].options.instructions, instructions)
-  await f.session.stop()
+for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
+  test(`${model} frames the saved prompt once per start without changing settings or Live instructions`, async () => {
+    const instructions = 'Answer briefly. Preserve Unicode: 🐢.\nUse the configured character.'
+    const settings = Object.freeze({ apiKey: 'test-only', mode: 'realtime', model, bargeIn: false, instructions })
+    const f = fixture({ settings })
+    await f.session.start()
+    const first = f.instances[0].options.instructions
+    assert.equal(f.instances[0].options.model, model)
+    assert.ok(first.includes(instructions))
+    assert.strictEqual(f.session.settings, settings)
+    await f.session.stop()
+    await f.session.start()
+    assert.equal(f.instances[1].options.instructions, first)
+    assert.equal(settings.instructions, instructions)
+    await f.session.stop()
+    f.session.settings = { ...settings, mode: 'live' }
+    await f.session.start()
+    assert.equal(f.instances[2].options.instructions, instructions)
+    await f.session.stop()
+  })
+}
+
+test('detailed status and safe errors identify the selected Realtime model', () => {
+  for (const [mode, model, label] of [
+    ['live', 'gpt-live-1', 'GPT-Live 1'],
+    ['realtime', undefined, 'GPT-Realtime 2.1 Mini'],
+    ['realtime', 'gpt-realtime-2.1-mini', 'GPT-Realtime 2.1 Mini'],
+    ['realtime', 'gpt-realtime-2.1', 'GPT-Realtime 2.1'],
+  ]) {
+    assert.equal(liveModelLabel(mode, model), label)
+    assert.equal(
+      formatLiveError({ stage: 'signal', code: 'http_error' }, mode, model),
+      `${label} error\nsignal/http_error`,
+    )
+  }
 })
 
 test('interruption settings apply only to the next start and preserve user instructions', async () => {
@@ -667,21 +685,24 @@ test('late transport errors during standby close preserve resume context at ever
   }
 })
 
-test('Realtime Mini never arms Live standby and does not import its saved transcript tail', async () => {
-  const f = fixture({ settings: { mode: 'realtime', apiKey: 'test-only', standbySeconds: 1 } })
-  f.session.history.push({ role: 'assistant', text: 'Previous GPT-Live session' })
-  assert.equal(await f.session.start(), true)
-  const options = f.instances[0].options
-  assert.equal(options.mode, 'realtime')
-  assert.equal(options.input, undefined)
-  assert.equal(options.delegation, undefined)
-  assert.ok(options.search.model)
-  for (let i = 0; i < 100; i++) {
-    f.tick(1000)
-    options.onTranscript({ role: 'assistant', delta: 'speech' })
-  }
-  assert.equal(f.states.at(-1), 'connected')
-  assert.equal(f.timers.size, 0)
-  await f.session.stop()
-  assert.equal(f.session.history.length, 0)
-})
+for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
+  test(`${model} never arms Live standby and does not import its saved transcript tail`, async () => {
+    const f = fixture({ settings: { mode: 'realtime', model, apiKey: 'test-only', standbySeconds: 1 } })
+    f.session.history.push({ role: 'assistant', text: 'Previous GPT-Live session' })
+    assert.equal(await f.session.start(), true)
+    const options = f.instances[0].options
+    assert.equal(options.mode, 'realtime')
+    assert.equal(options.model, model)
+    assert.equal(options.input, undefined)
+    assert.equal(options.delegation, undefined)
+    assert.ok(options.search.model)
+    for (let i = 0; i < 100; i++) {
+      f.tick(1000)
+      options.onTranscript({ role: 'assistant', delta: 'speech' })
+    }
+    assert.equal(f.states.at(-1), 'connected')
+    assert.equal(f.timers.size, 0)
+    await f.session.stop()
+    assert.equal(f.session.history.length, 0)
+  })
+}

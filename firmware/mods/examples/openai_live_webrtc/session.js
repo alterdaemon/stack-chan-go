@@ -38,9 +38,14 @@ export function diagnostic(error, stage, site) {
   return result
 }
 
-export function formatLiveError(detail, mode = 'live') {
+export function liveModelLabel(mode, model) {
+  if (mode !== 'realtime') return 'GPT-Live 1'
+  return model === 'gpt-realtime-2.1' ? 'GPT-Realtime 2.1' : 'GPT-Realtime 2.1 Mini'
+}
+
+export function formatLiveError(detail, mode = 'live', model) {
   if (!detail) detail = { stage: 'unknown', code: 'missing_diagnostic', site: 'error_display' }
-  const label = mode === 'realtime' ? 'GPT-Realtime 2.1 Mini' : 'GPT-Live 1'
+  const label = liveModelLabel(mode, model)
   const lines = [`${label} error`, `${detail.stage}/${detail.code}`]
   if (detail.site) lines.push(detail.site)
   if (detail.kind) lines.push(detail.kind)

@@ -54,21 +54,30 @@ describe('PreferencesPage', () => {
     expect(token).toHaveAttribute('type', 'password')
   })
 
-  it('offers versioned Live and Mini labels and only Realtime voices in Mini mode', async () => {
+  it.each([
+    ['realtime', 'GPT-Realtime 2.1 Mini'],
+    ['realtime-full', 'GPT-Realtime 2.1'],
+  ])('offers all three versioned choices and selects %s', async (mode, label) => {
     const user = userEvent.setup()
-    const { state, unmount } = renderPreferences()
+    const { state } = renderPreferences()
     await user.click(screen.getByRole('combobox', { name: '会話モード' }))
     expect(screen.getByRole('option', { name: 'GPT-Live 1' })).toBeVisible()
-    await user.click(screen.getByRole('option', { name: 'GPT-Realtime 2.1 Mini' }))
-    expect(state.update).toHaveBeenLastCalledWith('openailive.mode', 'realtime')
-    unmount()
-    renderPreferences({ values: { ...DEFAULT_PREFERENCES, 'openailive.mode': 'realtime' } })
+    expect(screen.getByRole('option', { name: 'GPT-Realtime 2.1' })).toBeVisible()
+    expect(screen.getByRole('option', { name: 'GPT-Realtime 2.1 Mini' })).toBeVisible()
+    await user.click(screen.getByRole('option', { name: label }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.mode', mode)
+  })
+
+  it.each(['realtime', 'realtime-full'])('uses Realtime voices and hides Live standby for %s', async (mode) => {
+    const user = userEvent.setup()
+    const { state } = renderPreferences({ values: { ...DEFAULT_PREFERENCES, 'openailive.mode': mode } })
     expect(screen.queryByRole('spinbutton', { name: '自動切断までの秒数' })).toBeNull()
     expect(screen.getByRole('combobox', { name: '音声で割り込み（実験的）' })).toBeEnabled()
     await user.click(screen.getByRole('combobox', { name: '声' }))
     expect(await screen.findByRole('option', { name: 'cedar' })).toBeVisible()
     expect(screen.queryByRole('option', { name: 'bossa' })).toBeNull()
     await user.click(screen.getByRole('option', { name: 'cedar' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.realtimeVoice', 'cedar')
   })
 
   it('edits standby seconds under OpenAI and disables it on older firmware', () => {

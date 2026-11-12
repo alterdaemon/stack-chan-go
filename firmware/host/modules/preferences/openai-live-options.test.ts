@@ -6,7 +6,16 @@ import {
   liveStyleInstructions,
   OPENAI_LIVE_STYLES,
   OPENAI_LIVE_VOICES,
+  OPENAI_REALTIME_VOICES,
 } from './openai-live-options.js'
+
+test('the three saved modes and Realtime voices are valid across preference transports', () => {
+  for (const mode of ['live', 'realtime', 'realtime-full']) assert.ok(isLiveVoicePreference('openailive.mode', mode))
+  for (const mode of [undefined, null, '', 'full', 'gpt-realtime-2.1', false, 1])
+    assert.equal(isLiveVoicePreference('openailive.mode', mode), false)
+  for (const voice of OPENAI_REALTIME_VOICES) assert.ok(isLiveVoicePreference('openailive.realtimeVoice', voice))
+  assert.equal(isLiveVoicePreference('openailive.realtimeVoice', 'bossa'), false)
+})
 
 test('every offered voice and style is writable; unrecognized values are rejected', () => {
   assert.equal(new Set(OPENAI_LIVE_VOICES).size, OPENAI_LIVE_VOICES.length)
