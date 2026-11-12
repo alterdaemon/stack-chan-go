@@ -90,6 +90,7 @@ export default class Conversation {
   #liveInputStart = -1
   #liveInputEnd = -1
   #liveInterrupted = false
+  #liveResumed = false
 
   constructor(options, platform) {
     if (!options || (!options.signaling && (typeof options.apiKey !== 'string' || !options.apiKey.trim())))
@@ -656,17 +657,22 @@ export default class Conversation {
       if (message.end_ms <= this.#liveOutputEnd) return
       if (this.#liveOutputStart < 0 || message.start_ms - this.#liveOutputEnd >= 500) {
         this.#liveOutputStart = message.start_ms
-        if (this.#liveInterrupted && message.start_ms >= this.#liveInputEnd) this.#transport.resumeOutput?.()
       }
       this.#liveOutputEnd = message.end_ms
-      return
+      if (this.#liveInterrupted && !this.#liveResumed && message.start_ms >= this.#liveInputEnd) {
+        // Keep the caller's interruption latch after resume: late fragments
+        // from that same caller turn must not cancel continued output again.
+        this.#liveResumed = true
+        this.#transport.resumeOutput?.()
+      }
+    } else {
+      if (message.end_ms <= this.#liveInputEnd) return
+      if (this.#liveInputStart < 0 || message.start_ms - this.#liveInputEnd >= 500) {
+        this.#liveInputStart = message.start_ms
+        this.#liveInterrupted = false
+      }
+      this.#liveInputEnd = message.end_ms
     }
-    if (message.end_ms <= this.#liveInputEnd) return
-    if (this.#liveInputStart < 0 || message.start_ms - this.#liveInputEnd >= 500) {
-      this.#liveInputStart = message.start_ms
-      this.#liveInterrupted = false
-    }
-    this.#liveInputEnd = message.end_ms
     // Delivery is not speech onset. Use the source interval and the caller's
     // first fragment; late old words must not cancel a later assistant reply.
     if (
@@ -678,6 +684,7 @@ export default class Conversation {
       this.#liveInputStart <= this.#liveOutputEnd + 300
     ) {
       this.#liveInterrupted = true
+      this.#liveResumed = false
       this.#interruptSpeech()
     }
   }

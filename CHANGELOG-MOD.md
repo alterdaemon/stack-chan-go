@@ -18,6 +18,8 @@ Release impact: minor.
 
 - Add GPT-Realtime 2.1 as a third conversation choice alongside GPT-Live 1 and Realtime Mini, sharing Realtime voices, web search and interruption controls.
 - Filter Realtime microphone input with far-field noise reduction before server VAD when Interruption is On; verify the filter acknowledgement before enabling input, retaining the 0.5 threshold and voice interruption.
+- Fix Live answers remaining muted after interruption: resume continued speech without requiring a new turn, handle delayed overlapping captions and recover after 1.5 seconds of suppressed audible PCM. Preserve Realtime recovery and existing late-caption protection.
+- Remove an inactive automatic audio-drop flag; retain the smaller playback queues, backpressure and interruption flushing.
 
 ### 2.1.0-R2
 
@@ -26,7 +28,7 @@ Release impact: patch.
 - Fix local playback interruption in Live and Realtime Mini: clear queued audio, reset Pitch, discard stale output and preserve later replies after delayed captions.
 - Correct interrupted web-search cancellation and Mini cancellation races; use the 0.5 server-VAD default.
 - Use 16 kHz I2S, Opus output and local Pitch with Interruption On or Off; restore the amplifier baseline and release the decoder-rate override when chat closes.
-- With Interruption On, use FD2 AEC and temporary 6 dB microphone gain with digital restoration; bypass AEC after a 200 ms silent-reference tail, bound playback queues and drop stale rendering data.
+- With Interruption On, use FD2 AEC and temporary 6 dB microphone gain with digital restoration; bypass AEC after a 200 ms silent-reference tail, bound playback queues and flush interrupted queued audio.
 - Allow Wi-Fi/LwIP allocations in PSRAM; update the mouth every 200 ms with Interruption On and retain 100 ms with Off.
 - Remove automatic release/prerelease publication and automatic public-deployment triggers.
 

@@ -89,6 +89,7 @@ extern void stackchanOpusDecodeRate(unsigned rate);
 #define DMA_BLOCKS 3
 #define CAPTURE_BYTES 6400
 #define PLAYBACK_BYTES (LIVE_RATE * 2 / 5)
+#define LIVE_YIELD_AUDIBLE_MS 1500
 
 struct LiveAudio {
 	esp_capture_audio_src_if_t source;
@@ -102,7 +103,7 @@ struct LiveAudio {
     LiveEcho echo;
     LiveCodec codec;
     LivePitch *pitch;
-	bool bargeIn;
+	bool bargeIn, realtime;
     UBaseType_t dspPriority;
 	atomic_bool stopping, done, reading, muted, quiesced;
     atomic_bool yieldOutput, discardOutput, renderActive;
@@ -277,7 +278,7 @@ static void audioTask(void *ctx)
 	int16_t *mic = reference + BLOCK * DMA_BLOCKS;
 	int16_t *ref = mic + a->chunk, *clean = ref + a->chunk;
 	int accumulated = 0, delay = 0;
-	unsigned idle = 1000, gap = 0, yieldedQuiet = 0;
+	unsigned idle = 1000, gap = 0, yieldedQuiet = 0, yieldedAudible = 0;
 	bool gapActive = false;
 	while (!atomic_load(&a->stopping)) {
         unsigned request = atomic_load(&a->interruptRequest);
@@ -294,6 +295,7 @@ static void audioTask(void *ctx)
             int reset = livePitchReset(a->pitch);
             if (reset) { a->stage = "pitch_reset"; atomic_store(&a->error, reset); break; }
             yieldedQuiet = 0;
+            yieldedAudible = 0;
             atomic_store(&a->interruptDrained, request);
         }
         if (atomic_load(&a->discardOutput) && request == atomic_load(&a->interruptFlushed)) {
@@ -348,7 +350,10 @@ static void audioTask(void *ctx)
         // Off's microphone gate. A new response can explicitly resume sooner.
         if (atomic_load(&a->yieldOutput) && !atomic_load(&a->discardOutput)) {
             yieldedQuiet = audible ? 0 : yieldedQuiet + 10;
-            if (yieldedQuiet >= 500) {
+            // Live has no output-turn boundary: continued model speech must
+            // not stay muted indefinitely. Realtime retains explicit recovery.
+            if (audible && !a->realtime) yieldedAudible += 10;
+            if (yieldedQuiet >= 500 || (!a->realtime && yieldedAudible >= LIVE_YIELD_AUDIBLE_MS)) {
                 portENTER_CRITICAL(&audioLock);
                 if (request == atomic_load(&a->interruptRequest)) atomic_store(&a->yieldOutput, false);
                 portEXIT_CRITICAL(&audioLock);
@@ -417,7 +422,6 @@ static void audioTask(void *ctx)
 
 int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch, bool realtime)
 {
-  (void)realtime; // Both conversation modes now share the capture schedule.
   atomic_store(&quiesceAudio, false);
   int err = stackchanMediaAdapter();
   if (!err) err = stackchanInstallOpusPolicy();
@@ -440,6 +444,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->output = audioStreamCreate(bargeIn ? PLAYBACK_BYTES / 2 : PLAYBACK_BYTES, 1);
 	if (!a->input || !a->output) return ESP_ERR_NO_MEM;
 	a->bargeIn = bargeIn;
+    a->realtime = realtime;
 	a->chunk = 160;
 	if (bargeIn) {
         a->stage = "codec_gain";
@@ -501,7 +506,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->render = audio_render_alloc_handle(&render);
 	if (!a->render) return ESP_ERR_NO_MEM;
 	av_render_cfg_t player = {.audio_render = a->render, .audio_raw_fifo_size = 16384,
-        .audio_render_fifo_size = bargeIn ? PLAYBACK_BYTES : 32768, .allow_drop_data = bargeIn};
+        .audio_render_fifo_size = bargeIn ? PLAYBACK_BYTES : 32768};
 	a->stage = "render_open";
 	a->player = av_render_open(&player);
 	if (!a->player) return ESP_ERR_NO_MEM;

@@ -9,7 +9,7 @@ static pthread_cond_t changed = PTHREAD_COND_INITIALIZER;
 static _Thread_local unsigned role;
 static unsigned cycles, permitted, flushCalls, resetCalls;
 static bool writerDone, flushDone;
-static int16_t played[160];
+static int16_t played[1600];
 static LiveAudio *session;
 
 static void permit(unsigned target) {
@@ -51,7 +51,7 @@ int livePitchRender(LivePitch *p, LivePitchRead read, void *ctx, int16_t *out, s
 int i2s_channel_write(i2s_chan_handle_t h, const void *data, size_t bytes, size_t *written, uint32_t timeout) {
     assert(role == 20 && bytes == BLOCK * 4);
     pthread_mutex_lock(&mutex);
-    assert(cycles < 160); played[cycles] = ((const int16_t *)data)[0];
+    assert(cycles < 1600); played[cycles] = ((const int16_t *)data)[0];
     pthread_mutex_unlock(&mutex);
     *written = bytes; return 0;
 }
@@ -95,6 +95,47 @@ static void *peer(void *p) {
     assert(!liveAudioFlushOutput(p));
     pthread_mutex_lock(&mutex); flushDone = true; pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex);
     return NULL;
+}
+static void interruptAndFlush(LiveAudio *a) {
+    unsigned next = flushCalls + 1;
+    assert(liveAudioRequestInterrupt());
+    pthread_t owner;
+    assert(!pthread_create(&owner, NULL, peer, a));
+    pthread_mutex_lock(&mutex);
+    while (flushCalls < next) pthread_cond_wait(&changed, &mutex);
+    pthread_mutex_unlock(&mutex);
+    permit(cycles + 15);
+    assert(!pthread_join(owner, NULL));
+    permit(cycles + 2);
+    assert(!atomic_load(&a->discardOutput) && atomic_load(&a->yieldOutput));
+}
+static unsigned continuousSpeech(LiveAudio *a, unsigned blocks) {
+    int16_t samples[BLOCK * 5];
+    for (unsigned i = 0; i < BLOCK * 5; i++) samples[i] = 800;
+    av_render_audio_frame_t frame = {.data = (uint8_t *)samples, .size = sizeof(samples)};
+    unsigned start = cycles;
+    assert(!renderWrite(a, &frame));
+    for (unsigned i = 0; i < blocks; i++) {
+        permit(start + i + 1);
+        if (i + 1 < blocks) { frame.size = BLOCK * 2; assert(!renderWrite(a, &frame)); }
+    }
+    return start;
+}
+static void recoveredWithinCap(unsigned start) {
+    unsigned first = start;
+    while (first < cycles && played[first] == 0) first++;
+    // One pre-submitted I2S block may precede the first new PCM read.
+    assert(first >= start + 148 && first <= start + 151);
+    for (unsigned i = first; i < cycles; i++) assert(played[i] == 400);
+}
+static void restartClock(LiveAudio *a, pthread_t *clock, bool realtime) {
+    atomic_store(&a->stopping, true);
+    pthread_mutex_lock(&mutex); pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex);
+    assert(!pthread_join(*clock, NULL));
+    // Mode is fixed before task creation, as it is in liveAudioOpen.
+    a->realtime = realtime;
+    atomic_store(&a->stopping, false); atomic_store(&a->done, false);
+    assert(!pthread_create(clock, NULL, clockTask, a));
 }
 int main(void) {
     struct Stream input = {.capacity = sizeof(input.data)}, output = {.capacity = PLAYBACK_BYTES / 2};
@@ -162,6 +203,36 @@ int main(void) {
     assert(!renderWrite(&a, &frame)); permit(115);
     fresh = false; for (unsigned i = 110; i < 115; i++) fresh |= played[i] == 400;
     assert(fresh);
+    // Continued model output must not stay suppressed for the whole answer.
+    interruptAndFlush(&a);
+    unsigned start = continuousSpeech(&a, 180);
+    recoveredWithinCap(start);
+    assert(!atomic_load(&a.yieldOutput));
+    // A newer interruption gets its own budget; the prior audible count
+    // must not reopen playback partway through the new suppression period.
+    interruptAndFlush(&a);
+    start = continuousSpeech(&a, 80);
+    for (unsigned i = start; i < cycles; i++) assert(played[i] == 0);
+    interruptAndFlush(&a);
+    start = continuousSpeech(&a, 180);
+    recoveredWithinCap(start);
+    // Realtime keeps suppressing an old response beyond the Live cap.
+    restartClock(&a, &clock, true);
+    interruptAndFlush(&a);
+    start = continuousSpeech(&a, 180);
+    for (unsigned i = start; i < cycles; i++) assert(played[i] == 0);
+    assert(atomic_load(&a.yieldOutput));
+    liveAudioResumeOutput();
+    start = continuousSpeech(&a, 10);
+    fresh = false; for (unsigned i = start; i < cycles; i++) fresh |= played[i] == 400;
+    assert(fresh);
+    // Live fallback cannot override close/quiescence, even once its cap ends.
+    restartClock(&a, &clock, false);
+    interruptAndFlush(&a);
+    atomic_store(&a.quiesced, true);
+    start = continuousSpeech(&a, 180);
+    for (unsigned i = start; i < cycles; i++) assert(played[i] == 0);
+    assert(!atomic_load(&a.yieldOutput) && atomic_load(&a.quiesced));
     atomic_store(&a.stopping, true);
     pthread_mutex_lock(&mutex); pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex);
     assert(!pthread_join(clock, NULL));

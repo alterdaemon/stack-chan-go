@@ -136,6 +136,20 @@ R3 with Interruption On requests far-field input filtering for both Realtime
 models before server VAD and verifies it before enabling microphone input.
 The published R2 images do not contain this fix.
 
+R3 Live resumes on the first advancing assistant caption starting at or after
+the caller's latest end, without requiring a 500 ms gap between assistant
+fragments. It checks overlap when either speaker's captions advance and keeps
+the protection against late caller fragments interrupting a later reply.
+After flush completes, a Live-only fallback releases suppression after 1,500 ms
+of consumed audible PCM; existing 500 ms quiet recovery remains. This is a
+recovery policy, not a wall-clock stop-latency guarantee or acoustic tuning result.
+Realtime keeps its explicit-resume/quiet recovery.
+
+Playback uses the existing finite FIFOs and backpressure: On retains its 100 ms
+PCM stream and 6,400-byte render FIFO. R3 removes the inactive vendor automatic
+drop flag because its 200 ms threshold cannot be reached in that FIFO after
+queue overhead. Accepted interruption still flushes obsolete queued audio.
+
 With **Interruption Off**, microphone samples are gated during playback and until
 the existing 500 ms received-silence gate clears: voice interruption is unavailable.
 On keeps capture and AEC active. Explicit microphone mute remains separate.

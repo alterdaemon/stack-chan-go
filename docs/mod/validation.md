@@ -556,3 +556,46 @@ Cleanup: the task-owned short checkout, compiler cache and simulator scratch
 were removed after image/source hash checks. Installable R3 images, build logs,
 source overlay and image evidence were retained. Pre-existing work and images
 were preserved.
+
+
+## R3 Live interruption recovery
+
+Scope: amend R3 with Live continuation/overlap recovery, a Live-only 1,500 ms
+suppressed-audible-PCM fallback and removal of the inactive vendor-drop flag.
+Keep R3's three model choices, Realtime far-field filtering, search, 16 kHz/FD2,
+FIFO sizes, Off gating, explicit microphone mute and saved settings.
+
+Before implementation, the three protocol regressions A/B/C and continuous-PCM
+native recovery regression all failed on `85c52479`, matching the prior read-only
+reproduction (495 continued speech blocks consumed with no audible output).
+After the fix, `node --test host/modules/realtime-conversation/__tests__/*.test.mjs`
+from `firmware/` passed 108 tests. The native fixture compiles the real audio task
+with hardware/RTOS boundaries doubled and address/undefined-behavior sanitizers.
+It now checks recovery at 1,500 ms with one audio block of observation tolerance,
+reset by a newer interruption, continued Realtime suppression past that cap,
+explicit Realtime resume and quiesced silence. Existing flush/capture/Pitch,
+late-caller, mute/Off, echo-filter, search and full-model regressions remain.
+
+The current native PCM stream is 3,200 bytes with On and render FIFO 6,400 bytes.
+The vendor queue query includes frame headers but excludes each four-byte queue
+header, so its reported size cannot reach 6,400 in that FIFO. Its 200 ms drop
+condition at 16 kHz mono PCM16 was unreachable. R3 removes the flag and retains
+backpressure and explicit cancellation flushing. The earlier R2 record of the
+flag being enabled describes historical configuration, not proof it dropped
+ordinary backlog; no performance gain is attributed to removing an inactive flag.
+
+The native cap counts consumed audible PCM after flushing, not elapsed wall time
+or detected user speech. It can restore continued model output; physical
+backchannel, sustained double-talk and stop behavior still need verification.
+No physical-device or live-API acceptance is claimed for this change. No device
+writes, saved preference changes or audible tests are performed.
+
+
+Broader local/static verification: `npm run test:unit` passed 719 tests and nine
+packaging tests. `npm run lint`, `npm run format`, scoped `biome check`,
+`npm run check:manifest` (six targets), `npm run check:release -- v2.1.0-R3`,
+project contract and whitespace checks passed. Commands ran from `firmware/`
+with the SDK environment for manifest checks and private temporary/cache paths.
+XS simulator checks are unavailable because `xvfb-run` is absent; no simulator
+pass is claimed. Web source/settings behavior is unchanged; the release wrapper
+rebuilds the embedded Settings assets.

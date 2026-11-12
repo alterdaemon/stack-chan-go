@@ -185,6 +185,59 @@ test('Live interrupts one overlapping caller turn and ignores its late fragments
   await closing
 })
 
+for (const [name, fragments] of [
+  [
+    'A: continued answer and late caller fragments',
+    [
+      ['output', 0, 3000, 0, 0],
+      ['input', 2000, 2300, 1, 0],
+      ['output', 3000, 5000, 1, 1],
+      ['output', 5000, 12000, 1, 1],
+      ['input', 2300, 2700, 1, 1],
+      ['input', 7500, 7800, 2, 1],
+      ['output', 12000, 12500, 2, 2],
+    ],
+  ],
+  [
+    'B: caller end advances inside an assistant turn',
+    [
+      ['output', 0, 3000, 0, 0],
+      ['input', 2500, 2900, 1, 0],
+      ['input', 2900, 3600, 1, 0],
+      ['output', 3400, 3700, 1, 0],
+      ['output', 3700, 4000, 1, 1],
+    ],
+  ],
+  [
+    'C: delayed assistant captions reveal overlap',
+    [
+      ['output', 0, 1500, 0, 0],
+      ['input', 2500, 2900, 0, 0],
+      ['output', 1500, 3000, 1, 0],
+      ['output', 3000, 3400, 1, 1],
+      ['output', 3400, 3800, 1, 1],
+    ],
+  ],
+]) {
+  test(`Live recovery ${name}`, async () => {
+    const f = fixture({ mode: 'live', bargeIn: true })
+    await f.connect()
+    try {
+      for (const [role, start_ms, end_ms, interrupted, resumed] of fragments) {
+        f.message({ type: `session.${role}_transcript.delta`, delta: 'Spoken fragment.', start_ms, end_ms })
+        assert.equal(f.interrupted, interrupted, `${role} ${start_ms}-${end_ms} interruptions`)
+        assert.equal(f.resumed, resumed, `${role} ${start_ms}-${end_ms} resumes`)
+      }
+      assert.equal(f.c.state, 'connected')
+      assert.equal(f.mute, false)
+    } finally {
+      const closing = f.c.close()
+      f.message({ type: 'session.closed', session: { id: 'sess_test' }, reason: 'close_requested' })
+      await closing
+    }
+  })
+}
+
 test('Live never interrupts a newer assistant turn for an older caller caption arriving for the first time', async () => {
   const f = fixture({ mode: 'live', bargeIn: true })
   await f.connect()
