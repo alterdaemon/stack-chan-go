@@ -1,3 +1,4 @@
+import { M5StackChanServoDriver } from 'm5stackchan-servo-driver'
 import {
   type MotionCompletion,
   MotionController,
@@ -5,11 +6,17 @@ import {
   type MotionResultCallback,
   motionDurationSecondsToCentiseconds,
   motionDurationSecondsToMilliseconds,
+  type SpeakingMotion,
 } from 'motion-controller'
 import { type Maybe, type Pose, type Rotation, wait, waitForCompletion } from 'stackchan-util'
 import { assert, equal } from 'testing/assert'
+// The fixture replaces only physical serial I/O, exercising the real packet path.
+import { port } from './serial'
 
 class FakeMotionDriver implements MotionDriver {
+  feedbackReady() {
+    return true
+  }
   appliedRotation: Rotation | null = null
   appliedTime: number | undefined
   attached = 0
@@ -136,6 +143,118 @@ async function runTest() {
   equal(nextDriver.appliedRotation?.y, 0.2, 'setPose should delegate yaw to the active driver')
   equal(nextDriver.appliedRotation?.p, -0.1, 'setPose should delegate pitch to the active driver')
   equal(nextDriver.appliedTime, 0.25, 'setPose should pass motion time to the active driver')
+
+  const hardware = new M5StackChanServoDriver({ servoPower: { type: 'none' } })
+  const guarded = new MotionController({ driver: hardware }, { isPaused: () => false })
+  let motion: SpeakingMotion | undefined, readError: unknown
+  const acquire = () =>
+    guarded.trySpeakingMotion((value, error) => {
+      motion = value
+      readError = error
+    })
+  const readPose = () => {
+    port.reply([1, 204])
+    port.reply([2, 188])
+  }
+  acquire()
+  equal(port.packets.length, 1, 'fresh pose begins with one axis read')
+  readPose()
+  assert(motion && !readError, 'compound calibrated pose read succeeds')
+  let done = false
+  motion.move({ y: 0.1, p: -0.7, r: 0 }, 0.5, () => {
+    done = true
+  })
+  equal(port.packets.length, 3, 'gesture starts pan torque enable')
+  port.reply()
+  equal(port.packets.length, 4, 'tilt torque waits for pan acknowledgement')
+  port.reply()
+  equal(port.packets.length, 5, 'position starts only after both torque acknowledgements')
+  const countBeforePreemption = port.packets.length
+  guarded.setTorque(true)
+  assert(!motion.valid(), 'ordinary torque immediately preempts gesture')
+  port.reply()
+  equal(port.packets.length, countBeforePreemption, 'late pan acknowledgement cannot transmit obsolete tilt')
+  await wait(5)
+  equal(port.packets.length, countBeforePreemption + 1, 'ordinary torque keeps its existing queue')
+  port.reply()
+  port.reply()
+  assert(!done, 'old gesture does not complete into a later motion')
+  let available = true
+  guarded.trySpeakingMotion((value) => {
+    available = !!value
+  })
+  assert(!available, 'ordinary held torque makes speaking ineligible')
+  guarded.setTorque(false)
+  guarded.trySpeakingMotion((value) => {
+    available = !!value
+  })
+  assert(!available, 'ordinary torque release remains busy until acknowledged')
+  port.reply()
+  port.reply()
+
+  acquire()
+  readPose()
+  motion.move({ y: 0.1, p: -0.7, r: 0 }, 0.5, () => {})
+  const cancelAtEnable = port.packets.length
+  motion.cancel()
+  port.reply()
+  equal(port.packets.length, cancelAtEnable + 1, 'cancelled pan enable permits only owned torque cleanup')
+  equal(port.packets[port.packets.length - 1][5], 40, 'cleanup writes torque, not position')
+  equal(port.packets[port.packets.length - 1][6], 0, 'cleanup releases torque')
+  port.reply()
+  port.reply()
+
+  let live = true
+  const beforeRead = port.packets.length
+  guarded.trySpeakingMotion(
+    (value) => {
+      motion = value
+    },
+    () => live,
+  )
+  live = false
+  port.reply([1, 204])
+  equal(port.packets.length, beforeRead + 1, 'closing during pose read prevents the tilt read')
+  assert(!motion, 'cancelled pose read returns no motion')
+
+  acquire()
+  readPose()
+  port.failWrites = 1
+  motion.move({ y: 0, p: -0.7, r: 0 }, 0.5, () => {})
+  const beforeRetry = port.packets.length
+  guarded.setTorque(false)
+  await wait(5)
+  // Only the ordinary release may be transmitted after the failed feedback write.
+  equal(port.packets.length, beforeRetry + 1, 'preemption cancels the delayed feedback write retry')
+  equal(port.packets[port.packets.length - 1][6], 0, 'the successor belongs to ordinary torque release')
+  port.reply()
+  port.reply()
+  hardware.getRotation(() => {})
+  const beforeBusy = port.packets.length
+  guarded.trySpeakingMotion((value) => {
+    available = !!value
+  })
+  assert(!available, 'busy physical dispatch skips feedback without queueing')
+  equal(port.packets.length, beforeBusy, 'busy feedback adds no serial command')
+  readPose()
+  guarded.close()
+
+  const freshDriver = new FakeMotionDriver()
+  const freshController = new MotionController({ driver: freshDriver }, { isPaused: () => false })
+  freshController.trySpeakingMotion((value) => {
+    motion = value
+  })
+  assert(motion, 'idle controller can acquire speaking pose')
+  freshController.setPose(pose, 0)
+  assert(!motion.valid(), 'ordinary pose preempts speaking')
+  freshDriver.rotation = { y: 0.3, p: -0.6, r: 0 }
+  freshController.trySpeakingMotion((value) => {
+    motion = value
+  })
+  equal(motion?.rotation.y, 0.3, 'later gesture reads the new actual pose')
+  freshController.lookAt([1, 0, 0])
+  assert(!motion.valid(), 'gaze preempts speaking')
+  freshController.close()
 
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }

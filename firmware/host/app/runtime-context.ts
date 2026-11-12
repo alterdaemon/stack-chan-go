@@ -438,6 +438,9 @@ export class StackchanRuntimeContext implements StackchanContext {
       setTorque(torque) {
         return context.setTorque(torque)
       },
+      trySpeakingMotion(callback, isCurrent) {
+        context.#motionController.trySpeakingMotion(callback, isCurrent)
+      },
     }
   }
 

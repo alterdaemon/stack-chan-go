@@ -56,14 +56,44 @@ export function formatLiveError(detail, mode = 'live', model) {
 }
 
 export class LiveSession {
-  constructor({ Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer }) {
-    Object.assign(this, { Conversation, audio, networkReady, acquireLowLatency, amp, settings, onState, Timer })
+  constructor({
+    Conversation,
+    audio,
+    networkReady,
+    acquireLowLatency,
+    amp,
+    settings,
+    onState,
+    Timer,
+    now = Date.now,
+    onInterruption,
+  }) {
+    Object.assign(this, {
+      Conversation,
+      audio,
+      networkReady,
+      acquireLowLatency,
+      amp,
+      settings,
+      onState,
+      Timer,
+      now,
+      onInterruption,
+    })
     this.history = []
   }
 
   start() {
     if (this.active) return this.active.starting
-    const entry = { cancelled: false, backend: new Map(), idleMs: (this.settings.standbySeconds ?? 60) * 1000 }
+    const entry = {
+      cancelled: false,
+      backend: new Map(),
+      idleMs: (this.settings.standbySeconds ?? 60) * 1000,
+      inputUntil: 0,
+      inputEnd: -1,
+      inputAvailable: true,
+      pendingSuppressed: false,
+    }
     this.active = entry
     this.onState('connecting')
     entry.starting = this.connect(entry)
@@ -150,6 +180,18 @@ ${this.settings.instructions}`
         onTranscript: (fragment) => {
           if (this.active !== entry || entry.cancelled) return
           if (this.settings.mode === 'realtime') return
+          if (
+            entry.connected &&
+            entry.inputAvailable &&
+            !entry.conversation?.muted &&
+            fragment.role === 'user' &&
+            fragment.delta?.trim() &&
+            fragment.end_ms > fragment.start_ms &&
+            fragment.end_ms > entry.inputEnd
+          ) {
+            entry.inputEnd = fragment.end_ms
+            entry.inputUntil = this.now() + 1000
+          }
           // Only the robot's words renew standby. Microphone noise, incoming
           // speech, silent RTP and usage heartbeats cannot keep LIVE open.
           if (fragment.role === 'assistant' && fragment.delta?.trim()) this.armStandby(entry)
@@ -212,16 +254,44 @@ ${this.settings.instructions}`
 
   receive(entry, message) {
     if (this.active !== entry || entry.cancelled) return
+    if (message.type === 'local.interruption') {
+      entry.responseId = entry.searchId = undefined
+      entry.pendingSuppressed = true
+      try {
+        this.onInterruption?.()
+      } catch {}
+    }
+    if (this.settings.mode === 'realtime') {
+      if (message.type === 'input_audio_buffer.speech_stopped') entry.inputUntil = 0
+      else if (
+        message.type === 'input_audio_buffer.speech_started' &&
+        entry.connected &&
+        entry.inputAvailable &&
+        !entry.conversation?.muted
+      )
+        entry.inputUntil = Infinity
+      else if (message.type === 'response.created') {
+        entry.responseId = message.response?.id
+        entry.pendingSuppressed = false
+      } else if (message.type === 'response.done' && message.response?.id === entry.responseId)
+        entry.responseId = undefined
+      else if (message.type === 'local.search.started') {
+        entry.searchId = message.call_id
+        entry.pendingSuppressed = false
+      } else if (message.type === 'local.search.finished' && message.call_id === entry.searchId)
+        entry.searchId = undefined
+    }
     const wasPending = entry.backend.size > 0
     if (message.type === 'session.delegation.created') {
+      entry.pendingSuppressed = false
       entry.backend.set(message.delegation.id, message.delegation.response_id)
     } else if (message.type === 'response.event') {
       const event = message.event
       const response = event.response?.id ?? event.response_id
       const id = message.delegation_id ?? response
-      if (['response.created', 'response.queued', 'response.in_progress'].includes(event.type))
+      if (['response.created', 'response.queued', 'response.in_progress'].includes(event.type)) {
         entry.backend.set(id, response)
-      else if (
+      } else if (
         ['response.completed', 'response.failed', 'response.incomplete', 'response.cancelled'].includes(event.type)
       ) {
         // Some envelopes omit delegation_id; retain the response ID from startup.
@@ -305,6 +375,7 @@ ${this.settings.instructions}`
     if (!conversation || entry.cancelled) return false
     try {
       await conversation.setMuted(muted)
+      if (conversation.muted) entry.inputUntil = 0
       return this.active === entry && !entry.cancelled && conversation.muted
     } catch (error) {
       if (this.active === entry) {

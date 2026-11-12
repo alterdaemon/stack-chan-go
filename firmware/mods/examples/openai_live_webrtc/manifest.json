@@ -3,6 +3,7 @@
   "modules": {
     "*": ["./mod"],
     "openai-live-session": "./session",
+    "openai-live-feedback": "./feedback",
     "openai-live-settings": "./settings",
     "openai-live-options": "../../../host/modules/preferences/openai-live-options"
   },

@@ -19,11 +19,25 @@ export type MotionCompletion = (error?: unknown) => void
 export type MotionResultCallback<T> = (result: T) => void
 
 export type MotionDriver = {
-  applyRotation: (ori: RotationType, time?: MotionDurationSeconds, callback?: MotionCompletion) => void
-  getRotation: (callback: MotionResultCallback<Maybe<RotationType>>) => void
-  setTorque: (torque: boolean, callback?: MotionCompletion) => void
+  applyRotation: (
+    ori: RotationType,
+    time?: MotionDurationSeconds,
+    callback?: MotionCompletion,
+    guard?: () => boolean,
+  ) => void
+  getRotation: (callback: MotionResultCallback<Maybe<RotationType>>, guard?: () => boolean) => void
+  setTorque: (torque: boolean, callback?: MotionCompletion, guard?: () => boolean) => void
+  feedbackReady?: () => boolean
   onAttached?: () => void
   onDetached?: () => void
+}
+
+export type SpeakingMotion = {
+  rotation: RotationType
+  valid: () => boolean
+  move: (rotation: RotationType, time: number, callback: MotionCompletion) => boolean
+  release: (callback: MotionCompletion) => void
+  cancel: () => void
 }
 
 export type MotionControllerPose = {
@@ -108,6 +122,10 @@ export class MotionController {
   #releaseTorqueHandler: ReturnType<typeof Timer.set> | undefined
   #updatePoseHandler: ReturnType<typeof Timer.repeat> | undefined
   #updatePose = () => this.updatePose()
+  #speaking: SpeakingMotion | undefined
+  #ordinaryPending = 0
+  #ordinaryTorque = false
+  #ordinaryUntil = 0
   updating = false
 
   constructor(params: MotionControllerConstructorParam, options: MotionControllerOptions) {
@@ -129,11 +147,13 @@ export class MotionController {
   }
 
   close(): void {
+    this.#speaking?.cancel()
     this.#stopPosePolling()
     this.#clearReleaseTorqueTimer()
   }
 
   useDriver(driver: MotionDriver) {
+    this.#preemptSpeaking()
     if (this.#driver != null) {
       this.#driver.onDetached?.()
     }
@@ -142,6 +162,7 @@ export class MotionController {
   }
 
   lookAt(position?: Vector3 | null) {
+    this.#preemptSpeaking()
     if (position == null) {
       this.lookAway()
       return
@@ -152,16 +173,183 @@ export class MotionController {
   }
 
   lookAway() {
+    this.#preemptSpeaking()
     this.#gazePoint = null
     this.#stopPosePollingIfIdle()
   }
 
   setPose(pose: Pose, time?: number, callback?: MotionCompletion): void {
-    this.#driver.applyRotation(pose.rotation, time, callback)
+    this.#preemptSpeaking()
+    this.#ordinaryPending++
+    let finished = false
+    const done: MotionCompletion = (error) => {
+      if (finished) return
+      finished = true
+      this.#ordinaryPending--
+      if (!error) this.#ordinaryUntil = Date.now() + (time ?? 0.5) * 1000
+      callback?.(error)
+    }
+    try {
+      this.#driver.applyRotation(pose.rotation, time, done)
+    } catch (error) {
+      done(error)
+    }
   }
 
   setTorque(torque: boolean, callback?: MotionCompletion): void {
-    this.#driver.setTorque(torque, callback)
+    this.#preemptSpeaking()
+    this.#ordinaryPending++
+    let finished = false
+    if (torque) this.#ordinaryTorque = true
+    const done: MotionCompletion = (error) => {
+      if (finished) return
+      finished = true
+      this.#ordinaryPending--
+      if (!error && !torque) this.#ordinaryTorque = false
+      callback?.(error)
+    }
+    try {
+      this.#driver.setTorque(torque, done)
+    } catch (error) {
+      done(error)
+    }
+  }
+
+  #preemptSpeaking(): void {
+    // Losing this reference invalidates every nested axis/retry guard. The new
+    // ordinary action owns torque; an old cleanup must not release it.
+    this.#speaking = undefined
+  }
+
+  trySpeakingMotion(
+    callback: (motion?: SpeakingMotion, error?: unknown) => void,
+    isCurrent: () => boolean = () => true,
+  ): void {
+    const driver = this.#driver
+    if (
+      this.#speaking ||
+      this.#ordinaryPending ||
+      this.#ordinaryTorque ||
+      this.#isMoving ||
+      this.updating ||
+      this.#gazePoint ||
+      this.#options.isPaused() ||
+      Date.now() < this.#ordinaryUntil ||
+      !driver.feedbackReady?.()
+    ) {
+      callback()
+      return
+    }
+    let cancelled = false,
+      pending = false,
+      owned = false,
+      operation = 0
+    const current = () => this.#speaking === motion
+    const valid = () => current() && !cancelled && isCurrent()
+    const release = (done: MotionCompletion) => {
+      if (!current() || !owned) {
+        done()
+        return
+      }
+      pending = true
+      try {
+        driver.setTorque(
+          false,
+          (error) => {
+            pending = false
+            owned = false
+            if (current()) {
+              if (cancelled) this.#speaking = undefined
+              done(error)
+            }
+          },
+          current,
+        )
+      } catch (error) {
+        pending = false
+        owned = false
+        if (current()) this.#speaking = undefined
+        done(error)
+      }
+    }
+    const settled = (generation: number, done: MotionCompletion, error?: unknown) => {
+      pending = false
+      if (cancelled) {
+        release(() => {})
+        return
+      }
+      if (!current() || generation !== operation) return
+      done(error)
+    }
+    const motion: SpeakingMotion = {
+      rotation: { y: 0, p: 0, r: 0 },
+      valid,
+      move: (rotation, time, done) => {
+        if (!valid() || pending || !driver.feedbackReady?.()) return false
+        pending = true
+        const generation = ++operation
+        const guard = () => valid() && generation === operation
+        const apply = (error?: unknown) => {
+          if (error || !guard()) {
+            settled(generation, done, error)
+            return
+          }
+          try {
+            driver.applyRotation(rotation, time, (error) => settled(generation, done, error), guard)
+          } catch (error) {
+            settled(generation, done, error)
+          }
+        }
+        if (owned) apply()
+        else {
+          owned = true
+          try {
+            driver.setTorque(true, apply, guard)
+          } catch (error) {
+            settled(generation, done, error)
+          }
+        }
+        return true
+      },
+      release: (done) => {
+        if (!valid() || pending) {
+          done(new Error('speaking motion unavailable'))
+          return
+        }
+        release(done)
+      },
+      cancel: () => {
+        if (!current()) return
+        cancelled = true
+        operation++
+        if (!pending) {
+          if (owned) release(() => {})
+          else this.#speaking = undefined
+        }
+      },
+    }
+    this.#speaking = motion
+    pending = true
+    try {
+      driver.getRotation((result) => {
+        pending = false
+        if (!valid()) {
+          if (current()) this.#speaking = undefined
+          callback()
+          return
+        }
+        if (result.success === false) {
+          this.#speaking = undefined
+          callback(undefined, new Error(result.reason))
+          return
+        }
+        Object.assign(motion.rotation, result.value)
+        callback(motion)
+      }, valid)
+    } catch (error) {
+      if (current()) this.#speaking = undefined
+      callback(undefined, error)
+    }
   }
 
   updatePose(_id?: unknown): void {

@@ -9,6 +9,8 @@ typedef struct {} xsMachine;
 #define xsmcVars(...) ((void)0)
 #define xsmcSetNewObject(...) ((void)0)
 #define xsmcSetInteger(...) ((void)0)
+#define xsmcSetNumber(...) ((void)0)
+#define xsmcSetBoolean(...) ((void)0)
 #define xsmcSet(...) ((void)0)
 typedef int portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0

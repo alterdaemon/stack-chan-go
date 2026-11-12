@@ -6,6 +6,71 @@ cleanup. The [changelog](../../CHANGELOG-MOD.md) owns revision history;
 the [guide](README.md) owns current instructions. Raw logs, credentials and device
 backups remain private outside Git.
 
+## 2.1 R4
+
+Conversation state lighting and speaking head gestures, based on source
+`c4c216ca` plus the scoped R4 implementation. Release impact: minor; initial
+feedback hardware is M5StackChan CoreS3.
+
+- Local/static: `npm run test:unit` passed 752 tests and nine packaging
+  regressions. Focused search cancellation checks passed. `npm run lint`,
+  `npm run format`, SDK-activated `npm run check:manifest` (six targets), and
+  `npm run check:release -- v2.1.0-R4` passed. Lint retains three unrelated
+  informational findings. The first manifest attempt lacked the SDK environment;
+  the activated run passed.
+- Native host fixtures exercise the production audio task/getter with hardware
+  boundaries replaced: delayed AEC and interruption recovery remain passing;
+  the lightweight getter exposes existing audible progress and suppression
+  flags, including an absent audio owner and the unsigned counter limit.
+- XS simulator: the motion-controller, live-startup and live-startup-baseline
+  manifests passed through the retained private Xvfb/D-Bus wrapper. The motion
+  fixture uses the host's existing 1024-slot stack and replaces only physical
+  serial I/O. It verifies delayed axis acknowledgement, cancellation before
+  tilt, cancellation of an existing write retry, busy dispatch skipping,
+  ordinary torque lifetime, fresh pose after preemption and pose/gaze priority.
+  Initial fixture runs exposed a TypeScript narrowing error, an ineffective
+  serial override and the simulator's smaller default stack; these were repaired.
+  The startup fixtures also exercise real XS timers with delayed movement
+  acknowledgements, normal baseline return and one settled torque release.
+- Behavior/cost checks verify one meter sample per existing 100/200 ms tick,
+  unchanged mouth mapping, no repeated LED writes in an unchanged state,
+  event-burst coalescing, dim/bright input feedback without extra timers, bounded
+  gesture targets and spacing, normal baseline return and close/interruption
+  invalidation. Live's one-second input hold uses caption receipt time, accepting
+  late or intermittent feedback rather than adding a local speech detector.
+- Review repairs include cancellation predicates down to axis dispatch and
+  delayed writes, guarding pose acquisition during close, ignoring obsolete
+  cleanup callbacks and old Live backend progress, and measuring minimum gesture
+  spacing from actual movement start.
+- The combined pre-commit check passed after import ordering was normalized.
+  The final images were rebuilt and independently reverified from that source;
+  the first unpublished candidate was preserved in a private archive.
+- CoreS3 release build: SDK-activated
+  `npm run build:m5stackchan_cores3 -- --mode=release` passed in a disposable
+  short-path worktree, including embedded Settings typecheck/Vite generation
+  and automatic image packaging. No production dependency or audio/DSP processing change.
+  Build provenance records base `c4c216ca`, source overlay tree
+  `b5c962a009eeb562b2501dbeebd29100cb83c50a`, compiled feedback/motion module
+  hashes and an exact match between built and final production inputs.
+- Independent image verification passed: ESP32-S3 chip, source/reference
+  partition layout, build flash offsets, bootloader/table provenance, app bounds,
+  matching build/app/full bytes and erased unused gaps. Application: 8,597,744
+  bytes, SHA-256 `00a05ee97fe6e6f7c50fd80b61201f1a7905223421c498b999c9294962e0b513`;
+  full image: 16,777,216 bytes, SHA-256
+  `da6dc90e3f13182a2291b42943d2f9833f567e88f6bea865850db0e3c8d9826e`.
+  Application destination is `0x10000`, sector-rounded end `0x844000`.
+  The previous R3 images remain byte-identical. Raw evidence, effective SDK
+  configuration and build symbols are retained privately.
+- Physical-device and live-API comparison: not run. No device was flashed.
+  Actual brightness, appearance, servo sound, audio/control continuity under
+  motion, and device CPU/memory/timing overhead are unmeasured. Simulator and
+  host results do not establish these physical outcomes.
+
+Cleanup: task-created short build worktrees and identified disposable simulator
+profiles were removed after retained-file hash checks.
+Release images, useful logs, source/image provenance, SDK configuration and build
+symbols remain private. Prior images, device data and shared tooling were preserved.
+
 ## 2.1 R1
 
 ### Corrected response-conflict build

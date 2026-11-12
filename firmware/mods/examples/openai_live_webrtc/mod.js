@@ -1,7 +1,9 @@
 import Modules from 'modules'
+import { ConversationFeedback } from 'openai-live-feedback'
 import { diagnostic, formatLiveError, LiveSession, liveModelLabel } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
 import Preference from 'preference'
+import Time from 'time'
 import Timer from 'timer'
 
 const SESSION = 'openai-live:session'
@@ -120,6 +122,8 @@ export function onContextCreated(robot) {
     liveButton,
     statusTimer
   let mouthTimer,
+    feedback,
+    headLed,
     lastMouth = 0,
     shuttingDown = false
   function clearStatus() {
@@ -168,19 +172,45 @@ export function onContextCreated(robot) {
     acquireLowLatency: () => power.acquireLowLatency(),
     amp: globalThis.amp,
     settings: readSettings(),
+    now: () => Time.ticks,
+    onInterruption: () => feedback?.interrupt(),
     onState(state, detail) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
-      if (state === 'connected' && mouthTimer === undefined && levels && robot.setMouthOpen) {
+      if (state === 'connecting') {
+        headLed = robot.led?.head
+        try {
+          headLed?.off()
+        } catch {
+          headLed = undefined
+        }
+      }
+      if (state === 'connected' && mouthTimer === undefined && levels) {
+        feedback = new ConversationFeedback({
+          led: headLed,
+          motion: robot.motion,
+          entry: session.active,
+          bargeIn: session.settings.bargeIn,
+          now: () => Time.ticks,
+        })
         mouthTimer = Timer.repeat(
           () => {
-            const level = levels.levels().playbackLevel ?? 0
+            const sample = levels.levels()
+            const level = sample.playbackLevel ?? 0
             updateMouth(Math.min(10, Math.round(level / 200)) / 10)
+            try {
+              feedback?.tick(sample)
+            } catch {
+              feedback?.close()
+              feedback = undefined
+            }
           },
           session.settings.bargeIn ? 200 : 100,
         )
       } else if (state !== 'connected') {
         if (mouthTimer !== undefined) Timer.clear(mouthTimer)
         mouthTimer = undefined
+        feedback?.close()
+        feedback = undefined
         updateMouth(0)
       }
       try {

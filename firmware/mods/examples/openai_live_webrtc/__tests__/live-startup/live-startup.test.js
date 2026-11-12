@@ -4,9 +4,11 @@ import Debug from 'device-debug'
 import { samples } from 'io-performance'
 import config from 'mc/config'
 import Modules from 'modules'
+import { ConversationFeedback } from 'openai-live-feedback'
 import { LiveSession } from 'openai-live-session'
 import Preference from 'preference'
 import { assert, equal } from 'testing/assert'
+import Time from 'time'
 import Timer from 'timer'
 
 function equalConfig(actual, expected) {
@@ -27,11 +29,13 @@ async function run() {
   Debug.install(recorder)
   globalThis.amp = {}
   const buttons = new Map(),
-    balloons = []
+    balloons = [],
+    colors = []
   let acquired = 0,
     released = 0,
     mouth = 0
   const robot = {
+    led: { head: { on: (...rgb) => colors.push(rgb.join(',')), off: () => colors.push('off') } },
     setMouthOpen(value) {
       mouth = value
     },
@@ -86,6 +90,10 @@ async function run() {
   button.callback()
   await waitFor('GPT-Live 1 connected')
   await checkMouth(100)
+  equal(colors[0], 'off', 'connecting turns LEDs off before remote startup')
+  equal(colors[1], '0,19,6', 'existing timer initially shows dim ready green')
+  equal(colors[2], '0,45,95', 'actual meter progress shows cyan')
+  equal(colors.length, 3, 'unchanged playback makes no repeated LED writes')
   equal(acquired, 1, 'host audio acquired')
   equal(transports[0].options.bargeIn, false, 'missing saved preference keeps native interruption off')
   equal(requests.length, 1, 'one signaling request')
@@ -101,6 +109,7 @@ async function run() {
   await waitFor('GPT-Live 1 stopped')
   equal(released, 1, 'host audio released')
   await checkMouthStopped()
+  equal(colors[colors.length - 1], 'off', 'close turns LEDs off without leaving a timer')
   equal(globalThis.amp.sampleRate, 24000, 'host audio rate restored')
   equal(diagnosticEvents.length, 0, 'diagnostics Off leaves startup and close unrecorded')
   recorder.enabled = true
@@ -159,6 +168,54 @@ async function run() {
   await live.stop()
   equal(released, 4, 'resumed session releases host audio')
   equal(globalThis.amp.sampleRate, 24000, 'standby and explicit stop restore host rate')
+  // Real XS Timer service must wait for acknowledgement AND commanded duration.
+  const targets = [],
+    starts = []
+  let acquiredMotion = 0,
+    torqueReleased = 0,
+    audibleMs = 0
+  const rotation = { y: 0.2, p: -0.7, r: 0 }
+  const speaking = new ConversationFeedback({
+    entry: { backend: new Map(), conversation: { muted: false }, inputUntil: 0 },
+    bargeIn: true,
+    now: () => Time.ticks,
+    motion: {
+      trySpeakingMotion(done) {
+        acquiredMotion++
+        done({
+          rotation,
+          valid: () => true,
+          move(target, time, acknowledged) {
+            targets.push(target)
+            starts.push(Time.ticks)
+            equal(time, 0.5, 'gesture uses the fixed smooth target duration')
+            Timer.set(() => acknowledged(), 150)
+            return true
+          },
+          release(acknowledged) {
+            torqueReleased++
+            acknowledged()
+          },
+          cancel() {},
+        })
+      },
+    },
+  })
+  const began = Time.ticks
+  const gestureTimer = Timer.repeat(() => {
+    if (Time.ticks - began < 2500) audibleMs += 100
+    speaking.tick({ audibleMs, outputIdleMs: 10000, outputSuppressed: false })
+  }, 100)
+  await new Promise((resolve) => Timer.set(resolve, 3900))
+  Timer.clear(gestureTimer)
+  speaking.close()
+  equal(acquiredMotion, 1, 'longer speech acquires one fresh pose')
+  equal(targets.length, 2, 'normal speech completion sends one target and its return')
+  assert(starts[0] - began >= 2000, 'short replies do not force a gesture')
+  assert(starts[1] - starts[0] >= 650, 'next target waits for delayed acknowledgement and movement')
+  equal(targets[1].y, rotation.y, 'normal completion restores starting yaw')
+  equal(targets[1].p, rotation.p, 'normal completion restores starting pitch')
+  equal(torqueReleased, 1, 'settled speech releases torque once')
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }
 run().catch((error) => {

@@ -270,14 +270,22 @@ class SCServo {
   get id(): number {
     return this.#id
   }
+  get busy(): boolean {
+    return this.#isWriting || this.#waitSlot.isWaiting || this.#commandQueue.length > 0
+  }
 
   #dispatchCommand(
     command: Command,
     address: Address,
     onResult: CommandCallback,
     onError: ErrorCallback,
+    guard: (() => boolean) | undefined,
     ...values: number[]
   ): boolean {
+    if (guard && !guard()) {
+      onError(new Error('speaking motion cancelled'))
+      return false
+    }
     const waitsForResponse = command === COMMAND.READ || this.#awaitWriteResponse
     if (this.#isWriting || (waitsForResponse && this.#waitSlot.isWaiting)) {
       onError(new Error(COMMAND_BUSY_ERROR))
@@ -321,11 +329,22 @@ class SCServo {
         onError(error)
         Timer.set(this.#drainCommandQueue, 0)
       },
+      guard,
     )
     return true
   }
 
-  #writePacket(length: number, onWritten: () => void, onError: ErrorCallback, attempt = 0): void {
+  #writePacket(
+    length: number,
+    onWritten: () => void,
+    onError: ErrorCallback,
+    guard?: () => boolean,
+    attempt = 0,
+  ): void {
+    if (guard && !guard()) {
+      onError(new Error('speaking motion cancelled'))
+      return
+    }
     const originalFormat = packetHandler.format
     let written = false
     packetHandler.format = 'buffer'
@@ -336,7 +355,7 @@ class SCServo {
       if (attempt >= 1) {
         onError(error)
       } else {
-        Timer.set(() => this.#writePacket(length, onWritten, onError, attempt + 1), 1)
+        Timer.set(() => this.#writePacket(length, onWritten, onError, guard, attempt + 1), 1)
       }
     } finally {
       packetHandler.format = originalFormat
@@ -384,6 +403,7 @@ class SCServo {
           Timer.set(this.#drainCommandQueue, error instanceof CommandTimeoutError ? COMMAND_RECOVERY_DELAY_MS : 0)
         }
       },
+      undefined,
       ...pending.values,
     )
   }
@@ -552,9 +572,11 @@ class SCServo {
     rawPosition: number,
     goalTimeMilliseconds: SCServoGoalTimeMilliseconds,
     callback?: CompletionCallback,
+    guard?: () => boolean,
   ): void {
     const position = Math.floor(clamp(rawPosition, 0, 0x03ff))
-    this.#sendCommand(
+    this.#sendFeedbackOrCommand(
+      guard,
       COMMAND.WRITE,
       ADDRESS.GOAL_POSITION,
       () => callback?.(),
@@ -564,8 +586,9 @@ class SCServo {
     )
   }
 
-  readRawPosition(callback: ResultCallback<{ position: number }>): void {
-    this.#sendCommand(
+  readRawPosition(callback: ResultCallback<{ position: number }>, guard?: () => boolean): void {
+    this.#sendFeedbackOrCommand(
+      guard,
       COMMAND.READ,
       ADDRESS.PRESENT_POSITION,
       (values) => {
@@ -591,8 +614,51 @@ class SCServo {
    * @param enable enable
    * @returns TBD
    */
-  setTorque(enable: boolean, callback?: CompletionCallback): void {
-    this.#sendCommand(COMMAND.WRITE, ADDRESS.TORQUE_ENABLE, () => callback?.(), callback ?? (() => {}), Number(enable))
+  setTorque(enable: boolean, callback?: CompletionCallback, guard?: () => boolean): void {
+    this.#sendFeedbackOrCommand(
+      guard,
+      COMMAND.WRITE,
+      ADDRESS.TORQUE_ENABLE,
+      () => callback?.(),
+      callback ?? (() => {}),
+      Number(enable),
+    )
+  }
+
+  // Speaking feedback never joins the ordinary command queue.
+  #sendFeedbackOrCommand(
+    guard: (() => boolean) | undefined,
+    command: Command,
+    address: Address,
+    onResult: CommandCallback,
+    onError: ErrorCallback,
+    ...values: number[]
+  ): boolean {
+    if (!guard) return this.#sendCommand(command, address, onResult, onError, ...values)
+    if (this.busy || !guard()) {
+      onError(new Error('speaking motion unavailable'))
+      return false
+    }
+    return this.#dispatchCommand(
+      command,
+      address,
+      (result) => {
+        try {
+          onResult(result)
+        } finally {
+          Timer.set(this.#drainCommandQueue, 0)
+        }
+      },
+      (error) => {
+        try {
+          onError(error)
+        } finally {
+          Timer.set(this.#drainCommandQueue, 0)
+        }
+      },
+      guard,
+      ...values,
+    )
   }
 
   /**

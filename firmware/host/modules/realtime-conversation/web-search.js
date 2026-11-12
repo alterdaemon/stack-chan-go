@@ -3,7 +3,7 @@
 
 // Realtime function -> hosted Responses search. No audio or full history is copied.
 // https://developers.openai.com/api/docs/guides/tools-web-search
-export function createWebSearchTool({ fetch, apiKey, model, reasoningEffort }) {
+export function createWebSearchTool({ fetch, apiKey, model, reasoningEffort, onEvent }) {
   let pending = false
   return {
     name: 'search_web',
@@ -21,6 +21,7 @@ export function createWebSearchTool({ fetch, apiKey, model, reasoningEffort }) {
       if (pending) return { error: 'search_busy' }
       if (context.isCancelled()) return { error: 'search_cancelled' }
       pending = true
+      onEvent?.({ type: 'local.search.started', call_id: context.callId })
       let unsubscribe
       try {
         const request = fetch('https://api.openai.com/v1/responses', {
@@ -50,6 +51,7 @@ export function createWebSearchTool({ fetch, apiKey, model, reasoningEffort }) {
       } finally {
         unsubscribe?.()
         pending = false
+        onEvent?.({ type: 'local.search.finished', call_id: context.callId })
       }
     },
   }

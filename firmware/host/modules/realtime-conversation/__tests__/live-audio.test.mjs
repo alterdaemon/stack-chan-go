@@ -6,6 +6,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 for (const [fixture, title] of [
+  ['levels.c', 'lightweight meter exposes existing audible progress and every output suppression state'],
   [
     'capture.c',
     'delayed capture AEC preserves microphone frames while independent I2S keeps playing; Off is unchanged',

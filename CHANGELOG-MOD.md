@@ -13,6 +13,13 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 ## 2.1.0
 
+### 2.1.0-R4
+
+Release impact: minor.
+
+- **See what the robot is doing:** Solid head lights distinguish ready input, incoming speech activity, pending work and audible replies in Live, Realtime standard and Realtime mini. Live's input indication follows captions and can appear late.
+- **Movement during longer replies:** Small, smooth nods and sideways head movements accompany sustained speech. Existing touch and manual actions take priority; interruption cancels further speaking gestures.
+
 ### 2.1.0-R3
 
 Release impact: minor.

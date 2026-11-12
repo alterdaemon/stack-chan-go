@@ -7,6 +7,7 @@
   "modules": {
     "openai-live-integrated": "../../mods/examples/openai_live_webrtc/mod",
     "openai-live-session": "../../mods/examples/openai_live_webrtc/session",
+    "openai-live-feedback": "../../mods/examples/openai_live_webrtc/feedback",
     "openai-live-settings": "../../mods/examples/openai_live_webrtc/settings"
   }
 }

@@ -1,4 +1,5 @@
 {
+  "creation": { "stack": 1024 },
   "include": [
     "$(MODDABLE)/examples/manifest_base.json",
     "$(MODDABLE)/examples/manifest_typings.json",
@@ -6,7 +7,10 @@
     "../../../testing/manifest.json"
   ],
   "modules": {
-    "main": "./motion-controller.test"
+    "~": ["$(MODDABLE)/modules/embedded/io/serial/$(PLATFORM)/*"],
+    "main": "./motion-controller.test",
+    "serial": "./serial",
+    "embedded:io/serial": "./serial-binding"
   },
   "defines": {
     "main": {

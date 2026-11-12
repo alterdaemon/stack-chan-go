@@ -3,7 +3,7 @@
 [Repository](https://github.com/alterdaemon/stack-chan-mod) ·
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
-Current product version: **2.1.0-R3**. Standard hardware: M5StackChan CoreS3.
+Current product version: **2.1.0-R4**. Standard hardware: M5StackChan CoreS3.
 The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
@@ -11,18 +11,19 @@ optimize performance, and keep the fork up to date and in sync with upstream.
 
 ## What this fork adds
 
-Main differences in **2.1.0-R3** compared with upstream **2.1.0**:
+Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
 
 | Area | What you get |
 | --- | --- |
 | Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
+| Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3. |
 | Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
-See the [R3 release notes](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3) for details and comparison links.
+See the [R4 changelog](../../CHANGELOG-MOD.md#210-r4) for source changes and the [R3 release notes](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3) for the published stable release.
 
 Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
@@ -149,6 +150,33 @@ competing FIFO writers. XS debug builds retain debugger ownership. Diagnostic co
 binary Android USB dock owns the port; do not send console commands into that
 stream. Initial supported target: M5StackChan CoreS3.
 
+## Conversation lights and head movement
+
+On CoreS3, Live, Realtime standard and Realtime mini use all 12 head LEDs:
+
+| Color | Meaning |
+| --- | --- |
+| Dim emerald | Microphone input is ready. |
+| Brighter emerald | Incoming speech activity has been reported. |
+| Purple | Confirmed response or search work is pending. |
+| Cyan/blue | The robot is playing audible speech. |
+| Off | The session is inactive, or microphone input is muted/gated while otherwise idle. |
+
+Playback takes priority over pending work, and both take priority over green.
+Realtime uses existing speech-start/stop events. Live brightens green for one
+second after each new user audio transcript fragment; late or sparse captions can
+make the indication delayed or intermittent. Neither green indication proves
+understanding or identifies the speaker. Colors stay solid, with no pulsing.
+
+During replies lasting at least two seconds, the robot can make small, smooth
+nods or sideways movements, normally two to three seconds apart. Short replies,
+listening and waiting do not force gestures. Normal completion returns to the
+starting pose; accepted interruption cancels further steps. Existing touch,
+manual and gaze actions take priority. Mouth, face and emotion behavior remains
+unchanged. Feedback reuses the existing 100/200 ms UI tick; LEDs are written only
+when their displayed color changes. Physical appearance and performance require
+[device verification](validation.md#21-r4).
+
 ## Build
 
 Use the existing Moddable/ESP-IDF environment, with `ESP_WEBRTC_SOLUTION` set,
@@ -173,8 +201,8 @@ BINs. Debug/instrument/alternate-manifest builds do not publish these packages.
 Builds and packaging do not flash a device. Different contents under an existing
 revision are rejected; identical repackaging is allowed.
 
-Local R3 builds produce `StackChan-Community-v2.1.0-R3-app.bin` and
-`StackChan-Community-v2.1.0-R3.bin` in `internal/release-packages/`. Download
+Local R4 builds produce `StackChan-Community-v2.1.0-R4-app.bin` and
+`StackChan-Community-v2.1.0-R4.bin` in `internal/release-packages/`. Download
 the preconfigured pair from the [R3 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3).
 
 To package an existing release in the same environment:

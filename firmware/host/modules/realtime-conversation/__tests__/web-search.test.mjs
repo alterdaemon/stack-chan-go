@@ -33,11 +33,13 @@ test('search summaries bound answer and sources and reject answers without a com
 })
 
 test('only one search request can run and cancellation reaches its HTTPS request', async () => {
+  const activity = []
   let complete,
     cancel,
     requests = 0,
     cancelled = 0
   const tool = createWebSearchTool({
+    onEvent: (event) => activity.push(event),
     apiKey: 'test-only',
     model: 'backend',
     fetch(_url, init) {
@@ -54,6 +56,7 @@ test('only one search request can run and cancellation reaches its HTTPS request
   })
   let stopped = false
   const context = {
+    callId: 'search-1',
     isCancelled: () => stopped,
     onCancel(fn) {
       cancel = fn
@@ -63,9 +66,12 @@ test('only one search request can run and cancellation reaches its HTTPS request
   const first = tool.execute({ query: 'current fact' }, context)
   assert.equal((await tool.execute({ query: 'other fact' }, context)).error, 'search_busy')
   assert.equal(requests, 1)
+  assert.deepEqual(activity, [{ type: 'local.search.started', call_id: 'search-1' }])
   stopped = true
   cancel()
   complete({ ok: true, text: async () => '{"answer":"late","sources":[]}' })
   assert.equal((await first).error, 'search_cancelled')
   assert.equal(cancelled, 1)
+  assert.deepEqual(activity[1], { type: 'local.search.finished', call_id: 'search-1' })
+  assert.equal(activity.length, 2)
 })

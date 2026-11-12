@@ -8,7 +8,7 @@ import type { ButtonInputEvent } from 'input-event'
 import type { LocalPeerCapability } from 'local-peer-types'
 import type { I18nCapability } from 'localization'
 import type { MiniAppRegistryCapability } from 'mini-app'
-import type { MotionControllerPose, MotionDurationSeconds } from 'motion-controller'
+import type { MotionControllerPose, MotionDurationSeconds, SpeakingMotion } from 'motion-controller'
 import type { Container as PiuContainer, Content as PiuContent } from 'piu/MC'
 import type { Maybe, Pose, Vector3 } from 'stackchan-util'
 import type Touch from 'touch'
@@ -114,6 +114,7 @@ export type MotionCapability = {
   lookAway(): void
   setPose(pose: Pose, time?: MotionDurationSeconds): Promise<void>
   setTorque(torque: boolean): Promise<void>
+  trySpeakingMotion?(callback: (motion?: SpeakingMotion, error?: unknown) => void, isCurrent?: () => boolean): void
 }
 
 export type AudioCapability = {

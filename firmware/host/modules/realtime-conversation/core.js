@@ -193,7 +193,14 @@ export default class Conversation {
     if (options.tools !== undefined && !Array.isArray(options.tools)) throw new TypeError('Invalid tools')
     const tools =
       this.#realtime && options.search
-        ? [createWebSearchTool({ ...options.search, apiKey: this.#key, fetch: platform.fetch })]
+        ? [
+            createWebSearchTool({
+              ...options.search,
+              apiKey: this.#key,
+              fetch: platform.fetch,
+              onEvent: (event) => this.#notify('onEvent', event),
+            }),
+          ]
         : options.tools
     if (tools?.length) {
       if (!this.#realtime && this.#options.delegation?.type !== 'responses')

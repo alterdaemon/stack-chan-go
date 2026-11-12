@@ -668,16 +668,22 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
 }
 
 void xs_io_audio_levels(xsMachine *the) {
-  unsigned level = 0, reference = 0, idle = 10000;
+  unsigned level = 0, reference = 0, idle = 10000, audible = 0;
+  bool suppressed = true;
   portENTER_CRITICAL(&audioLock);
   if (activeAudio) {
     level = atomic_load(&activeAudio->playbackLevel);
     reference = atomic_load(&activeAudio->referenceLevel);
     idle = atomic_load(&activeAudio->outputIdleMs);
+    audible = atomic_load(&activeAudio->audibleMs);
+    suppressed = atomic_load(&activeAudio->quiesced) || atomic_load(&activeAudio->yieldOutput) ||
+      atomic_load(&activeAudio->discardOutput);
   }
   portEXIT_CRITICAL(&audioLock);
   xsmcVars(1); xsmcSetNewObject(xsResult);
   xsmcSetInteger(xsVar(0),level); xsmcSet(xsResult,xsID("playbackLevel"),xsVar(0));
   xsmcSetInteger(xsVar(0),reference); xsmcSet(xsResult,xsID("referenceLevel"),xsVar(0));
   xsmcSetInteger(xsVar(0),idle); xsmcSet(xsResult,xsID("outputIdleMs"),xsVar(0));
+  xsmcSetNumber(xsVar(0),audible); xsmcSet(xsResult,xsID("audibleMs"),xsVar(0));
+  xsmcSetBoolean(xsVar(0),suppressed); xsmcSet(xsResult,xsID("outputSuppressed"),xsVar(0));
 }

@@ -78,6 +78,7 @@ function fixture(overrides = {}) {
         timers.delete(id)
       },
     },
+    now: () => ticks,
     ...overrides,
   })
   return {
@@ -110,6 +111,97 @@ function fixture(overrides = {}) {
     },
   }
 }
+
+for (const model of ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini']) {
+  for (const bargeIn of [false, true]) {
+    test(`${model} input feedback observes speech with interruption ${bargeIn}`, async () => {
+      const f = fixture({ settings: { apiKey: 'test', mode: 'realtime', model, bargeIn } })
+      await f.session.start()
+      const entry = f.session.active,
+        event = f.instances[0].options.onEvent
+      event({ type: 'input_audio_buffer.speech_started' })
+      assert.equal(entry.inputUntil, Infinity)
+      event({ type: 'input_audio_buffer.speech_stopped' })
+      assert.equal(entry.inputUntil, 0)
+      await f.session.setMuted(true)
+      event({ type: 'input_audio_buffer.speech_started' })
+      assert.equal(entry.inputUntil, 0)
+      await f.session.setMuted(false)
+      entry.inputAvailable = false
+      event({ type: 'input_audio_buffer.speech_started' })
+      assert.equal(entry.inputUntil, 0)
+      entry.inputAvailable = true
+      event({ type: 'response.created', response: { id: 'old' } })
+      event({ type: 'response.created', response: { id: 'new' } })
+      event({ type: 'response.done', response: { id: 'old' } })
+      assert.equal(entry.responseId, 'new')
+      event({ type: 'local.search.started', call_id: 'search' })
+      event({ type: 'response.done', response: { id: 'new' } })
+      assert.equal(entry.searchId, 'search', 'search outlives the response')
+      event({ type: 'local.search.finished', call_id: 'old-search' })
+      assert.equal(entry.searchId, 'search')
+      event({ type: 'local.search.finished', call_id: 'search' })
+      assert.equal(entry.searchId, undefined)
+      const timers = f.timers.size
+      for (let i = 0; i < 100; i++) event({ type: 'input_audio_buffer.speech_started' })
+      assert.equal(f.timers.size, timers, 'input feedback allocates no timers')
+      await f.session.stop()
+      event({ type: 'input_audio_buffer.speech_started' })
+      await f.session.start()
+      assert.equal(f.session.active.inputUntil, 0)
+      await f.session.stop()
+    })
+  }
+}
+
+test('Live feedback keeps only a one-second receipt-time hold for advancing user audio', async () => {
+  const f = fixture()
+  await f.session.start()
+  const fragment = f.instances[0].options.onTranscript,
+    entry = f.session.active
+  fragment({ role: 'user', delta: 'Hello', start_ms: 0, end_ms: 100 })
+  assert.equal(entry.inputUntil, 1000)
+  const timers = f.timers.size
+  f.tick(500)
+  for (const value of [
+    { role: 'assistant', delta: 'Hello', start_ms: 100, end_ms: 200 },
+    { role: 'user', delta: ' ', start_ms: 100, end_ms: 200 },
+    { role: 'user', delta: 'context', start_ms: 200, end_ms: 200 },
+    { role: 'user', delta: 'duplicate', start_ms: 0, end_ms: 100 },
+    { role: 'user', delta: 'old', start_ms: 0, end_ms: 50 },
+  ])
+    fragment(value)
+  assert.equal(entry.inputUntil, 1000)
+  f.tick(1000)
+  fragment({ role: 'user', delta: 'Late words', start_ms: 100, end_ms: 200 })
+  assert.equal(entry.inputUntil, 2500, 'late captions use receipt time without clock synchronization')
+  assert.equal(f.timers.size, timers)
+  await f.session.setMuted(true)
+  fragment({ role: 'user', delta: 'muted', start_ms: 200, end_ms: 300 })
+  assert.equal(entry.inputUntil, 0)
+  await f.session.stop()
+})
+
+test('late Live backend progress after interruption does not revive old feedback or change standby', async () => {
+  let interruptions = 0
+  const f = fixture({ onInterruption: () => interruptions++ })
+  await f.session.start()
+  const event = f.instances[0].options.onEvent,
+    entry = f.session.active
+  event({ type: 'session.delegation.created', delegation: { id: 'old', response_id: 'r1' } })
+  event({ type: 'local.interruption' })
+  event({
+    type: 'response.event',
+    delegation_id: 'old',
+    event: { type: 'response.in_progress', response: { id: 'r1' } },
+  })
+  assert.equal(entry.pendingSuppressed, true)
+  assert.equal(entry.backend.size, 1, 'feedback does not alter existing standby work tracking')
+  assert.equal(interruptions, 1)
+  event({ type: 'session.delegation.created', delegation: { id: 'new', response_id: 'r2' } })
+  assert.equal(entry.pendingSuppressed, false)
+  await f.session.stop()
+})
 
 test('empty key and unavailable network never acquire audio or create a session', async () => {
   for (const overrides of [{ settings: { apiKey: '' } }, { networkReady: Promise.resolve({ status: 'skipped' }) }]) {

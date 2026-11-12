@@ -77,21 +77,42 @@ export class M5StackChanServoDriver {
     this.#servoPower?.setEnabled(false)
   }
 
-  setTorque(torque: boolean, callback?: MotionCompletion): void {
-    this.#pan.setTorque(torque, (panError) => {
-      if (panError != null) {
-        callback?.(panError)
-        return
-      }
-      this.#tilt.setTorque(torque, callback)
-    })
+  feedbackReady(): boolean {
+    return !this.#pan.busy && !this.#tilt.busy
   }
 
-  applyRotation(ori: Rotation, time: MotionDurationSeconds = 0.5, callback?: MotionCompletion): void {
+  setTorque(torque: boolean, callback?: MotionCompletion, guard?: () => boolean): void {
+    if (guard && (!guard() || !this.feedbackReady())) {
+      callback?.(new Error('speaking motion unavailable'))
+      return
+    }
+    this.#pan.setTorque(
+      torque,
+      (panError) => {
+        if (panError != null) {
+          callback?.(panError)
+          return
+        }
+        this.#tilt.setTorque(torque, callback, guard)
+      },
+      guard,
+    )
+  }
+
+  applyRotation(
+    ori: Rotation,
+    time: MotionDurationSeconds = 0.5,
+    callback?: MotionCompletion,
+    guard?: () => boolean,
+  ): void {
+    if (guard && (!guard() || !this.feedbackReady())) {
+      callback?.(new Error('speaking motion unavailable'))
+      return
+    }
     const angles = rotationToM5StackChanServoAngles(ori)
     const panRawPosition = angleToRawPosition(angles.yaw, this.#config.yaw)
     const tiltRawPosition = angleToRawPosition(angles.pitch, this.#config.pitch)
-    if (time === 0) {
+    if (time === 0 && !guard) {
       this.#pan.setRawPosition(panRawPosition, (panError) => {
         if (panError != null) {
           callback?.(panError)
@@ -101,17 +122,26 @@ export class M5StackChanServoDriver {
       })
     } else {
       const goalTimeMilliseconds = motionDurationSecondsToMilliseconds(time)
-      this.#pan.setRawPositionInTime(panRawPosition, goalTimeMilliseconds, (panError) => {
-        if (panError != null) {
-          callback?.(panError)
-          return
-        }
-        this.#tilt.setRawPositionInTime(tiltRawPosition, goalTimeMilliseconds, callback)
-      })
+      this.#pan.setRawPositionInTime(
+        panRawPosition,
+        goalTimeMilliseconds,
+        (panError) => {
+          if (panError != null) {
+            callback?.(panError)
+            return
+          }
+          this.#tilt.setRawPositionInTime(tiltRawPosition, goalTimeMilliseconds, callback, guard)
+        },
+        guard,
+      )
     }
   }
 
-  getRotation(callback: MotionResultCallback<Maybe<Rotation>>): void {
+  getRotation(callback: MotionResultCallback<Maybe<Rotation>>, guard?: () => boolean): void {
+    if (guard && (!guard() || !this.feedbackReady())) {
+      this.#returnRotationError(callback, 'speaking motion unavailable')
+      return
+    }
     this.#pan.readRawPosition((panStatus) => {
       if (panStatus.success === false) {
         this.#returnRotationError(callback, panStatus.reason)
@@ -128,8 +158,8 @@ export class M5StackChanServoDriver {
         this.#rotation.p = -(pitchAngle / RAD_TO_01_DEGREE)
         this.#rotation.r = 0.0
         callback(this.#rotationResult)
-      })
-    })
+      }, guard)
+    }, guard)
   }
 
   #returnRotationError(callback: MotionResultCallback<Maybe<Rotation>>, reason?: string): void {
