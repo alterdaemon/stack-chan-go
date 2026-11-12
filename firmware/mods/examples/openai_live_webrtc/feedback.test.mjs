@@ -177,7 +177,125 @@ test('delayed pose acquisition does not shorten the minimum spacing between gest
   assert.ok(moves[2].time - moves[0].time >= 2000)
 })
 
-test('hardware failure disables only the failed channel and missing hardware stays usable', () => {
+for (const failure of [
+  'read',
+  'read-throw',
+  'target',
+  'target-throw',
+  'return',
+  'release',
+  'release-throw',
+  'cleanup',
+]) {
+  test(`a failed ${failure} permits a fresh gesture after normal spacing in the same session`, () => {
+    const acquisitions = [],
+      targets = []
+    let failedAt,
+      cancelled = 0
+    const f = fixture(true, {
+      trySpeakingMotion(done) {
+        const attempt = acquisitions.push(f.feedback.now())
+        const fail = () => {
+          failedAt = f.feedback.now()
+          return new Error('servo unavailable')
+        }
+        if (attempt === 1 && failure === 'read') return done(undefined, fail())
+        if (attempt === 1 && failure === 'read-throw') throw fail()
+        let current = true,
+          moves = 0
+        done({
+          rotation: { y: attempt / 10, p: -0.7, r: 0 },
+          valid: () => current,
+          move(target, _time, acknowledged) {
+            moves++
+            targets.push({ attempt, target })
+            if (attempt === 1) {
+              if (failure === 'target-throw') throw fail()
+              if ((moves === 1 && ['target', 'cleanup'].includes(failure)) || (moves === 2 && failure === 'return')) {
+                acknowledged(fail())
+                return true
+              }
+            }
+            acknowledged()
+            return true
+          },
+          release(acknowledged) {
+            if (attempt === 1 && failure === 'release-throw') throw fail()
+            acknowledged(attempt === 1 && failure === 'release' ? fail() : undefined)
+          },
+          cancel() {
+            current = false
+            cancelled++
+            if (attempt === 1 && failure === 'cleanup') throw new Error('cleanup failed')
+          },
+        })
+      },
+    })
+    f.tick(0)
+    for (let t = 100; t <= 12000; t += 100) f.tick(t, 100)
+    assert.ok(Number.isFinite(failedAt))
+    assert.ok(acquisitions.length >= 2, 'movement recovers without reconnecting')
+    assert.ok(acquisitions[1] - failedAt >= 2000, 'failure cannot cause rapid retries')
+    assert.ok(acquisitions[1] - failedAt <= 3100, 'fresh speech permits the next normal opportunity')
+    assert.ok(
+      targets.some(({ attempt, target }) => attempt === 2 && target.y === 0.2 && target.p === -0.7),
+      'recovery returns to its freshly acquired baseline',
+    )
+    if (!failure.startsWith('read')) assert.ok(cancelled > 0, 'failed motion is cancelled')
+    assert.deepEqual(f.colors.at(-1), [0, 45, 95], 'LED feedback continues')
+    f.feedback.close()
+  })
+}
+
+test('persistent servo failures stay spaced and stop on close', () => {
+  const attempts = []
+  const f = fixture(true, {
+    trySpeakingMotion(done) {
+      attempts.push(f.feedback.now())
+      done(undefined, new Error('servo unavailable'))
+    },
+  })
+  f.tick(0)
+  for (let t = 100; t <= 15000; t += 100) f.tick(t, 100)
+  assert.ok(attempts.length >= 4 && attempts.length <= 7)
+  for (let i = 1; i < attempts.length; i++) assert.ok(attempts[i] - attempts[i - 1] >= 2000)
+  f.feedback.close()
+  const count = attempts.length
+  for (let t = 15100; t <= 20000; t += 100) f.tick(t, 100)
+  assert.equal(attempts.length, count)
+})
+
+test('an obsolete completion cannot advance a recovered gesture', () => {
+  let oldCompletion,
+    attempts = 0
+  const f = fixture(true, {
+    trySpeakingMotion(done) {
+      const attempt = ++attempts
+      done({
+        rotation: { y: 0, p: -0.7, r: 0 },
+        valid: () => true,
+        move(_target, _time, acknowledged) {
+          if (attempt === 1) oldCompletion = acknowledged
+          else acknowledged()
+          return true
+        },
+        release: (acknowledged) => acknowledged(),
+        cancel() {},
+      })
+    },
+  })
+  f.tick(0)
+  for (let t = 100; t <= 2100; t += 100) f.tick(t, 100)
+  oldCompletion(new Error('servo timeout'))
+  for (let t = 2200; t <= 5200; t += 100) f.tick(t, 100)
+  assert.ok(attempts >= 2)
+  const phase = f.feedback.phase
+  oldCompletion()
+  assert.equal(f.feedback.phase, phase)
+  f.feedback.close()
+})
+
+test('LED failure disables only that channel and missing hardware stays usable', () => {
   const f = fixture()
   f.feedback.led = {
     on() {

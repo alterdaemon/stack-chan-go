@@ -173,7 +173,10 @@ nods or sideways movements, normally two to three seconds apart. Short replies,
 listening and waiting do not force gestures. Normal completion returns to the
 starting pose; accepted interruption cancels further steps. Existing touch,
 manual and gaze actions take priority. Mouth, face and emotion behavior remains
-unchanged. Feedback reuses the existing 100/200 ms UI tick; LEDs are written only
+unchanged. A failed servo operation cancels the current gesture; fresh speech can
+start another after two to three seconds, using a newly read pose. Speaking
+feedback allows 200 ms for servo acknowledgements; ordinary motion retains 120 ms.
+Feedback reuses the existing 100/200 ms UI tick; LEDs are written only
 when their displayed color changes. Physical appearance and performance require
 [device verification](validation.md#21-r4).
 

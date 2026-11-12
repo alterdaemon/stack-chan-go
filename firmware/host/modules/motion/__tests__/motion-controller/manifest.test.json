@@ -9,6 +9,7 @@
   "modules": {
     "~": ["$(MODDABLE)/modules/embedded/io/serial/$(PLATFORM)/*"],
     "main": "./motion-controller.test",
+    "openai-live-feedback": "../../../../../mods/examples/openai_live_webrtc/feedback",
     "serial": "./serial",
     "embedded:io/serial": "./serial-binding"
   },

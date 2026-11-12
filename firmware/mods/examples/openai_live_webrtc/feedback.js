@@ -38,7 +38,7 @@ export class ConversationFeedback {
     try {
       motion?.cancel()
     } catch {
-      this.motion = undefined
+      // Cleanup is bounded; a failed gesture must not disable later gestures.
     }
   }
 
@@ -166,6 +166,6 @@ export class ConversationFeedback {
 
   failMotion() {
     this.cancelMotion()
-    this.motion = undefined
+    this.nextGesture = this.now() + 2000 + Math.random() * 1000
   }
 }

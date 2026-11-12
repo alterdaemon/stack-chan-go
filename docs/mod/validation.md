@@ -6,6 +6,38 @@ cleanup. The [changelog](../../CHANGELOG-MOD.md) owns revision history;
 the [guide](README.md) owns current instructions. Raw logs, credentials and device
 backups remain private outside Git.
 
+## R4 speaking-motion recovery, 2026-11-12
+
+Release impact: patch, retained under `2.1.0-R4` at the maintainer's request.
+A failed pose read, target, return or torque release now cancels only that
+gesture. Fresh sustained playback can acquire a new pose after two to three
+seconds, including after failed cleanup. Speaking-feedback acknowledgements
+allow 200 ms; ordinary servo commands retain 120 ms. Existing interruption,
+close and ordinary-motion ownership guards remain in place.
+
+- Local/static: the existing `test:unit` command, run with Node
+  `--test-concurrency=1`, passed all 762 tests and nine packaging regressions.
+  Two default parallel runs each failed the unrelated asynchronous
+  `module-test-runner.test.mjs` fixture; its isolated run and the complete serial
+  run passed. The 16 focused feedback tests cover recovery, persistent failures,
+  cleanup exceptions and obsolete completions. `npm run lint`, `npm run format`,
+  SDK-activated `npm run check:manifest` (six targets),
+  `npm run check:release -- v2.1.0-R4`, strict accepted-spec validation and the
+  workspace contract passed. Lint retains three existing informational findings.
+- XS simulator: after the private runtime wrapper's `--check`, SDK-activated
+  `npm run test:moddable --` passed the motion-controller, live-startup and
+  live-startup-baseline manifests through that wrapper. The motion fixture uses
+  the production feedback, motion controller and CoreS3 serial protocol with
+  only physical serial I/O replaced. Actual timer expiry during pose reads,
+  position writes and torque release permits later fresh-pose gestures in the
+  same connection. A 150 ms feedback acknowledgement succeeds; an ordinary
+  unanswered read still expires after 120 ms. Existing real-timer gesture,
+  cancellation, preemption and baseline-return checks pass.
+- CoreS3 release build and independent image verification: pending.
+- Physical-device and live-API checks: not run; no device was flashed. The
+  original device-side triggering error and the adequacy of 200 ms on hardware
+  remain unmeasured. Raw evidence is retained privately.
+
 ## GitHub Actions repair, 2026-11-12
 
 Initial manual runs used source `8223b161`:

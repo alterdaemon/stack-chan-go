@@ -23,7 +23,7 @@ Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
 | --- | --- |
 | Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
-| Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3. |
+| Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
 | Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |

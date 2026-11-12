@@ -8,6 +8,7 @@ import {
   motionDurationSecondsToMilliseconds,
   type SpeakingMotion,
 } from 'motion-controller'
+import { ConversationFeedback } from 'openai-live-feedback'
 import { type Maybe, type Pose, type Rotation, wait, waitForCompletion } from 'stackchan-util'
 import { assert, equal } from 'testing/assert'
 // The fixture replaces only physical serial I/O, exercising the real packet path.
@@ -237,6 +238,71 @@ async function runTest() {
   assert(!available, 'busy physical dispatch skips feedback without queueing')
   equal(port.packets.length, beforeBusy, 'busy feedback adds no serial command')
   readPose()
+
+  let ordinaryTimedOut = false
+  hardware.getRotation((result) => {
+    ordinaryTimedOut = result.success === false
+  })
+  await wait(150)
+  assert(ordinaryTimedOut, 'ordinary reads retain the 120 ms timeout')
+
+  motion = undefined
+  readError = undefined
+  acquire()
+  await wait(150)
+  assert(!motion && !readError && !hardware.feedbackReady(), 'feedback accepts acknowledgements beyond 120 ms')
+  readPose()
+  assert(motion && !readError, 'a feedback acknowledgement at 150 ms succeeds')
+  motion.cancel()
+
+  for (const failure of ['read', 'target', 'release']) {
+    let now = 0,
+      audibleMs = 0,
+      packetIndex = port.packets.length,
+      failedAt = -1
+    const acquisitions: number[] = [],
+      targets: number[] = []
+    const feedback = new ConversationFeedback({
+      entry: { backend: new Map(), conversation: { muted: false }, inputUntil: 0 },
+      bargeIn: true,
+      motion: guarded,
+      now: () => now,
+    })
+    const answerPackets = async (allowFailure: boolean) => {
+      while (packetIndex < port.packets.length) {
+        const packet = port.packets[packetIndex++]
+        const read = packet[4] === 2,
+          address = packet[5]
+        if (read && packet[2] === 1) acquisitions.push(now)
+        if (!read && address === 42) targets.push(now)
+        if (
+          allowFailure &&
+          failedAt < 0 &&
+          ((failure === 'read' && read) ||
+            (failure === 'target' && address === 42) ||
+            (failure === 'release' && address === 40 && packet[6] === 0))
+        ) {
+          failedAt = now
+          await wait(230)
+        } else port.reply(read ? (packet[2] === 1 ? [1, 204] : [2, 188]) : [])
+      }
+    }
+    for (now = 0; now <= 12000; now += 100) {
+      audibleMs += 100
+      feedback.tick({ audibleMs, outputIdleMs: 10000, outputSuppressed: false })
+      await answerPackets(true)
+    }
+    assert(failedAt >= 0, `${failure} exercises an actual feedback command timeout`)
+    assert(acquisitions.length >= 2, `${failure} recovers through a fresh physical pose read`)
+    assert(acquisitions[1] - failedAt >= 2000, `${failure} preserves spacing after failure`)
+    assert(
+      targets.some((time) => time >= acquisitions[1]),
+      `${failure} permits later position commands`,
+    )
+    feedback.close()
+    await answerPackets(false)
+    assert(hardware.feedbackReady(), `${failure} cleanup leaves serial dispatch available`)
+  }
   guarded.close()
 
   const freshDriver = new FakeMotionDriver()

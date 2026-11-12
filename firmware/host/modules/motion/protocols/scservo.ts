@@ -191,6 +191,7 @@ type PendingCommand = {
 }
 const COMMAND_BUSY_ERROR = 'command is already waiting for response'
 const COMMAND_TIMEOUT_MS = 120
+const FEEDBACK_COMMAND_TIMEOUT_MS = 200
 const COMMAND_RECOVERY_DELAY_MS = 20
 
 function reasonFromError(error: unknown): string {
@@ -314,9 +315,10 @@ class SCServo {
           deferNoResponseResult(onResult, onError)
           return
         }
-        const waiting = this.#waitSlot.wait(COMMAND_TIMEOUT_MS, onResult, () => {
+        const timeout = guard ? FEEDBACK_COMMAND_TIMEOUT_MS : COMMAND_TIMEOUT_MS
+        const waiting = this.#waitSlot.wait(timeout, onResult, () => {
           trace(`[scservo] timeout id=${this.#id} command=${command} address=${address}\n`)
-          onError(new CommandTimeoutError('scservo', COMMAND_TIMEOUT_MS))
+          onError(new CommandTimeoutError('scservo', timeout))
         })
         if (!waiting) {
           onError(new Error(COMMAND_BUSY_ERROR))
