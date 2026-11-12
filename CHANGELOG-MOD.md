@@ -17,8 +17,6 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 Release impact: minor.
 
-#### Since 2.1.0-R2
-
 - **Another conversation choice:** Select GPT-Realtime 2.1 alongside GPT-Live 1 and Realtime Mini. The two Realtime choices share your saved Realtime voice and web-search settings.
 - **Fewer unwanted answer restarts:** Reduce cases where Realtime hears its own speaker and starts another answer. Fix Live playback getting stuck silent after an interruption. Speaking to interrupt remains available when enabled.
 - **Troubleshooting without repeated installations:** USB logs and temporary audio adjustments let developers investigate problems without rebuilding firmware for every trial. Logging starts Off, and these adjustments do not overwrite your saved settings.
