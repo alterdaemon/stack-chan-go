@@ -601,7 +601,7 @@ await test('failed, incomplete, and cancelled responses never execute collected 
     equal(executions, 0)
   }
 })
-await test('response cancellation discards results while a handler is running', async () => {
+await test('response cancellation returns a terminal result and ignores late handler completion', async () => {
   let resolve, context
   const h = harness({
     tools: [
@@ -626,7 +626,9 @@ await test('response cancellation discards results while a handler is running', 
   check(context.isCancelled())
   resolve('late')
   await flush()
-  equal(h.sent, [])
+  equal(h.sent.length, 1)
+  equal(h.sent[0].item.call_id, 'slow1')
+  equal(JSON.parse(h.sent[0].item.output), { error: 'tool_cancelled' })
 })
 await test('close from a result callback stops the rest of the batch', async () => {
   let h

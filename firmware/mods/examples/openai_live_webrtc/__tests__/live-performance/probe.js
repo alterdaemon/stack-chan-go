@@ -15,7 +15,7 @@ const report = (event) => {
   trace(`[live-probe] ${JSON.stringify({ ...event, reportMaxMs })}\n`)
   reportMaxMs = Math.max(reportMaxMs, Performance.now() - at)
 }
-const greeting = 'Speak now in English. Count slowly from one to fifteen, then remain silent and listen.'
+const greeting = 'Tell me a story about a place you would like to explore. Speak naturally until I interrupt.'
 const budgets = [
   [20, 21, 2000, 6000],
   [20, 21, 4000, 8000],
@@ -39,6 +39,13 @@ export function onContextCreated(robot) {
       super(
         {
           ...options,
+          onEvent(event) {
+            if (event.type === 'local.interruption') {
+              observed.interruptionAt = Performance.now()
+              observed.localStopMs = undefined
+            }
+            options.onEvent?.(event)
+          },
           onTranscript(fragment) {
             if (fragment.role === 'user' && fragment.delta?.trim()) observed.userTranscripts++
             options.onTranscript(fragment)
@@ -82,6 +89,13 @@ export function onContextCreated(robot) {
     let touching = false
     heartbeat = Timer.repeat((timer) => {
       Performance.mark(0)
+      const conversation = session.active?.conversation
+      const observed = conversation?.observed
+      if (observed?.interruptionAt !== undefined && observed.localStopMs === undefined) {
+        const stats = conversation.stats
+        if (stats.playbackLevel === 0 && stats.flushedInterruptions >= stats.interruptions)
+          observed.localStopMs = Performance.now() - observed.interruptionAt
+      }
       if (touching) Performance.touch?.(true)
       Timer.schedule(timer, 20, 20)
     }, 20)
@@ -114,6 +128,7 @@ export function onContextCreated(robot) {
         inputBefore = 0
       if (mode !== 'sweep') {
         inputBefore = conversation.observed.userTranscripts
+        conversation.observed.playbackBefore = conversation.stats.playbackLevel
         native('xs_live_probe_input')(inputClip)
         injected = true
       }
@@ -160,6 +175,9 @@ export function onContextCreated(robot) {
         history: session.history.length,
         injected,
         inputReceived: injected && conversation.observed.userTranscripts > inputBefore,
+        interruption: { ...conversation.observed },
+        localSilenceVerified:
+          conversation.observed.playbackBefore > 0 && conversation.observed.localStopMs !== undefined,
         resumedFragments: conversation.resumedFragments,
         profile,
         budget: mode === 'control' ? [6, 10, 2000, 6000] : budgets[profile],

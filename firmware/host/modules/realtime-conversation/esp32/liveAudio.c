@@ -101,6 +101,8 @@ struct LiveAudio {
 	bool bargeIn;
     UBaseType_t dspPriority;
 	atomic_bool stopping, done, reading, muted, quiesced;
+    atomic_bool yieldOutput, discardOutput, renderActive;
+    atomic_uint interruptRequest, interruptFlushed, interruptDrained, resumeRequest;
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
 	atomic_uint micLevel, cleanLevel, referenceLevel, playbackLevel;
@@ -228,9 +230,13 @@ static int renderOpen(audio_render_handle_t h, av_render_audio_frame_info_t *inf
 static int renderWrite(audio_render_handle_t h, av_render_audio_frame_t *frame)
 {
 	LiveAudio *a = h;
+	atomic_store(&a->renderActive, true);
 	int offset = 0;
-	while (offset < frame->size && !atomic_load(&a->stopping))
+	while (offset < frame->size && !atomic_load(&a->stopping)) {
+        // The renderer must finish its write while the peer waits in flush.
+        if (atomic_load(&a->discardOutput)) return 0;
 		offset += xStreamBufferSend(a->output, frame->data + offset, frame->size - offset, pdMS_TO_TICKS(50));
+	}
 	return offset == frame->size ? 0 : -1;
 }
 static int renderLatency(audio_render_handle_t h, uint32_t *ms)
@@ -262,9 +268,46 @@ static void audioTask(void *ctx)
 	int16_t *mic = reference + BLOCK * DMA_BLOCKS;
 	int16_t *ref = mic + a->chunk, *clean = ref + a->chunk;
 	int accumulated = 0, delay = 0;
-	unsigned idle = 1000, gap = 0;
+	unsigned idle = 1000, gap = 0, yieldedQuiet = 0;
 	bool gapActive = false;
 	while (!atomic_load(&a->stopping)) {
+        unsigned request = atomic_load(&a->interruptRequest);
+        if (request != atomic_load(&a->interruptDrained)) {
+            // Only this task reads output. Writers drop during invalidation;
+            // bound draining even if an already-blocked write finishes late.
+            size_t remaining = PLAYBACK_BYTES;
+            while (remaining) {
+                size_t count = remaining < BLOCK * 2 ? remaining : BLOCK * 2;
+                size_t dropped = xStreamBufferReceive(a->output, tx, count, 0);
+                if (!dropped) break;
+                remaining -= dropped;
+            }
+            int reset = livePitchReset(a->pitch);
+            if (reset) { a->stage = "pitch_reset"; atomic_store(&a->error, reset); break; }
+            yieldedQuiet = 0;
+            atomic_store(&a->interruptDrained, request);
+        }
+        if (atomic_load(&a->discardOutput) && request == atomic_load(&a->interruptFlushed)) {
+            // Flush finished after its writer stopped. Drain once more before
+            // accepting new decoded frames; a previous write may have unblocked.
+            size_t remaining = PLAYBACK_BYTES;
+            while (remaining) {
+                size_t count = remaining < BLOCK * 2 ? remaining : BLOCK * 2;
+                size_t dropped = xStreamBufferReceive(a->output, tx, count, 0);
+                if (!dropped) break;
+                remaining -= dropped;
+            }
+            int reset = livePitchReset(a->pitch);
+            if (reset) { a->stage = "pitch_reset"; atomic_store(&a->error, reset); break; }
+            portENTER_CRITICAL(&audioLock);
+            if (request == atomic_load(&a->interruptRequest)) atomic_store(&a->discardOutput, false);
+            portEXIT_CRITICAL(&audioLock);
+        }
+        portENTER_CRITICAL(&audioLock);
+        if (request && request == atomic_load(&a->resumeRequest) &&
+            request == atomic_load(&a->interruptFlushed) && request == atomic_load(&a->interruptRequest))
+            atomic_store(&a->yieldOutput, false);
+        portEXIT_CRITICAL(&audioLock);
 		/* Non-blocking dequeue: the clock must keep running between utterances. */
         size_t got;
         bool missing;
@@ -289,12 +332,22 @@ static void audioTask(void *ctx)
 		for (size_t i = 0; i < BLOCK; i++) if (abs(tx[i]) > 32) { audible = true; break; }
 		/* Missing packets are not evidence of silence. Only received PCM
 		 * can reopen the S3 microphone after playback. */
-		if (audible) { idle = 0; atomic_fetch_add(&a->audibleMs, 10); }
+		if (audible) idle = 0;
 		else if (!missing && idle < 10000) idle += 10;
 		atomic_store(&a->outputIdleMs, idle);
+        // Missing packets count only for cancelled-tail recovery, never for
+        // Off's microphone gate. A new response can explicitly resume sooner.
+        if (atomic_load(&a->yieldOutput) && !atomic_load(&a->discardOutput)) {
+            yieldedQuiet = audible ? 0 : yieldedQuiet + 10;
+            if (yieldedQuiet >= 500) {
+                portENTER_CRITICAL(&audioLock);
+                if (request == atomic_load(&a->interruptRequest)) atomic_store(&a->yieldOutput, false);
+                portEXIT_CRITICAL(&audioLock);
+            }
+        }
 		unsigned volume = atomic_load(&a->volume);
         unsigned playbackLevel = 0;
-        bool quiesced = atomic_load(&a->quiesced);
+        bool quiesced = atomic_load(&a->quiesced) || atomic_load(&a->yieldOutput);
 		for (int i = BLOCK - 1; i >= 0; i--) {
 			int16_t sample = quiesced ? 0 : (int32_t)tx[i] * volume / 1024;
             playbackLevel += abs(sample);
@@ -309,6 +362,7 @@ static void audioTask(void *ctx)
 			break;
 		}
         atomic_store(&a->playbackLevel, playbackLevel / BLOCK);
+        if (playbackLevel && !quiesced) atomic_fetch_add(&a->audibleMs, 10);
 		for (int i = 0; i < BLOCK; i++) {
 			pair[i * 2] = rx[i * 2];
 			pair[i * 2 + 1] = reference[delay];
@@ -375,7 +429,7 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->stage = "audio_buffers";
 	// On carries mic + reference rather than clean mono: retain the same 200 ms.
 	a->input = audioStreamCreate(CAPTURE_BYTES * (bargeIn ? 2 : 1), 1);
-	a->output = audioStreamCreate(PLAYBACK_BYTES, 1);
+	a->output = audioStreamCreate(bargeIn ? PLAYBACK_BYTES / 2 : PLAYBACK_BYTES, 1);
 	if (!a->input || !a->output) return ESP_ERR_NO_MEM;
 	a->bargeIn = bargeIn;
 	a->chunk = 160;
@@ -441,7 +495,8 @@ int liveAudioOpen(LiveAudio **out, esp_webrtc_media_provider_t *provider, bool b
 	a->stage = "render_alloc";
 	a->render = audio_render_alloc_handle(&render);
 	if (!a->render) return ESP_ERR_NO_MEM;
-	av_render_cfg_t player = {.audio_render = a->render, .audio_raw_fifo_size = 16384, .audio_render_fifo_size = 32768};
+	av_render_cfg_t player = {.audio_render = a->render, .audio_raw_fifo_size = 16384,
+        .audio_render_fifo_size = bargeIn ? PLAYBACK_BYTES : 32768, .allow_drop_data = bargeIn};
 	a->stage = "render_open";
 	a->player = av_render_open(&player);
 	if (!a->player) return ESP_ERR_NO_MEM;
@@ -465,7 +520,7 @@ void liveAudioStop(LiveAudio *a)
   bool first = !atomic_exchange(&a->stopping, true);
 	atomic_store(&a->reading, false);
   // A renderer without a decoded frame has no render task to flush.
-  if (first && a->player && atomic_load(&a->rendered)) av_render_flush(a->player);
+  if (first && a->player && atomic_load(&a->renderActive)) av_render_flush(a->player);
 }
 void liveAudioClose(LiveAudio *a)
 {
@@ -504,6 +559,34 @@ void xs_live_audio_quiesce(xsMachine *the) {
   if (activeAudio) atomic_store(&activeAudio->quiesced, true);
   portEXIT_CRITICAL(&audioLock);
 }
+bool liveAudioRequestInterrupt(void) {
+    bool requested = false;
+    portENTER_CRITICAL(&audioLock);
+    if (activeAudio && activeAudio->bargeIn && !atomic_load(&activeAudio->muted) &&
+        !atomic_load(&activeAudio->stopping) && !atomic_load(&activeAudio->quiesced)) {
+        atomic_store(&activeAudio->yieldOutput, true);
+        atomic_store(&activeAudio->discardOutput, true);
+        atomic_fetch_add(&activeAudio->interruptRequest, 1);
+        requested = true;
+    }
+    portEXIT_CRITICAL(&audioLock);
+    return requested;
+}
+void liveAudioResumeOutput(void) {
+    portENTER_CRITICAL(&audioLock);
+    if (activeAudio) atomic_store(&activeAudio->resumeRequest, atomic_load(&activeAudio->interruptRequest));
+    portEXIT_CRITICAL(&audioLock);
+}
+int liveAudioFlushOutput(LiveAudio *a) {
+    if (!a || atomic_load(&a->stopping)) return 0;
+    unsigned request = atomic_load(&a->interruptRequest);
+    if (request == atomic_load(&a->interruptFlushed)) return 0;
+    int err = 0;
+    if (a->player && atomic_load(&a->renderActive)) err = av_render_flush(a->player);
+    if (!err) atomic_store(&a->interruptFlushed, request);
+    else a->stage = "render_flush";
+    return err;
+}
 void liveAudioVolume(LiveAudio *a, unsigned volume) { if (a) atomic_store(&a->volume, volume); }
 int liveAudioError(LiveAudio *a) { return a ? atomic_load(&a->error) : 0; }
 const char *liveAudioStage(LiveAudio *a) { return a ? a->stage : "audio_allocate"; }
@@ -513,6 +596,9 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
 	*s = (LiveAudioStats){atomic_load(&a->captured), atomic_load(&a->rendered), atomic_load(&a->underruns),
 		atomic_load(&a->overruns), atomic_load(&a->micLevel), atomic_load(&a->cleanLevel), atomic_load(&a->referenceLevel), atomic_load(&a->outputIdleMs), atomic_load(&a->silenceMs), atomic_load(&a->maxSilenceMs), atomic_load(&a->sourceSamples), atomic_load(&a->requestedRate), atomic_load(&a->requestedChannels), atomic_load(&a->sourceFrameBytes)};
 	s->audibleMs = atomic_load(&a->audibleMs);
+    s->playbackLevel = atomic_load(&a->playbackLevel);
+    s->interruptions = atomic_load(&a->interruptRequest);
+    s->flushedInterruptions = atomic_load(&a->interruptFlushed);
 }
 
 void xs_io_audio_levels(xsMachine *the) {

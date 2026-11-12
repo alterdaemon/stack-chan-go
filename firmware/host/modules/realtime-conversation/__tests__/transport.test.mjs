@@ -34,6 +34,25 @@ function fixture() {
   return { Transport, timers, scheduled, events, calls }
 }
 
+test('playback invalidation and resume use native control without closing the session or muting input', async () => {
+  const f = fixture()
+  const transport = new f.Transport(() => {})
+  transport.interruptOutput()
+  transport.resumeOutput()
+  assert.deepEqual(f.calls.slice(1), ['xs_live_transport_interrupt', 'xs_live_transport_resume_output'])
+  const closing = transport.close()
+  const before = f.calls.length
+  transport.interruptOutput()
+  transport.resumeOutput()
+  assert.equal(f.calls.length, before)
+  f.events.push({ type: 'released' })
+  f.timers[0].callback(f.timers[0])
+  await closing
+  transport.interruptOutput()
+  transport.resumeOutput()
+  assert.equal(f.calls.filter((name) => name === 'xs_live_transport_interrupt').length, 1)
+})
+
 test('successful native polls reschedule the same timer from completion', async () => {
   const f = fixture()
   const seen = []

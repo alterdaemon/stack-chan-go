@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 
-REVISION = 1
+REVISION = 2
 
 
 def require(condition, message):

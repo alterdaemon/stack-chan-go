@@ -14,6 +14,7 @@ typedef struct {
 	unsigned outputIdleMs, silenceMs, maxSilenceMs, sourceSamples;
 	unsigned requestedRate, requestedChannels, sourceFrameBytes;
 	unsigned audibleMs;
+    unsigned playbackLevel, interruptions, flushedInterruptions;
 } LiveAudioStats;
 
 int liveAudioOpen(LiveAudio **audio, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch, bool realtime);
@@ -21,6 +22,10 @@ void liveAudioStop(LiveAudio *audio);
 void liveAudioClose(LiveAudio *audio);
 void liveAudioMute(LiveAudio *audio, bool mute);
 void liveAudioVolume(LiveAudio *audio, unsigned volume);
+/* Request/resume are non-blocking. Flush runs only on the peer owner task. */
+bool liveAudioRequestInterrupt(void);
+void liveAudioResumeOutput(void);
+int liveAudioFlushOutput(LiveAudio *audio);
 void liveAudioStats(LiveAudio *audio, LiveAudioStats *stats);
 int liveAudioError(LiveAudio *audio);
 const char *liveAudioStage(LiveAudio *audio);

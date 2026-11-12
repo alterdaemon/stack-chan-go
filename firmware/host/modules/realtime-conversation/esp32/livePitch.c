@@ -60,6 +60,14 @@ int livePitchRender(LivePitch *p, LivePitchRead read, void *context,
     return written == count ? 0 : ESP_AE_ERR_FAIL;
 }
 
+int livePitchReset(LivePitch *p)
+{
+    if (!p) return 0;
+    int err = esp_ae_sonic_reset(p->sonic);
+    if (!err) p->offset = sizeof(p->input) / sizeof(p->input[0]);
+    return err;
+}
+
 void livePitchClose(LivePitch *p)
 {
     if (!p) return;

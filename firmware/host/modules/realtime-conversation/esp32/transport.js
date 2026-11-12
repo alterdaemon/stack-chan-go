@@ -14,6 +14,8 @@ const bindings = {
   xs_live_transport_answer: native('xs_live_transport_answer'),
   xs_live_transport_send: native('xs_live_transport_send'),
   xs_live_audio_quiesce: native('xs_live_audio_quiesce'),
+  xs_live_transport_interrupt: native('xs_live_transport_interrupt'),
+  xs_live_transport_resume_output: native('xs_live_transport_resume_output'),
   xs_live_transport_mute: native('xs_live_transport_mute'),
   xs_live_transport_volume: native('xs_live_transport_volume'),
   xs_live_transport_stats: native('xs_live_transport_stats'),

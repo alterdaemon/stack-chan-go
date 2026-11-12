@@ -9,4 +9,5 @@ int esp_ae_sonic_open(esp_ae_sonic_cfg_t *, esp_ae_sonic_handle_t *);
 int esp_ae_sonic_set_speed(esp_ae_sonic_handle_t, float);
 int esp_ae_sonic_set_pitch(esp_ae_sonic_handle_t, float);
 int esp_ae_sonic_process(esp_ae_sonic_handle_t, esp_ae_sonic_in_data_t *, esp_ae_sonic_out_data_t *);
+int esp_ae_sonic_reset(esp_ae_sonic_handle_t);
 void esp_ae_sonic_close(esp_ae_sonic_handle_t);

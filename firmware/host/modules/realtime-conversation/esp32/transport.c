@@ -25,11 +25,11 @@
 #define EVENT_COUNT 128
 #define COMMAND_COUNT 8
 
-enum { kOffer = 1, kMessage, kError, kDisconnected, kAnswer, kSend };
+enum { kOffer = 1, kMessage, kError, kDisconnected, kAnswer, kSend, kFlushOutput };
 typedef struct { int type, size, code; char *data; } LiveMessage;
 typedef struct {
 	QueueHandle_t events, commands;
-	atomic_bool stopping, done, muted;
+	atomic_bool stopping, done, muted, flushPending;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
 	bool started, errorRead, captureOnly, bargeIn, realtime;
@@ -211,8 +211,10 @@ static void worker(void *ctx)
 			err = ESP_ERR_TIMEOUT; break;
 		}
 		LiveMessage msg;
+		if (atomic_exchange(&t->flushPending, false) && (err = liveAudioFlushOutput(audio))) break;
 		if (xQueueReceive(t->commands, &msg, pdMS_TO_TICKS(20)) == pdPASS) {
-			if (msg.type == kAnswer) {
+			if (msg.type == kFlushOutput) err = liveAudioFlushOutput(audio);
+			else if (msg.type == kAnswer) {
 				esp_peer_signaling_msg_t answer = {.type = ESP_PEER_SIGNALING_MSG_SDP, .data = (uint8_t *)msg.data, .size = msg.size};
 				err = t->signal.on_msg(&answer, t->signal.ctx);
 			}
@@ -323,6 +325,21 @@ static void command(xsMachine *the, int type)
 }
 void xs_live_transport_answer(xsMachine *the) { command(the, kAnswer); }
 void xs_live_transport_send(xsMachine *the) { command(the, kSend); }
+void xs_live_transport_interrupt(xsMachine *the)
+{
+    LiveTransport *t = xsmcGetHostData(xsThis);
+    if (!t || !t->started || atomic_load(&t->stopping)) return;
+    if (!liveAudioRequestInterrupt()) return;
+    LiveMessage msg = {.type = kFlushOutput};
+    // A saturated data queue cannot lose an interruption or block XS. The
+    // owner retries the coalesced request before its next queued command.
+    if (xQueueSendToFront(t->commands, &msg, 0) != pdPASS) atomic_store(&t->flushPending, true);
+}
+void xs_live_transport_resume_output(xsMachine *the)
+{
+    LiveTransport *t = xsmcGetHostData(xsThis);
+    if (t && t->started && !atomic_load(&t->stopping)) liveAudioResumeOutput();
+}
 void xs_live_transport_mute(xsMachine *the)
 {
 	LiveTransport *t = xsmcGetHostData(xsThis);
@@ -402,6 +419,9 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("lastPeerEvent", atomic_load(&t->lastPeerEvent));
 	STAT("dataMessages", atomic_load(&t->dataMessages));
 	STAT("renderedSamples", stats.rendered);
+    STAT("playbackLevel", stats.playbackLevel);
+    STAT("interruptions", stats.interruptions);
+    STAT("flushedInterruptions", stats.flushedInterruptions);
 	STAT("audibleMs", stats.audibleMs);
 	STAT("underruns", stats.underruns);
 	STAT("overruns", stats.overruns);

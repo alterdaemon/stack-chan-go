@@ -44,6 +44,7 @@ export function onContextCreated(robot) {
               observed.playingId = event.response_id
             }
             if (event.type === 'output_audio_buffer.cleared') {
+              observed.clearedAt = Performance.now()
               observed.playing = false
               observed.cleared = (observed.cleared ?? 0) + 1
             }
@@ -153,7 +154,7 @@ export function onContextCreated(robot) {
         model: 'gpt-realtime-2.1-mini',
         voice: 'marin',
         instructions:
-          'You are a voice test assistant. Follow the user instructions. Keep replies to one short sentence, except when asked to count. Use search_web only when explicitly asked.',
+          'You are a voice test assistant. Follow the user instructions. Use search_web only when explicitly asked.',
         bargeIn,
         standbySeconds: 1,
       }
@@ -182,7 +183,9 @@ export function onContextCreated(robot) {
         const speechBefore = observed.speech
         const clearsBefore = observed.cleared ?? 0
         const audibleBefore = current.stats.audibleMs
-        const bargeRequest = current.say('Count slowly from one to thirty. Keep counting until you are interrupted.')
+        const bargeRequest = current.say(
+          'Tell me a story about a place you would like to explore. Speak naturally until I interrupt.',
+        )
         await until(
           () =>
             observed.request === bargeRequest &&
@@ -196,9 +199,12 @@ export function onContextCreated(robot) {
         native('xs_live_probe_input')(clip, true)
         await until(() => observed.speech > speechBefore, 12000, 'barge_vad_missing')
         await until(() => (observed.cleared ?? 0) > clearsBefore, 10000, 'barge_clear_missing')
-        const clearAt = Performance.now()
-        await until(() => current.stats.outputIdleMs >= 50, 2000, 'barge_local_audio_pending')
-        observed.localStopMs = Performance.now() - clearAt
+        await until(
+          () => current.stats.playbackLevel === 0 && current.stats.flushedInterruptions >= current.stats.interruptions,
+          2000,
+          'barge_local_audio_pending',
+        )
+        observed.localStopMs = Performance.now() - observed.clearedAt
         await until(
           () => observed.responses > responseBefore && !observed.responding && !observed.playing,
           30000,

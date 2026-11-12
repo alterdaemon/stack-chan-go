@@ -27,7 +27,7 @@ void vTaskPrioritySet(void *task, UBaseType_t priority) {
 void vTaskDelete(void *task) { assert(!task); }
 int64_t esp_timer_get_time(void) { return atomic_load(&blocks) * 10000; }
 void stackchanAudioProgress(unsigned direction, int64_t at) { (void)direction; (void)at; }
-void av_render_flush(av_render_handle_t player) { assert(false); }
+int av_render_flush(av_render_handle_t player) { assert(false); return 0; }
 
 size_t xStreamBufferReceive(StreamBufferHandle_t stream, void *data, size_t bytes, unsigned wait) {
     if (stream->playback) {
@@ -106,6 +106,7 @@ int esp_ae_rate_cvt_process(esp_ae_rate_cvt_handle_t handle, int16_t *input,
     }
     return 0;
 }
+int livePitchReset(LivePitch *pitch) { return 0; }
 int livePitchRender(LivePitch *pitch, LivePitchRead read, void *context,
                     int16_t *output, size_t count, LivePitchResult *result) {
     assert(taskPriority == ioPriority && pitch->semitones);

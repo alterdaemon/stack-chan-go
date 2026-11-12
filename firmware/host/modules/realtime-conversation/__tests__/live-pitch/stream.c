@@ -43,6 +43,11 @@ int esp_ae_sonic_process(esp_ae_sonic_handle_t handle, esp_ae_sonic_in_data_t *i
     return 0;
 }
 void esp_ae_sonic_close(esp_ae_sonic_handle_t handle) { closes++; free(handle); }
+int esp_ae_sonic_reset(esp_ae_sonic_handle_t handle) {
+    if (failure == 6) return -1;
+    ((Fake *)handle)->count = 0;
+    return 0;
+}
 
 typedef struct { unsigned position, limit, received; } Source;
 static size_t readSource(void *context, int16_t *samples, size_t count) {
@@ -74,6 +79,19 @@ int main(void) {
             assert(output[i] == (int16_t)(position < source.limit ? 1 + position % 10000 : 0));
     }
     assert(missing && received == source.received && received == source.limit);
+    // Reset a live processor with both internal cache and partial input. Its
+    // next output must contain only the next source, without closing Sonic.
+    source = (Source){.limit = 2000};
+    LivePitchResult resetResult;
+    assert(!livePitchRender(p, readSource, &source, output, 480, &resetResult));
+    assert(!livePitchReset(p));
+    source = (Source){0};
+    assert(!livePitchRender(p, readSource, &source, output, 480, &resetResult));
+    for (unsigned i = 0; i < 480; i++) assert(output[i] == 0);
+    failure = 6;
+    assert(livePitchReset(p));
+    failure = 0;
+    assert(!livePitchReset(NULL));
     // No earlier session's buffered samples may survive closing/reopening.
     livePitchClose(p);
     assert(!livePitchOpen(&p, 2));

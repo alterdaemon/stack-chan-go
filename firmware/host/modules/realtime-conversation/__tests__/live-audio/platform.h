@@ -126,12 +126,12 @@ typedef struct {
     void *cfg;
     size_t cfg_size;
 } audio_render_cfg_t;
-typedef struct { audio_render_handle_t audio_render; unsigned audio_raw_fifo_size, audio_render_fifo_size; } av_render_cfg_t;
+typedef struct { audio_render_handle_t audio_render; unsigned audio_raw_fifo_size, audio_render_fifo_size; bool allow_drop_data; } av_render_cfg_t;
 #define ESP_MEDIA_ERR_WRONG_STATE 1
 audio_render_handle_t audio_render_alloc_handle(audio_render_cfg_t *);
 av_render_handle_t av_render_open(av_render_cfg_t *);
 int av_render_set_fixed_frame_info(av_render_handle_t, av_render_audio_frame_info_t *);
-void av_render_flush(av_render_handle_t);
+int av_render_flush(av_render_handle_t);
 void av_render_close(av_render_handle_t);
 void audio_render_free_handle(audio_render_handle_t);
 typedef struct { esp_capture_handle_t capture; av_render_handle_t player; } esp_webrtc_media_provider_t;

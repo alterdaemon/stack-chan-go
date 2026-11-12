@@ -75,7 +75,7 @@ export default class ToolRunner {
     const response = this.#responses.get(id)
     if (!response || response.delegation !== delegation) return
     if (['response.failed', 'response.incomplete', 'response.cancelled'].includes(event.type)) {
-      this.#retire(response)
+      this.#retire(response, true)
       return
     }
     if (response.terminal) return
@@ -170,6 +170,7 @@ export default class ToolRunner {
         if (this.#closed || response.cancelled) return
         const call = calls[i],
           result = results[i]
+        call.sent = true
         this.#send({
           type: this.#protocol === 'realtime' ? 'conversation.item.create' : 'response.item.create',
           event_id: `tool_result_${++this.#serial}`,
@@ -187,7 +188,7 @@ export default class ToolRunner {
           ...result,
         })
       }
-      if (calls.length && !this.#closed)
+      if (calls.length && !this.#closed && !response.cancelled)
         this.#send({ type: 'response.create', event_id: `tool_continue_${++this.#serial}` })
     } catch (error) {
       if (!this.#closed) this.#error(error)
@@ -196,14 +197,32 @@ export default class ToolRunner {
     }
   }
 
-  #retire(response) {
+  #retire(response, reportCancellation = false) {
+    if (response.cancelled) return
     response.cancelled = true
+    // Cancel local work before any send can throw, and retire ownership even
+    // when the transport is already failing.
     for (const finish of response.waits) finish({ error: 'tool_cancelled' })
     this.#responses.delete(response.id)
     if (this.#active.get(response.delegation) === response.id) this.#active.delete(response.delegation)
+    if (reportCancellation && !this.#closed) {
+      for (const call of response.calls.values()) {
+        if (call.sent) continue
+        call.sent = true
+        this.#send({
+          type: this.#protocol === 'realtime' ? 'conversation.item.create' : 'response.item.create',
+          event_id: `tool_cancel_${++this.#serial}`,
+          item: {
+            type: 'function_call_output',
+            call_id: call.callId,
+            output: JSON.stringify({ error: 'tool_cancelled' }),
+          },
+        })
+      }
+    }
   }
-  cancelPending() {
-    for (const response of this.#responses.values()) this.#retire(response)
+  cancelPending(reportCancellation = false) {
+    for (const response of this.#responses.values()) this.#retire(response, reportCancellation)
   }
   close() {
     this.#closed = true

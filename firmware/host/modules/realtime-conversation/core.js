@@ -78,11 +78,18 @@ export default class Conversation {
   #callId
   #signalRequest
   #activeResponse
+  #playbackResponse
   #continuation
   #continuationTimer
   #continuationAttempts = 0
   #sentContinuation
   #continuationInFlight = false
+  #miniInterrupted = false
+  #liveOutputStart = -1
+  #liveOutputEnd = -1
+  #liveInputStart = -1
+  #liveInputEnd = -1
+  #liveInterrupted = false
 
   constructor(options, platform) {
     if (!options || (!options.signaling && (typeof options.apiKey !== 'string' || !options.apiKey.trim())))
@@ -104,6 +111,17 @@ export default class Conversation {
         throw new TypeError(`${name} must be a function`)
     if (options.bargeIn !== undefined && typeof options.bargeIn !== 'boolean')
       throw new TypeError('bargeIn must be boolean')
+    const vad = options.turnDetection
+    if (
+      vad !== undefined &&
+      (!vad ||
+        !['server_vad', 'semantic_vad'].includes(vad.type) ||
+        (vad.threshold !== undefined &&
+          (vad.type !== 'server_vad' || !Number.isFinite(vad.threshold) || vad.threshold < 0 || vad.threshold > 1)) ||
+        (vad.eagerness !== undefined &&
+          (vad.type !== 'semantic_vad' || !['low', 'medium', 'high', 'auto'].includes(vad.eagerness))))
+    )
+      throw new TypeError('Invalid turn detection')
     if (options.pitch !== undefined && (!Number.isInteger(options.pitch) || options.pitch < -6 || options.pitch > 6))
       throw new RangeError('pitch must be an integer between -6 and 6 semitones')
     this.#key = options.apiKey
@@ -116,6 +134,7 @@ export default class Conversation {
       voice: options.voice ?? 'marin',
       pitch: options.pitch ?? 0,
       bargeIn: options.bargeIn === true,
+      turnDetection: vad === undefined ? undefined : { ...vad },
       delegation: options.delegation === undefined ? undefined : copyDelegation(options.delegation),
       input: options.input === undefined ? undefined : copyDelegation(options.input),
       onStateChanged: options.onStateChanged,
@@ -431,17 +450,30 @@ export default class Conversation {
       this.#tools?.receive(message)
       switch (message.type) {
         case 'input_audio_buffer.speech_started':
-          if (this.#realtime && this.#options.bargeIn) {
-            this.#tools?.cancelPending()
-            this.#cancelTimer(this.#continuationTimer)
-            this.#continuation = undefined
-            this.#sentContinuation = undefined
+          if (this.#realtime && this.#options.bargeIn && !this.#muted && !this.#miniInterrupted) {
+            this.#miniInterrupted = true
+            this.#interruptSpeech()
+          }
+          break
+        case 'output_audio_buffer.cleared':
+          if (
+            this.#realtime &&
+            this.#options.bargeIn &&
+            !this.#muted &&
+            !this.#miniInterrupted &&
+            (!message.response_id || !this.#playbackResponse || message.response_id === this.#playbackResponse)
+          ) {
+            this.#miniInterrupted = true
+            this.#interruptSpeech()
           }
           break
         case 'response.created':
           if (this.#realtime) {
             this.#activeResponse = message.response?.id
+            this.#playbackResponse = this.#activeResponse
             this.#continuationInFlight = false
+            this.#miniInterrupted = false
+            this.#transport.resumeOutput?.()
           }
           break
         case 'session.created':
@@ -453,8 +485,9 @@ export default class Conversation {
           this.#sessionId = message.session.id
           const turn = message.session.audio?.input?.turn_detection
           if (
-            turn?.type !== 'server_vad' ||
+            turn?.type !== this.#turnDetection().type ||
             turn.threshold !== this.#turnDetection().threshold ||
+            turn.eagerness !== this.#turnDetection().eagerness ||
             turn.create_response !== true ||
             turn.interrupt_response !== this.#options.bargeIn ||
             message.session.instructions !== this.#options.instructions
@@ -516,6 +549,7 @@ export default class Conversation {
             message.end_ms < message.start_ms
           )
             throw new ConversationError('Invalid transcript fragment', 'invalid_transcript', 'events')
+          if (!this.#realtime && this.#state === 'connected' && message.delta.trim()) this.#liveTurn(message)
           this.#notify('onTranscript', {
             role: message.type === 'session.input_transcript.delta' ? 'user' : 'assistant',
             delta: message.delta,
@@ -543,6 +577,8 @@ export default class Conversation {
           break
         }
         case 'error': {
+          // Automatic cancellation can win this race without losing a session.
+          if (this.#realtime && message.error?.code === 'response_cancel_not_active') break
           if (message.error?.code === 'conversation_already_has_active_response') {
             // This rejects a command, not the session, with either interruption
             // policy. event_id is optional; attribute an absent ID only while
@@ -590,12 +626,52 @@ export default class Conversation {
   }
 
   #turnDetection() {
+    const configured = this.#options.turnDetection
     return {
-      type: 'server_vad',
-      // Use a more sensitive VAD threshold when interruption is enabled.
-      threshold: this.#options.bargeIn ? 0.3 : 0.5,
+      type: configured?.type ?? 'server_vad',
+      ...(configured?.type === 'semantic_vad'
+        ? { eagerness: configured.eagerness ?? 'auto' }
+        : { threshold: configured?.threshold ?? 0.5 }),
       create_response: true,
       interrupt_response: this.#options.bargeIn,
+    }
+  }
+  #interruptSpeech() {
+    this.#transport.interruptOutput?.()
+    this.#tools?.cancelPending(true)
+    this.#cancelTimer(this.#continuationTimer)
+    this.#continuation = this.#sentContinuation = undefined
+    this.#continuationInFlight = false
+    this.#notify('onEvent', { type: 'local.interruption' })
+  }
+  #liveTurn(message) {
+    if (message.type === 'session.output_transcript.delta') {
+      if (message.end_ms <= this.#liveOutputEnd) return
+      if (this.#liveOutputStart < 0 || message.start_ms - this.#liveOutputEnd >= 500) {
+        this.#liveOutputStart = message.start_ms
+        if (this.#liveInterrupted && message.start_ms >= this.#liveInputEnd) this.#transport.resumeOutput?.()
+      }
+      this.#liveOutputEnd = message.end_ms
+      return
+    }
+    if (message.end_ms <= this.#liveInputEnd) return
+    if (this.#liveInputStart < 0 || message.start_ms - this.#liveInputEnd >= 500) {
+      this.#liveInputStart = message.start_ms
+      this.#liveInterrupted = false
+    }
+    this.#liveInputEnd = message.end_ms
+    // Delivery is not speech onset. Use the source interval and the caller's
+    // first fragment; late old words must not cancel a later assistant reply.
+    if (
+      this.#options.bargeIn &&
+      !this.#muted &&
+      !this.#liveInterrupted &&
+      this.#liveOutputStart >= 0 &&
+      this.#liveInputStart >= this.#liveOutputStart &&
+      this.#liveInputStart <= this.#liveOutputEnd + 300
+    ) {
+      this.#liveInterrupted = true
+      this.#interruptSpeech()
     }
   }
   #send(message) {

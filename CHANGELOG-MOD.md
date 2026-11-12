@@ -37,6 +37,26 @@ implementation repository's tracked paths, firmware versions and release images.
 
 ## 2.1.0
 
+### 2.1.0-R2
+
+Release impact: patch. Repair local interruption on main without importing
+experimental rate/AEC changes. Queue renderer flush on its peer owner; silence
+and discard old output on the audio task and reset Pitch. Mini handles server
+speech-start/output-clear once per turn and preserves the session after an
+idle-cancel race. Live uses caller/assistant source intervals to invalidate
+overlapping old output while preserving later replies after delayed captions.
+Bound On-mode queues and enable the vendor stale-render drop policy. Return one
+cancelled result for interrupted accepted tools without obsolete continuation.
+Restore the documented 0.5 Mini VAD default; per-session overrides support
+diagnostic comparisons without changing saved settings.
+
+Native delayed-render/capture/Pitch and protocol regressions pass; the new
+protocol tests fail against the R1 core. Probes now observe local output silence
+separately from recognized words. Build/image checks are recorded in validation.
+The user performs physical verification; no device write or audible trial is
+performed here. The same repairs are applied separately to gpt-full-duplex and
+its requested R8 image. Neither branch is published by this work.
+
 ### 2.1.0-R1
 
 Release impact: minor.

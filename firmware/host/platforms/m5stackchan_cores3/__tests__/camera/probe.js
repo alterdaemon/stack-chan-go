@@ -172,6 +172,7 @@ async function verifyConversation(robot) {
             settings.onTranscript?.(fragment)
           },
           onEvent(event) {
+            if (event.type === 'local.interruption') observed.interruptionAt = Performance.now()
             if (event.type === 'input_audio_buffer.speech_started') observed.speech++
             if (event.type === 'output_audio_buffer.cleared') observed.clears++
             const inner = event.event
@@ -274,7 +275,7 @@ async function verifyConversation(robot) {
       )
     }
     requestPlayback(mode) {
-      const text = 'Count slowly from one to twenty in English, without an introduction.'
+      const text = 'Tell me a story about a place you would like to explore. Speak naturally until I interrupt.'
       if (mode === 'live') {
         this.transport.send(
           JSON.stringify({
@@ -360,7 +361,7 @@ async function verifyConversation(robot) {
         report({ phase: 'provider-playing', mode, bargeIn })
         if (config.cameraProbeVoiceUI) await exerciseVoiceUI(robot, conversation, mode, bargeIn, record)
         // Capture is intentionally suspended during output when barge-in is off.
-        // Slow counting can pause beyond the normal 500 ms microphone gate.
+        // Conversational pauses can exceed the normal 500 ms microphone gate.
         // Wait for a longer idle tail before injecting the Off-mode fixture.
         while (!bargeIn && conversation.stats.outputIdleMs < 3000) {
           const now = Performance.now()
@@ -385,6 +386,24 @@ async function verifyConversation(robot) {
           while (!accepted()) {
             if (!session.active || Performance.now() - injectedAt >= 20000) throw new Error('provider_input')
             await wait(100)
+          }
+          if (bargeIn && conversation.observed.interruptionAt !== undefined) {
+            const at = conversation.observed.interruptionAt
+            while (
+              conversation.stats.playbackLevel !== 0 ||
+              conversation.stats.flushedInterruptions < conversation.stats.interruptions
+            ) {
+              if (!session.active || Performance.now() - at >= 2000) throw new Error('local_output_not_silent')
+              await wait(20)
+            }
+            record({
+              phase: 'local-output-silent',
+              mode,
+              bargeIn,
+              elapsedMs: Performance.now() - at,
+              stats: conversation.stats,
+              scope: 'accepted event to local PCM silence; physical speaker timing requires recording',
+            })
           }
           const inputIO = Performance.stats()
           if (!(inputIO.injectedSamples > 0 && inputIO.sentSamples > 0 && inputIO.sentPeak > 0))

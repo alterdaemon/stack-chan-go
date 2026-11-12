@@ -3,7 +3,8 @@
 [Repository](https://github.com/alterdaemon/stack-chan-mod) ·
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
-Current product version: **2.1.0-R1**. Standard hardware: M5StackChan CoreS3.
+Current product version: **2.1.0-R2**. Standard hardware: M5StackChan CoreS3.
+The published stable release remains R1; R2 is a local build pending physical verification.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -97,7 +98,41 @@ The release workflow extracts the exact version section from `CHANGELOG-MOD.md`.
 The application descriptor keeps the independent Moddable/host API compatibility
 version used by MOD loading.
 
-## Install
+## R2 interruption behavior
+
+R2 invalidates queued local playback in both voice modes. Mini handles server
+speech-start/output-clear events. Live uses timestamped caller fragments with
+guards against delayed fragments cancelling a later reply. Renderer flush runs
+on its native owner task; the audio task discards old PCM and resets Pitch.
+Interrupted accepted searches return a cancelled result without resuming the old
+answer. Mini uses the documented 0.5 server-VAD default.
+
+With **Interruption Off**, microphone samples are gated during playback and until
+the existing 500 ms received-silence gate clears: voice interruption is unavailable.
+On keeps capture and AEC active. Explicit microphone mute remains separate.
+Live caption delivery can lag speech; event-to-PCM-silence timing does not prove
+physical speech-onset latency. The user performs physical verification of R2 and
+the repaired experimental R8. No physical usability claim follows from unit tests.
+
+The local R2 pair is `StackChan-Community-v2.1.0-R2-app.bin` and
+`StackChan-Community-v2.1.0-R2.bin`. Preserve supported-layout settings by writing
+only the application:
+
+```sh
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R2-app.bin
+```
+
+Full installation resets settings, MODs and storage:
+
+```sh
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R2.bin
+```
+
+Use your device port: Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, macOS
+`/dev/cu.*`. See [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
+Do not write the full image at `0x10000`. R2 has not been published.
+
+## Install the published R1
 
 Current files are in the ignored `internal/release-packages/` directory.
 Run from the repository root and replace `/dev/ttyACM0` with the device port.

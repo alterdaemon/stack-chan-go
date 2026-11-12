@@ -60,6 +60,12 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
     quiesce() {
       if (!this.#released) binding('xs_live_audio_quiesce').call(this)
     }
+    interruptOutput() {
+      if (!this.#closing && !this.#released) binding('xs_live_transport_interrupt').call(this)
+    }
+    resumeOutput() {
+      if (!this.#closing && !this.#released) binding('xs_live_transport_resume_output').call(this)
+    }
     #flush() {
       while (this.#outgoing.length) {
         const { data, bytes } = this.#outgoing[0]

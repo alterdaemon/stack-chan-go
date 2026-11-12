@@ -17,5 +17,6 @@ int livePitchOpen(LivePitch **out, int semitones);
 // during pauses instead of carrying words into a later utterance.
 int livePitchRender(LivePitch *pitch, LivePitchRead read, void *context,
                     int16_t *output, size_t count, LivePitchResult *result);
+int livePitchReset(LivePitch *pitch);
 void livePitchClose(LivePitch *pitch);
 #endif

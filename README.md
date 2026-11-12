@@ -11,8 +11,9 @@ optimize performance, and keep the fork up to date and in sync with upstream.
 Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
 The current 2.1.0 series also incorporates upstream 2.1.0.
 
-Current firmware: **[2.1.0-R1](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R1)**,
-for **M5StackChan CoreS3**.
+Current source firmware: **2.1.0-R2**, for **M5StackChan CoreS3**.
+The published stable release remains **[2.1.0-R1](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R1)**.
+R2 fixes local interruption playback and search cancellation; physical verification is pending.
 
 ## What this fork adds
 

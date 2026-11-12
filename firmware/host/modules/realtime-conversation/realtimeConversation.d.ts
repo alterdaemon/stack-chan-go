@@ -77,6 +77,10 @@ declare module 'realtimeConversation' {
     /** Keep the microphone active with AEC during playback; defaults to false.
      * The selected provider handles interruption; immediate playback stop is not guaranteed. */
     bargeIn?: boolean
+    /** Optional per-session Mini VAD policy, also used by diagnostic comparisons. */
+    turnDetection?:
+      | { type: 'server_vad'; threshold?: number }
+      | { type: 'semantic_vad'; eagerness?: 'low' | 'medium' | 'high' | 'auto' }
     delegation?: Record<string, unknown>
     tools?: ConversationTool[]
     toolTimeout?: number
@@ -89,6 +93,9 @@ declare module 'realtimeConversation' {
   export interface ConversationStats {
     capturedSamples: number
     renderedSamples: number
+    playbackLevel: number
+    interruptions: number
+    flushedInterruptions: number
     underruns: number
     overruns: number
     micLevel: number

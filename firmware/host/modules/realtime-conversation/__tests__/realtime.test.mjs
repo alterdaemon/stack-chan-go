@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LiveSession } from '../../../../mods/examples/openai_live_webrtc/session.js'
+import ToolRunner from '../tools.js'
 import { summarizeWebSearchResponse } from '../web-search.js'
 
 let source = readFileSync(new URL('../core.js', import.meta.url), 'utf8')
@@ -12,6 +13,208 @@ const { default: Conversation } = await import(`data:text/javascript,${encodeURI
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve()
 }
+
+for (const protocol of ['live', 'realtime']) {
+  for (const cancellation of ['local', 'server']) {
+    test(`${protocol} ${cancellation} interrupted accepted tools return cancellation once without obsolete continuation`, async () => {
+      let resolve,
+        cancelled = 0
+      const sent = [],
+        timers = new Set()
+      const runner = new ToolRunner(
+        [
+          {
+            name: 'lookup',
+            parameters: { type: 'object' },
+            execute(_args, context) {
+              context.onCancel(() => {
+                cancelled++
+              })
+              return new Promise((done) => {
+                resolve = done
+              })
+            },
+          },
+        ],
+        {
+          protocol,
+          send: (event) => sent.push(event),
+          platform: {
+            setTimeout(fn) {
+              const timer = { fn }
+              timers.add(timer)
+              return timer
+            },
+            clearTimeout(timer) {
+              timers.delete(timer)
+            },
+          },
+        },
+      )
+      const event = (value) =>
+        runner.receive(protocol === 'live' ? { type: 'response.event', delegation_id: 'task', event: value } : value)
+      event({ type: 'response.created', response: { id: 'search' } })
+      event({
+        type: 'response.output_item.done',
+        response_id: 'search',
+        item: { type: 'function_call', call_id: 'lookup_1', name: 'lookup', arguments: '{}' },
+      })
+      event({
+        type: protocol === 'live' ? 'response.completed' : 'response.done',
+        response: { id: 'search', status: 'completed' },
+      })
+      await flush()
+      if (cancellation === 'server') {
+        event({
+          type: protocol === 'live' ? 'response.cancelled' : 'response.done',
+          response: { id: 'search', status: 'cancelled' },
+        })
+      } else runner.cancelPending(true)
+      runner.cancelPending(true)
+      assert.equal(cancelled, 1)
+      assert.equal(sent.length, 1)
+      assert.equal(sent[0].type, protocol === 'live' ? 'response.item.create' : 'conversation.item.create')
+      assert.equal(sent[0].item.call_id, 'lookup_1')
+      assert.deepEqual(JSON.parse(sent[0].item.output), { error: 'tool_cancelled' })
+      resolve({ found: 'late result' })
+      await flush()
+      assert.equal(sent.length, 1)
+      assert.equal(timers.size, 0)
+      runner.close()
+      assert.equal(sent.length, 1)
+    })
+  }
+
+  test(`${protocol} cancellation from a result callback cannot continue an obsolete turn`, async () => {
+    const sent = []
+    const runner = new ToolRunner([{ name: 'lookup', parameters: { type: 'object' }, execute: () => 'found' }], {
+      protocol,
+      send: (event) => sent.push(event),
+      platform: { setTimeout, clearTimeout },
+      onResult: () => runner.cancelPending(true),
+    })
+    const event = (value) =>
+      runner.receive(protocol === 'live' ? { type: 'response.event', delegation_id: 'task', event: value } : value)
+    event({ type: 'response.created', response: { id: 'search' } })
+    event({
+      type: 'response.output_item.done',
+      response_id: 'search',
+      item: { type: 'function_call', call_id: 'lookup_1', name: 'lookup', arguments: '{}' },
+    })
+    event({
+      type: protocol === 'live' ? 'response.completed' : 'response.done',
+      response: { id: 'search', status: 'completed' },
+    })
+    await flush()
+    assert.equal(sent.length, 1)
+    assert.equal(sent[0].item.output, 'found')
+    runner.close()
+  })
+}
+
+for (const first of ['input_audio_buffer.speech_started', 'output_audio_buffer.cleared']) {
+  test(`Mini ${first} flushes once, preserves capture/session and resumes the next response`, async () => {
+    const f = fixture({ bargeIn: true })
+    await f.connect()
+    f.message({ type: 'response.created', response: { id: 'old' } })
+    f.message({ type: first, response_id: 'old' })
+    f.message({ type: 'input_audio_buffer.speech_started' })
+    f.message({ type: 'output_audio_buffer.cleared', response_id: 'old' })
+    assert.equal(f.interrupted, 1)
+    assert.equal(f.mute, false)
+    assert.equal(f.closed, 0)
+    f.message({ type: 'response.done', response: { id: 'old', status: 'cancelled' } })
+    f.message({ type: 'response.created', response: { id: 'fresh' } })
+    const resumed = f.resumed
+    assert.ok(resumed > 0)
+    f.message({ type: 'output_audio_buffer.cleared', response_id: 'old' })
+    assert.equal(f.interrupted, 1)
+    f.message({ type: 'error', error: { code: 'response_cancel_not_active' } })
+    assert.deepEqual(f.errors, [])
+    assert.equal(f.c.state, 'connected')
+    f.message({ type: 'input_audio_buffer.speech_started' })
+    assert.equal(f.interrupted, 2)
+    await f.c.close()
+  })
+}
+
+for (const mode of ['live', 'realtime']) {
+  test(`${mode} ignores interruption while Off or explicitly muted`, async () => {
+    for (const bargeIn of [false, true]) {
+      const f = fixture({ mode, bargeIn })
+      await f.connect()
+      if (bargeIn) {
+        const muting = f.c.setMuted(true)
+        if (mode === 'live') f.message({ type: 'session.input_audio.muted', client_event_id: f.sent.at(-1).event_id })
+        await muting
+      }
+      f.message({ type: 'input_audio_buffer.speech_started' })
+      f.message({ type: 'output_audio_buffer.cleared' })
+      f.message({ type: 'session.output_transcript.delta', delta: 'Story.', start_ms: 0, end_ms: 1000 })
+      f.message({ type: 'session.input_transcript.delta', delta: 'Please stop.', start_ms: 300, end_ms: 800 })
+      assert.equal(f.interrupted, 0)
+      const closing = f.c.close()
+      if (mode === 'live')
+        f.message({ type: 'session.closed', session: { id: 'sess_test' }, reason: 'close_requested' })
+      await closing
+    }
+  })
+}
+
+test('Live interrupts one overlapping caller turn and ignores its late fragments after a fresh reply', async () => {
+  const f = fixture({ mode: 'live', bargeIn: true })
+  await f.connect()
+  const caption = (role, text, start_ms, end_ms) =>
+    f.message({ type: `session.${role}_transcript.delta`, delta: text, start_ms, end_ms })
+  caption('output', 'A story.', 0, 1000)
+  caption('input', 'Please stop.', 300, 800)
+  assert.equal(f.interrupted, 1)
+  caption('input', ' Now I am talking.', 800, 1200)
+  assert.equal(f.interrupted, 1)
+  caption('output', 'What would you like?', 2000, 2600)
+  assert.equal(f.resumed, 1)
+  caption('input', ' Please listen.', 1200, 1600)
+  caption('input', 'Please stop.', 300, 800)
+  assert.equal(f.interrupted, 1)
+  caption('input', 'Another question.', 2400, 3000)
+  assert.equal(f.interrupted, 2)
+  assert.equal(f.c.state, 'connected')
+  assert.equal(f.mute, false)
+  const closing = f.c.close()
+  f.message({ type: 'session.closed', session: { id: 'sess_test' }, reason: 'close_requested' })
+  await closing
+})
+
+test('Live never interrupts a newer assistant turn for an older caller caption arriving for the first time', async () => {
+  const f = fixture({ mode: 'live', bargeIn: true })
+  await f.connect()
+  f.message({ type: 'session.output_transcript.delta', delta: 'An old answer.', start_ms: 0, end_ms: 200 })
+  f.message({ type: 'session.output_transcript.delta', delta: 'A fresh answer.', start_ms: 1800, end_ms: 2200 })
+  f.message({ type: 'session.input_transcript.delta', delta: 'Please stop.', start_ms: 300, end_ms: 800 })
+  assert.equal(f.interrupted, 0)
+  const closing = f.c.close()
+  f.message({ type: 'session.closed', session: { id: 'sess_test' }, reason: 'close_requested' })
+  await closing
+})
+
+for (const turnDetection of [
+  { type: 'server_vad', threshold: 0.3 },
+  { type: 'server_vad', threshold: 0.5 },
+  { type: 'semantic_vad', eagerness: 'auto' },
+]) {
+  test(`Mini negotiates ${JSON.stringify(turnDetection)} without changing On/Off`, async () => {
+    for (const bargeIn of [false, true]) {
+      const f = fixture({ bargeIn, turnDetection })
+      await f.connect()
+      assert.deepEqual(f.setup[0].session.audio.input.turn_detection, {
+        ...turnDetection,
+        create_response: true,
+        interrupt_response: bargeIn,
+      })
+      await f.c.close()
+    }
+  })
+}
 function fixture(options = {}) {
   let callback,
     pendingSearch,
@@ -19,6 +222,8 @@ function fixture(options = {}) {
     searchCancelled = 0,
     closed = 0,
     quiesced = false,
+    interrupted = 0,
+    resumed = 0,
     mute = false
   const requests = [],
     sent = [],
@@ -44,6 +249,12 @@ function fixture(options = {}) {
         return {
           start: (value) => starts.push(value),
           setVolume() {},
+          interruptOutput() {
+            interrupted++
+          },
+          resumeOutput() {
+            resumed++
+          },
           quiesce() {
             quiesced = true
           },
@@ -107,6 +318,12 @@ function fixture(options = {}) {
     },
     get quiesced() {
       return quiesced
+    },
+    get interrupted() {
+      return interrupted
+    },
+    get resumed() {
+      return resumed
     },
     get mute() {
       return mute
@@ -343,7 +560,7 @@ test('Mini uses multipart WebRTC, server VAD and only supported tool fields at e
     assert.equal(f.timers.size, 0)
     assert.ok(f.requests.at(-1).url.endsWith('/rtc_test/hangup'))
   }
-  assert.ok(thresholds[1] < thresholds[0])
+  assert.equal(thresholds[1], thresholds[0])
 })
 test('delayed search leaves event processing responsive, sends sources once and then continues', async () => {
   const f = fixture()
@@ -441,7 +658,13 @@ test('new speech cancels an obsolete search when interruption is enabled', async
   assert.equal(f.searchCancelled, 1)
   resolve(searchReply())
   await flush()
-  assert.deepEqual(f.sent, [])
+  assert.equal(f.sent.length, 1)
+  assert.equal(f.sent[0].item.call_id, 'call_test')
+  assert.deepEqual(JSON.parse(f.sent[0].item.output), { error: 'tool_cancelled' })
+  f.message({ type: 'output_audio_buffer.cleared' })
+  await flush()
+  assert.equal(f.sent.length, 1)
+  assert.equal(f.searchCancelled, 1)
   await f.c.close()
 })
 
