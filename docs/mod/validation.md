@@ -439,3 +439,6 @@ Amended R2 build/image verification completed from `d46614edab0690961e6102be76ba
 Six parsed workflow definitions were reviewed: tag CI has read-only permissions and only builds/stores images; Pages deployment jobs require manual dispatch; Cloudflare has no automatic trigger. Fresh GitHub API checks confirmed unchanged remote branch/tag/release state and no R2 release/tag. These publication guards are local until a requested push. The private release plan and notes are prepared; no push, publication, draft or workflow dispatch occurred. Physical quality and interruption acceptance are still unverified by this port. Build evidence is retained privately; no new runtime performance result is claimed.
 
 Cleanup: the task-owned short build worktree, generated build output, compiler cache and simulator scratch directories were removed after retained-file hash checks. Useful runtime/build logs, exact image provenance, the old R2 archive and reusable tests remain. Existing SDK/dependencies, device backups and experimental images were preserved.
+
+
+R2 maintainer confirmation, 2026-11-12: the maintainer stated that physical verification is complete and the firmware is working. This supersedes the earlier pending-acceptance status. No additional agent-run device test or quantified acoustic/latency measurement is claimed.

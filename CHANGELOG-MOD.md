@@ -66,8 +66,9 @@ and non-chat audio behavior; omit other experimental prototypes.
 Native delayed-render/capture/Pitch and protocol regressions pass; the new
 protocol tests fail against the R1 core. Probes now observe local output silence
 separately from recognized words. Build/image checks are recorded in validation.
-The user performs physical verification; no device write or audible trial is
-performed here. The same repairs are applied separately to gpt-full-duplex and
+On 2026-11-12, the maintainer confirmed physical verification of the amended
+R2 is complete and it is working. The agent performed no device write or
+audible trial for this amendment. The same repairs are applied separately to gpt-full-duplex and
 its requested R8 image. Neither branch is published by this work.
 
 ### 2.1.0-R1

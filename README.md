@@ -14,7 +14,8 @@ The current 2.1.0 series also incorporates upstream 2.1.0.
 Current source firmware: **2.1.0-R2**, for **M5StackChan CoreS3**.
 The published stable release remains **[2.1.0-R1](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R1)**.
 R2 combines the selected R8 16 kHz/FD2 audio profile with local interruption and
-search-cancellation fixes. Physical verification is pending.
+search-cancellation fixes. The maintainer confirmed physical verification is complete
+and R2 is working.
 
 ## What this fork adds
 

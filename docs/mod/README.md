@@ -4,7 +4,8 @@
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R2**. Standard hardware: M5StackChan CoreS3.
-The published stable release remains R1; R2 is a local build pending physical verification.
+The published stable release remains R1; the maintainer has physically verified
+the local R2 build and confirmed it is working.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -130,8 +131,9 @@ With **Interruption Off**, microphone samples are gated during playback and unti
 the existing 500 ms received-silence gate clears: voice interruption is unavailable.
 On keeps capture and AEC active. Explicit microphone mute remains separate.
 Live caption delivery can lag speech; event-to-PCM-silence timing does not prove
-physical speech-onset latency. The user performs physical verification of the
-amended R2. No physical usability claim follows from unit tests. Historical
+physical speech-onset latency. On 2026-11-12, the maintainer confirmed physical
+verification of the amended R2 is complete and it is working. This confirmation
+is separate from unit-test results. Historical
 combined-profile measurements and their limits are in [validation](validation.md#r2-selected-r8-profile-promotion).
 
 The local R2 pair is `StackChan-Community-v2.1.0-R2-app.bin` and
