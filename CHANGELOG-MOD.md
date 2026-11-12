@@ -7,12 +7,16 @@ The fork started at upstream `v2.0.1`, commit
 
 [Build/install/branch guide](docs/mod/README.md) · [Detailed validation](docs/mod/validation.md)
 
-This is the only source of fork release notes. Publication extracts the section
-headed `### <product-version>` for the requested tag.
+This changelog records changes between fork releases. Differences from upstream
+are summarized in the [README](README.md#what-this-fork-adds) and published release notes.
+Publication extracts the section headed `### <product-version>` for the requested tag.
 
 ## Unreleased
 
 - Credit alterdaemon for fork modifications and remove the README's Fork issues link.
+- Refresh both README comparison tables so the main R3 differences from upstream are easy to find.
+- Remove the README's test-results link to keep its navigation focused on getting started.
+- Keep the upstream comparison in the READMEs and release notes instead of repeating it here.
 
 ## 2.1.0
 
@@ -25,15 +29,6 @@ Release impact: minor.
 - **Another conversation choice:** Select GPT-Realtime 2.1 alongside GPT-Live 1 and Realtime Mini. The two Realtime choices share your saved Realtime voice and web-search settings.
 - **Fewer unwanted answer restarts:** Reduce cases where Realtime hears its own speaker and starts another answer. Fix Live playback getting stuck silent after an interruption. Speaking to interrupt remains available when enabled.
 - **Troubleshooting without repeated installations:** USB logs and temporary audio adjustments let developers investigate problems without rebuilding firmware for every trial. Logging starts Off, and these adjustments do not overwrite your saved settings.
-
-#### Compared with upstream 2.1.0
-
-- **Voice chat ready to use:** The prepared firmware includes GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, with web search in all three. After setting up Wi-Fi and your OpenAI key, start or stop chat from the LIVE button or drawer; connection problems appear on the robot.
-- **Make the robot respond your way:** Use Bluetooth or the added password-protected Wi-Fi settings page to set conversation instructions, choose conversation and reasoning models and thinking effort, save separate Live/Realtime voices, and adjust voice pitch and speaking style.
-- **Interrupt and move on:** Enable voice interruption to speak while the robot is talking and stop its current reply. Cancelling an ongoing web search does not bring back the interrupted answer.
-- **Resume a GPT-Live conversation:** Choose when an idle Live session disconnects. After automatic standby, tap LIVE to resume with recent conversation context, so you have less to repeat. This history is temporary, specific to GPT-Live, and cleared by a device restart.
-- **Chat, screen and camera recovery:** Fixes cover interrupted chat recovery and keeping screen/touch work running alongside voice chat. Camera capture releases memory when closed and can reopen for another photo; recoverable “already answering” service responses no longer close the chat.
-- **Updates and troubleshooting:** Prepared app-update BINs preserve settings, MODs and storage on the supported layout. When investigating a problem, developers can enable USB logs and temporarily adjust audio behavior without reinstalling for each test; diagnostics stay Off until enabled.
 
 ### 2.1.0-R2
 

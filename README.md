@@ -33,23 +33,23 @@ See [USB diagnostics](docs/mod/README.md#usb-development-diagnostics) for captur
 
 ## What this fork adds
 
-Compared with upstream **2.1.0**, the current CoreS3 firmware adds:
+Main differences in **2.1.0-R3** compared with upstream **2.1.0**:
 
 | Area | What you get |
 | --- | --- |
-| Installation | Full and app-only BINs with chat MODs preconfigured. No local build needed. |
-| Voice chat | Built-in GPT-Live 1, GPT-Realtime 2.1 Mini and GPT-Realtime 2.1, started with the LIVE button. |
-| Settings | Bluetooth (BLE) or a password-protected Wi-Fi settings page. |
-| Voice controls | Saved voices, pitch, speaking style and optional interruption while the robot speaks. |
-| Conversation resume | GPT-Live idle standby with recent conversation memory. |
-| Web search | Search preconfigured for all three conversation choices. |
-| Firmware fixes | Camera memory cleanup, audio/UI scheduling fixes and chat error recovery. |
+| Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
+| Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
+| Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
+| Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
+| Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
+| USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
+
+See the [R3 release notes](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3) for details and comparison links.
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
 
 - [Build, install, settings and branch guide](docs/mod/README.md)
 - [All fork release notes](CHANGELOG-MOD.md)
-- [Test results, performance evidence and limits](docs/mod/validation.md)
 - [Contributing](CONTRIBUTING.md)
 - [Fork releases](https://github.com/alterdaemon/stack-chan-mod/releases)
 
