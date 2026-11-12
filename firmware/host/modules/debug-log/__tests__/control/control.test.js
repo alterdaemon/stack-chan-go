@@ -17,6 +17,7 @@ const recorder = new DebugRecorder({
   async tune() {},
   write(line) {
     records.push(line)
+    if (line.includes('"phase":"applied"')) Timer.set(verifyAcknowledgement, 0)
     return true
   },
 })
@@ -27,8 +28,12 @@ recorder.emit('device', 'disabled', () => {
 if (constructed || sampling) throw new Error('Disabled diagnostics performed work')
 recorder.parser.feed(new Uint8Array(ArrayBuffer.fromString('diag on\n')))
 if (!recorder.enabled || !sampling) throw new Error('USB enable failed')
+const timeout = Timer.set(() => {
+  throw new Error('RAM trial acknowledgement timed out')
+}, 2000)
 recorder.parser.feed(new Uint8Array(ArrayBuffer.fromString('diag set speaker 0\n')))
-Timer.set(() => {
+function verifyAcknowledgement() {
+  Timer.clear(timeout)
   if (!records.some((line) => line.includes('"phase":"applied"'))) throw new Error('RAM trial acknowledgement failed')
   recorder.emit('device', 'tick', { phase: 'ready', password: 'private' })
   now = 30001
@@ -37,4 +42,4 @@ Timer.set(() => {
   if (records.join('').includes('private')) throw new Error('Private data escaped')
   recorder.parser.feed(new Uint8Array(ArrayBuffer.fromString('diag off\n')))
   trace('@@STACKCHAN_TEST:PASS@@\n')
-}, 10)
+}

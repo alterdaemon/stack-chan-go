@@ -34,8 +34,20 @@ SDK setup, versions, release tags and published images are unchanged.
 - XS simulator: after the retained runtime wrapper's `--check`, SDK-activated
   `npm run test:moddable --` passed the debug-log control, Live startup and Live
   startup-baseline manifests through the same Xvfb/D-Bus wrapper.
-- The repaired workflows still require a GitHub Actions run. These local results
-  do not establish WASM/browser or hosted-build success. No device was flashed.
+- GitHub Actions: [Bundle on main](https://github.com/alterdaemon/stack-chan-go/actions/runs/43313307606)
+  passed at `9955b57b`: six hardware builds, CoreS3 Avatar DSL ABI verification,
+  editor artifacts, WASM, web and final firmware bundle packaging. It completed
+  in 5 minutes 43 seconds; website deployment was skipped. The main-branch badge
+  returned `passing`. Existing parallel jobs and SDK caches are retained.
+- The [test retry on main](https://github.com/alterdaemon/stack-chan-go/actions/runs/43313194773)
+  passed lint, fast/unit/architecture/web tests, browser checks, simulator smoke
+  checks and one module-test shard. The other shard failed only the debug control
+  fixture: its acknowledgement was absent at the fixed 10 ms assertion. The
+  fixture now continues on the actual acknowledgement, with a two-second failure
+  timeout. That focused XS fixture and Biome check passed locally; hosted retry
+  is pending. No production change was needed for this test timing repair.
+- No device was flashed. Hosted compilation and simulator/browser checks do not
+  establish physical-device or live-API performance.
 
 ## 2.1 R4
 
