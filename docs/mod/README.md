@@ -1,10 +1,10 @@
 # Stack-chan Community fork
 
-[Repository](https://github.com/alterdaemon/stack-chan-mod) ·
+[Repository](https://github.com/alterdaemon/stack-chan-go) ·
 [Changelog](../../CHANGELOG-MOD.md) · [Validation](validation.md)
 
 Current product version: **2.1.0-R4**. Standard hardware: M5StackChan CoreS3.
-The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3)**.
+The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -23,7 +23,7 @@ Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
-See the [R4 changelog](../../CHANGELOG-MOD.md#210-r4) for source changes and the [R3 release notes](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3) for the published stable release.
+See the [R4 changelog](../../CHANGELOG-MOD.md#210-r4) for source changes and the [R3 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3) for the published stable release.
 
 Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
@@ -203,7 +203,7 @@ revision are rejected; identical repackaging is allowed.
 
 Local R4 builds produce `StackChan-Community-v2.1.0-R4-app.bin` and
 `StackChan-Community-v2.1.0-R4.bin` in `internal/release-packages/`. Download
-the preconfigured pair from the [R3 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3).
+the preconfigured pair from the [R3 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3).
 
 To package an existing release in the same environment:
 
@@ -300,7 +300,7 @@ esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 St
 
 Use your device port: Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, macOS
 `/dev/cu.*`. See [esptool setup](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
-Do not write the full image at `0x10000`. Download the BINs from the [R3 release](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3).
+Do not write the full image at `0x10000`. Download the BINs from the [R3 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3).
 
 ## Historical R1 installation
 
