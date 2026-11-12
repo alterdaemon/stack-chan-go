@@ -1,6 +1,6 @@
 # Stack-chan Community changelog
 
-Changes made by [alterdaemon/stack-chan-mod](https://github.com/alterdaemon/stack-chan-mod).
+Changes made by [alterdaemon/stack-chan-go](https://github.com/alterdaemon/stack-chan-go).
 Upstream release notes remain in [docs/release-notes](docs/release-notes/).
 The fork started at upstream `v2.0.1`, commit
 `6a8f7553610e5d91770901e76fd93a0c50cfd970`. Upstream history and licenses are retained.

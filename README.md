@@ -1,6 +1,6 @@
-# Stack-chan (community-mod)
+# stack-chan-go (community-mod)
 
-[![Build](https://github.com/alterdaemon/stack-chan-mod/actions/workflows/build.yml/badge.svg)](https://github.com/alterdaemon/stack-chan-mod/actions/workflows/build.yml)
+[![Build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/build.yml/badge.svg)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/build.yml)
 
 A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.
@@ -12,7 +12,7 @@ Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
 The current 2.1.0 series also incorporates upstream 2.1.0.
 
 Current source firmware: **2.1.0-R3**, for **M5StackChan CoreS3**.
-The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3)**.
+The published stable release is **[2.1.0-R3](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3)**.
 Preconfigured application-only and full BINs are available in that release.
 
 ## What this fork adds
@@ -28,14 +28,14 @@ Main differences in **2.1.0-R3** compared with upstream **2.1.0**:
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
-See the [R3 release notes](https://github.com/alterdaemon/stack-chan-mod/releases/tag/v2.1.0-R3) for details and comparison links.
+See the [R3 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R3) for details and comparison links.
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
 
 - [Build, install, settings and branch guide](docs/mod/README.md)
 - [All fork release notes](CHANGELOG-MOD.md)
 - [Contributing](CONTRIBUTING.md)
-- [Fork releases](https://github.com/alterdaemon/stack-chan-mod/releases)
+- [Fork releases](https://github.com/alterdaemon/stack-chan-go/releases)
 
 ## Upstream resources
 
