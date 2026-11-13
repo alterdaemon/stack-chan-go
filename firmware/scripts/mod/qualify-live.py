@@ -19,6 +19,7 @@ class Capture:
         self.rows = []
         self.reader = None
         self.results = []
+        self.valid = True
         args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
         self.trace = args.output / 'capture.jsonl'
         self.log = (args.output / 'capture.log').open('x')
@@ -41,7 +42,11 @@ class Capture:
                     break
                 device = json.loads(line)['device']
                 self.rows.append(device)
+                if device.get('component') == 'native' and device.get('event') in ('abort', 'backtrace'):
+                    self.valid = False
+                    raise RuntimeError('Native failure invalidated qualification')
                 if device.get('dropped', 0) or device.get('nativeDropped', 0):
+                    self.valid = False
                     raise RuntimeError('Lost diagnostic records; qualification is invalid')
 
     def wait(self, predicate, after=0, seconds=35):
@@ -87,11 +92,13 @@ class Capture:
         started = time.monotonic()
         self.child.stdin.write(f'diag live {profile}\n')
         self.child.stdin.flush()
-        end = self.wait(lambda d: d.get('action') == 'live' and d.get('setting') == profile and
-                        d.get('phase') in ('applied', 'failed'), after)
-        elapsed = round(time.monotonic() - started, 3)
+        end = {'phase': 'failed'}
+        elapsed = None
         probe_error = None
         try:
+            end = self.wait(lambda d: d.get('action') == 'live' and d.get('setting') == profile and
+                            d.get('phase') in ('applied', 'failed'), after)
+            elapsed = round(time.monotonic() - started, 3)
             if end['phase'] == 'applied':
                 for probe in probes:
                     self.set('probe', probe)
@@ -105,10 +112,12 @@ class Capture:
             try:
                 self.command('diag live stop', 'live', setting='stop', phase='applied')
             except (RuntimeError, OSError) as error:
+                self.valid = False
                 probe_error = probe_error or error
         details = self.rows[after:]
         result = dict(name=name, profile=profile, interruption=interruption, settings=settings or {},
-                      phase='probe_failed' if probe_error else end['phase'], seconds=elapsed,
+                      phase='probe_failed' if probe_error and end['phase'] == 'applied' else end['phase'],
+                      seconds=elapsed or round(time.monotonic() - started, 3),
                       session=next((d for d in details if d.get('event') == 'call.session'), None),
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
                       failures=[d for d in details if d.get('event') == 'failure'],
@@ -195,7 +204,7 @@ def main():
                                                    settings={'model': model, 'effort': effort},
                                                    probes=('reasoning', 'search'))
                         except RuntimeError:
-                            if capture.child.poll() is not None:
+                            if not capture.valid or capture.child.poll() is not None:
                                 raise
                             passed = False
                         failures += not passed

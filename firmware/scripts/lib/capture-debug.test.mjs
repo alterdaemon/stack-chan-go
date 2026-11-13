@@ -73,7 +73,57 @@ print('passed')
 `,
       fileURLToPath(new URL('../mod/capture-debug.py', import.meta.url)),
     ],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
   )
   assert.match(result, /passed/)
+})
+
+test('LIVE qualification retains startup/probe failures and always attempts Stop', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import importlib.util, io, json, sys, tempfile
+from pathlib import Path
+from types import SimpleNamespace
+spec=importlib.util.spec_from_file_location('qualify_live',sys.argv[1])
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+for failure in [None,'startup','probe','stop']:
+    with tempfile.TemporaryDirectory() as directory:
+        capture=object.__new__(module.Capture)
+        capture.args=SimpleNamespace(output=Path(directory))
+        capture.results=[]; capture.rows=[]; capture.valid=True
+        capture.child=SimpleNamespace(stdin=io.StringIO())
+        commands=[]
+        capture.reset=lambda: None
+        capture.pump=lambda: None
+        def command(text,*args,**kwargs):
+            commands.append(text)
+            if failure=='stop' and text=='diag live stop': raise RuntimeError('stop timeout')
+        capture.command=command
+        def wait(*args,**kwargs):
+            if failure=='startup': raise RuntimeError('startup timeout')
+            return dict(phase='applied')
+        capture.wait=wait
+        def set_value(parameter,value):
+            if failure=='probe' and parameter=='probe': raise RuntimeError('probe failed')
+        capture.set=set_value
+        try:
+            passed=capture.trial('fixture',probes=('reasoning',))
+            assert failure is None and passed
+        except RuntimeError:
+            assert failure is not None
+        rows=json.loads((Path(directory)/'results.json').read_text())
+        assert len(rows)==1 and rows[0]['name']=='fixture'
+        assert rows[0]['phase']==('failed' if failure=='startup' else 'probe_failed' if failure else 'applied')
+        assert commands.count('diag live stop')==1
+        assert capture.valid==(failure!='stop')
+print('passed all qualification outcomes')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed all qualification outcomes/)
 })
