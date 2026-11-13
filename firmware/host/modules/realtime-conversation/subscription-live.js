@@ -246,12 +246,13 @@ export class SubscriptionLive {
         }),
       })
       const response = await this.#request
+      // Resource rejection does not prove refresh-grant revocation (RFC6750 section3.1).
+      // The auth owner handles renewal failure; resource errors never delete the grant.
       this.diagnose?.('call.response', () => ({
         status: response.status,
         locationPresent: typeof (response.location ?? response.headers?.location) === 'string',
         sessionHeaderPresent: typeof response.headers?.['openai-session-id'] === 'string',
       }))
-      if (response.status === 401) this.auth.logout()
       let bootstrap
       try {
         bootstrap = parseSubscriptionCall(response, await response.text())
@@ -466,7 +467,6 @@ export class SubscriptionLive {
       })
       const response = await job.request
       this.diagnose?.('backend.response', () => ({ status: response.status }))
-      if (response.status === 401) this.auth.logout()
       if (!response.ok)
         throw Object.assign(new Error('Subscription backend rejected'), {
           status: response.status,

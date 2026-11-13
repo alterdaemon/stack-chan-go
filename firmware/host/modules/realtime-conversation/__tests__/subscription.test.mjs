@@ -815,7 +815,7 @@ test('subscription denial, quota and service failures never try a public endpoin
       /Subscription call rejected/,
     )
     assert.equal(requests.length, 1)
-    assert.equal(logouts, status === 401 ? 1 : 0)
+    assert.equal(logouts, 0)
     assert.ok(requests[0].url.startsWith('https://chatgpt.com/backend-api/codex/realtime/calls'))
     assert.equal(requests[0].options.headers.Authorization, 'Bearer subscription-grant')
     live.dispose()
@@ -1049,4 +1049,29 @@ test('subscription requests honor selected model and each effort without public 
       f.live.dispose()
     }
   }
+})
+
+test('backend resource rejection preserves the grant and never substitutes credentials', async () => {
+  const f = liveFixture()
+  let logouts = 0
+  f.live.auth.logout = () => logouts++
+  f.live.debug = { enabled: true }
+  await f.live.create(
+    'v=0 offer',
+    { instructions: '', voice: 'cove' },
+    () => {},
+    () => true,
+  )
+  f.live.activate()
+  f.receive({ type: 'session.started' })
+  const requests = []
+  f.live.fetch = async (url) => {
+    requests.push(url)
+    return reply({ error: { code: 'invalid_token' } }, 401)
+  }
+  await assert.rejects(f.live.probe('probe', 'reasoning'), /probe failed/)
+  assert.equal(logouts, 0)
+  assert.equal(requests.length, 1)
+  assert.ok(requests[0].startsWith('https://chatgpt.com/backend-api/codex/'))
+  f.live.dispose()
 })

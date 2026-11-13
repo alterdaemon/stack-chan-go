@@ -152,8 +152,11 @@ def main():
         (args.output / 'identity.json').write_text(json.dumps(first, indent=2) + '\n')
         if args.suite == 'backend':
             for mode in ('off', 'on'):
+                if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):
+                    raise RuntimeError('Standard backend qualification failed')
+            for mode in ('off', 'on'):
                 for model in ('gpt-6.1-terra', 'gpt-6-luna'):
-                    for effort in ('none', 'low', 'medium', 'high', 'xhigh', 'max'):
+                    for effort in ('medium', 'none', 'low', 'high', 'xhigh', 'max'):
                         if not capture.trial(f'{model}-{effort}', interruption=mode,
                                              settings={'model': model, 'effort': effort}, probes=('reasoning',)):
                             raise RuntimeError('Backend parameter qualification failed')
