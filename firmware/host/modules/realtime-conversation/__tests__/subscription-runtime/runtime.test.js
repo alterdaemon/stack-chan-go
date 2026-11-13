@@ -1,4 +1,5 @@
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
+import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
 import { assert, equal } from 'testing/assert'
 import TextDecoder from 'text/decoder'
@@ -99,4 +100,50 @@ try {
 } catch {}
 lateDNS.onResolved('api.openai.com', '192.0.2.1')
 equal(connected, 0, 'late DNS after cancellation cannot open a socket')
+// Actual XS/Timer authorization, persisted identity, independent reboot renewal and deletion.
+let saved,
+  exchanges = 0
+const store = {
+  available: () => true,
+  read: () => saved,
+  write: (value) => {
+    saved = value
+  },
+  clear: () => {
+    saved = undefined
+  },
+}
+const options = {
+  store,
+  schedule: (callback, delay) => Timer.set(callback, delay),
+  cancel: (timer) => Timer.clear(timer),
+  now: () => 1000000,
+  decodeClaims: () => ({
+    iss: 'https://auth.openai.com',
+    sub: 'fixture',
+    exp: 2000,
+    'https://api.openai.com/auth': { chatgpt_account_id: 'fixture-account' },
+  }),
+  fetch: async (url) => {
+    let value
+    if (url.endsWith('/usercode')) value = { device_auth_id: 'fixture-device', user_code: 'TEST', interval: 1 }
+    else if (url.endsWith('/deviceauth/token'))
+      value = { authorization_code: 'fixture-code', code_verifier: 'fixture-verifier' }
+    else {
+      exchanges++
+      value = { access_token: 'fixture-access', refresh_token: 'fixture-refresh', expires_in: 1000 }
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify(value) }
+  },
+}
+const firstBoot = new SubscriptionAuth(options)
+await firstBoot.start()
+await new Promise((resolve) => Timer.set(resolve, 1100))
+assert(firstBoot.status().signedIn && !firstBoot.status().volatile)
+assert(saved.refreshToken && !saved.accessToken)
+const nextBoot = new SubscriptionAuth(options)
+await nextBoot.credentials()
+equal(exchanges, 2, 'reboot renews independently rather than using an old access token')
+nextBoot.logout()
+assert(!new SubscriptionAuth(options).status().signedIn, 'logout survives restart')
 trace('@@STACKCHAN_TEST:PASS@@\n')

@@ -10,6 +10,7 @@
     "main": "./runtime.test",
     "realtimeConversation/subscription": "../../subscription",
     "realtimeConversation/http": "./http",
+    "realtimeConversation/subscription-store": "./store",
     "rng": "./rng",
     "realtimeConversation/http-core": "../../http-core"
   },

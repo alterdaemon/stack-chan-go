@@ -54,8 +54,16 @@ deltas do not repeat that history. Local capture stays muted until control
 readiness, and close retains the existing three-second finalization grace.
 
 Device authorization and serialized refresh run on the robot using the existing
-HTTPS worker. Grants live only in RAM in this initial implementation. The
-private Codex Live and Responses routes require account/device qualification;
-this adapter does not establish service entitlement or protected persistence.
+HTTPS worker. The native subscription store seals one bounded refresh credential
+and identity with AES-256-GCM in existing NVS, using an already protected HMAC_UP
+key and the device identity. It never provisions eFuses or changes flash security
+or layout. Missing key protection blocks sign-in; storage faults are explicit.
+Only the refresh credential survives reboot; access/identity tokens remain in RAM.
+Renewal commits a tombstone before requesting rotation and saves a complete new
+record before using it. Interrupted rotation requires reauthorization unless the
+new record committed. Logout invalidates late callbacks and commits deletion;
+Stop retains authorization. Native plaintext/key buffers are wiped after use.
+The private Codex Live and Responses routes and hardware storage still require
+account/device qualification; this adapter does not establish service entitlement.
 Neither subscription failure nor API-key failure selects the other connection.
 See the [Wi-Fi sign-in guide](../../../../docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).

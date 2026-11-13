@@ -54,7 +54,10 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
         method: 'POST',
         credentials: 'same-origin',
         cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Stackchan-Settings': '1' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Stackchan-Settings': '1',
+        },
         body: JSON.stringify({ action }),
       })
       if (!response.ok) throw new Error()
@@ -80,6 +83,12 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
                 ? 'Sign-in failed. Try again.'
                 : 'Sign in to ChatGPT on this robot.'}
       </p>
+      {status?.state === 'storage-unavailable' && (
+        <p role="alert">Secure sign-in storage needs setup on this robot before you can sign in.</p>
+      )}
+      {status?.state === 'storage-error' && (
+        <p role="alert">Secure sign-in storage failed. Retry sign-out before signing in again.</p>
+      )}
       {pending && status.url === 'https://auth.openai.com/codex/device' && status.code && (
         <p>
           Open{' '}
@@ -92,13 +101,24 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
       <div>
         <Button
           type="button"
-          disabled={disabled || busy}
-          onClick={() => void action(status?.signedIn ? 'logout' : pending ? 'cancel' : 'start')}
+          disabled={disabled || busy || status?.state === 'storage-unavailable'}
+          onClick={() =>
+            void action(status?.signedIn || status?.state === 'storage-error' ? 'logout' : pending ? 'cancel' : 'start')
+          }
         >
-          {status?.signedIn ? 'Sign out' : pending ? 'Cancel sign-in' : 'Continue with ChatGPT'}
+          {status?.state === 'storage-error'
+            ? 'Retry sign-out'
+            : status?.signedIn
+              ? 'Sign out'
+              : pending
+                ? 'Cancel sign-in'
+                : 'Continue with ChatGPT'}
         </Button>
       </div>
       {status?.volatile && <p className="text-xs text-muted-foreground">Sign-in lasts until the robot restarts.</p>}
+      {status?.signedIn && status.volatile === false && (
+        <p className="text-xs text-muted-foreground">Sign-in is saved securely on this robot and survives restarts.</p>
+      )}
       <p className="text-xs text-muted-foreground">
         Authentication runs on the robot. Enter your account password only on OpenAI’s website. Save settings to use
         this connection on the next manual start.

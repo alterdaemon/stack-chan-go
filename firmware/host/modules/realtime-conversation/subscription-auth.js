@@ -16,18 +16,52 @@ export class SubscriptionAuth {
   #renewal
   #state = 'signed-out'
   #listeners = new Set()
+  #store
+  #storageError = false
+  #storageAvailable = false
 
-  constructor({ fetch, schedule, cancel, decodeClaims, now = Date.now, clientId = CLIENT }) {
+  constructor({ fetch, schedule, cancel, decodeClaims, store, now = Date.now, clientId = CLIENT }) {
     Object.assign(this, { fetch, schedule, cancel, decodeClaims, now, clientId })
+    this.#store = store
+    if (!store) return // Pure-helper fixtures may explicitly exercise volatile authorization.
+    try {
+      this.#storageAvailable = store.available()
+      if (!this.#storageAvailable) return
+      const saved = store.read()
+      if (saved === undefined) return
+      if (
+        saved?.version !== 1 ||
+        saved.issuer !== ISSUER ||
+        saved.clientId !== this.clientId ||
+        !valid(saved.refreshToken) ||
+        !valid(saved.subject) ||
+        saved.subject.length > 256 ||
+        !valid(saved.accountId) ||
+        saved.accountId.length > 256 ||
+        typeof saved.label !== 'string' ||
+        saved.label.length > 160 ||
+        Object.keys(saved).sort().join(',') !== 'accountId,clientId,issuer,label,refreshToken,subject,version'
+      )
+        throw new Error('Invalid stored subscription identity')
+      // No access/identity token is persisted. Reboot always requires independent renewal.
+      this.#record = { ...saved, expiresAt: 0 }
+      this.#state = 'signed-in'
+    } catch {
+      this.#storageError = true
+    }
   }
 
   status() {
     const attempt = this.#attempt
     return {
-      state: this.#state,
+      state: this.#storageError
+        ? 'storage-error'
+        : this.#store && !this.#storageAvailable
+          ? 'storage-unavailable'
+          : this.#state,
       signedIn: !!this.#record,
       account: this.#record?.label,
-      volatile: true,
+      volatile: !this.#store,
       ...(attempt?.code ? { url: `${ISSUER}/codex/device`, code: attempt.code, expiresAt: attempt.expiresAt } : {}),
     }
   }
@@ -55,6 +89,7 @@ export class SubscriptionAuth {
   }
 
   async start() {
+    if (this.#store && (!this.#storageAvailable || this.#storageError)) return this.status()
     if (this.#record || this.#attempt || this.#renewal) return this.status()
     const attempt = { generation: this.#generation, expiresAt: this.now() + 900000 }
     this.#attempt = attempt
@@ -115,6 +150,7 @@ export class SubscriptionAuth {
         true,
       )
       if (this.#attempt !== attempt) return
+      if (this.now() >= attempt.expiresAt) return this.#finishAttempt(attempt, 'expired')
       await this.#install(tokens.value, attempt.generation)
       this.#finishAttempt(attempt, 'signed-in')
     } catch {
@@ -169,6 +205,22 @@ export class SubscriptionAuth {
       label: typeof identity.email === 'string' ? identity.email.slice(0, 160) : 'ChatGPT account',
     }
     if (generation !== this.#generation) throw new Error('Authorization cancelled')
+    if (this.#store) {
+      try {
+        this.#store.write({
+          version: 1,
+          issuer: ISSUER,
+          clientId: record.clientId,
+          accountId: record.accountId,
+          subject: record.subject,
+          label: record.label,
+          refreshToken: record.refreshToken,
+        })
+      } catch {
+        this.#storageError = true
+        throw new Error('Secure sign-in storage failed')
+      }
+    }
     this.#record = record
   }
 
@@ -197,6 +249,10 @@ export class SubscriptionAuth {
     this.#renewal = operation
     operation.promise = (async () => {
       try {
+        // Invalidate disk state BEFORE sending a potentially rotating refresh token.
+        // A reset at any subsequent point yields the new complete record or reauthorization.
+        // Stop does not invalidate auth; logout changes generation and blocks late commits.
+        this.#store?.clear()
         const response = await this.#post(
           '/oauth/token',
           { grant_type: 'refresh_token', refresh_token: record.refreshToken, client_id: record.clientId },
@@ -221,6 +277,12 @@ export class SubscriptionAuth {
     this.#renewal?.request?.cancel?.()
     this.#record = undefined
     this.#state = 'signed-out'
+    try {
+      this.#store?.clear()
+      this.#storageError = false
+    } catch {
+      this.#storageError = true
+    }
     for (const callback of this.#listeners) {
       try {
         callback()

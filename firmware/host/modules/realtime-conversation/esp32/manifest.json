@@ -1,8 +1,10 @@
 {
   "modules": {
     "realtimeConversation/transport": "./transport.js",
+    "realtimeConversation/subscription-store": "./subscription-store.js",
     "*": [
       "./transport.c",
+      "./subscription-store.c",
       "./media-init.c",
       "./liveAudio.c",
       "./liveCodec.c",
@@ -31,6 +33,19 @@
     "CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC": "y"
   },
   "dependencies": [
+    {
+      "idf": "efuse",
+      "includes": ["esp32s3/include"]
+    },
+    {
+      "idf": "esp_security"
+    },
+    {
+      "idf": "esp_hal_security"
+    },
+    {
+      "idf": "nvs_flash"
+    },
     {
       "name": "esp-sr",
       "version": "==2.4.7",

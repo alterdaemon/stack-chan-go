@@ -12,7 +12,7 @@ const reply = (value, status = 200) => ({
   status,
   text: async () => JSON.stringify(value),
 })
-function authFixture() {
+function authFixture(store) {
   const timers = new Map(),
     requests = []
   let sequence = 0,
@@ -36,22 +36,26 @@ function authFixture() {
             id_token: 'id-secret',
             expires_in: 1000,
           })
-  const auth = new SubscriptionAuth({
-    fetch: (url, options) => {
-      requests.push({ url, options })
-      return respond(url, options)
-    },
-    schedule: (callback, delay) => {
-      const id = ++sequence
-      timers.set(id, { callback, delay })
-      return id
-    },
-    cancel: (id) => timers.delete(id),
-    now: () => now,
-    decodeClaims: () => claims,
-  })
+  const create = () =>
+    new SubscriptionAuth({
+      store,
+      fetch: (url, options) => {
+        requests.push({ url, options })
+        return respond(url, options)
+      },
+      schedule: (callback, delay) => {
+        const id = ++sequence
+        timers.set(id, { callback, delay })
+        return id
+      },
+      cancel: (id) => timers.delete(id),
+      now: () => now,
+      decodeClaims: () => claims,
+    })
+  const auth = create()
   return {
     auth,
+    restart: create,
     requests,
     timers,
     claims,
@@ -70,6 +74,218 @@ function authFixture() {
     },
   }
 }
+
+function savedStore() {
+  let disk
+  return {
+    events: [],
+    available: () => true,
+    read: () => (disk === undefined ? undefined : structuredClone(disk)),
+    write(value) {
+      this.events.push('write')
+      if (this.failWrite) throw new Error('synthetic secret storage error')
+      disk = structuredClone(value)
+    },
+    clear() {
+      this.events.push('clear')
+      if (this.failClear) throw new Error('synthetic secret storage error')
+      disk = undefined
+    },
+  }
+}
+
+test('protected sign-in persists only the refresh credential and bound identity; reboot renews once', async () => {
+  const store = savedStore()
+  const f = authFixture(store)
+  await f.auth.start()
+  await f.poll()
+  assert.equal(f.auth.status().volatile, false)
+  assert.equal(store.read().refreshToken, 'refresh-secret')
+  assert.deepEqual(Object.keys(store.read()).sort(), [
+    'accountId',
+    'clientId',
+    'issuer',
+    'label',
+    'refreshToken',
+    'subject',
+    'version',
+  ])
+  assert.ok(!JSON.stringify(store.read()).includes('access-secret'))
+  assert.ok(!JSON.stringify(store.read()).includes('id-secret'))
+  const rebooted = f.restart()
+  assert.equal(rebooted.status().signedIn, true)
+  const before = f.requests.length
+  const a = rebooted.credentials(),
+    b = rebooted.credentials()
+  assert.equal(store.read(), undefined, 'invalidate saved refresh token before using it')
+  assert.deepEqual(await a, await b)
+  assert.equal(f.requests.length, before + 1)
+  assert.deepEqual(store.events, ['write', 'clear', 'write'])
+  assert.equal(store.read().accountId, 'account')
+  rebooted.logout()
+  assert.equal(f.restart().status().signedIn, false)
+})
+
+test('power loss during rotation yields reauthorization, then a complete new credential after commit', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  await f.auth.start()
+  await f.poll()
+  let finish
+  f.respond(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const rebooted = f.restart(),
+    renewal = rebooted.credentials()
+  assert.equal(f.restart().status().signedIn, false)
+  finish(reply({ access_token: 'new-access', refresh_token: 'rotated-refresh', expires_in: 1000 }))
+  await renewal
+  assert.equal(store.read().refreshToken, 'rotated-refresh')
+  assert.equal(f.restart().status().signedIn, true)
+  assert.equal(store.read().accessToken, undefined)
+})
+
+test('logout racing rotation cannot restore a credential in RAM or storage after reboot', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  await f.auth.start()
+  await f.poll()
+  let finish
+  f.respond(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const rebooted = f.restart(),
+    renewal = rebooted.credentials()
+  rebooted.logout()
+  finish(reply({ access_token: 'late-access', refresh_token: 'late-refresh' }))
+  await assert.rejects(renewal, { code: 'subscription_sign_in_required' })
+  assert.equal(store.read(), undefined)
+  assert.equal(rebooted.status().signedIn, false)
+  assert.equal(f.restart().status().signedIn, false)
+})
+
+test('Stop during independent renewal preserves its committed grant without starting a call', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  await f.auth.start()
+  await f.poll()
+  let finish,
+    calls = 0
+  f.respond(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const auth = f.restart()
+  const live = new SubscriptionLive({
+    auth,
+    fetch: () => {
+      calls++
+      throw new Error('A stopped session cannot create a call')
+    },
+    uuid: () => 'fixture',
+  })
+  const starting = live.create(
+    'v=0',
+    {},
+    () => {},
+    () => true,
+  )
+  live.dispose()
+  finish(reply({ access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 1000 }))
+  await assert.rejects(starting, /cancelled/)
+  assert.equal(calls, 0)
+  assert.equal(store.read().refreshToken, 'new-refresh')
+  assert.equal(f.restart().status().signedIn, true)
+})
+
+test('unavailable hardware refuses authorization without a plaintext or volatile fallback', async () => {
+  const f = authFixture({ available: () => false })
+  assert.equal((await f.auth.start()).state, 'storage-unavailable')
+  assert.equal(f.requests.length, 0)
+  assert.equal(f.auth.status().signedIn, false)
+})
+
+test('a late authorization exchange cannot persist credentials past its deadline', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  await f.auth.start()
+  f.time(2000000)
+  await f.poll()
+  assert.equal(f.auth.status().state, 'expired')
+  assert.equal(store.read(), undefined)
+  assert.equal(f.auth.status().signedIn, false)
+})
+
+test('storage failures are explicit; a failed refresh invalidation sends no credential request', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  store.failWrite = true
+  await f.auth.start()
+  await f.poll()
+  assert.equal(f.auth.status().state, 'storage-error')
+  assert.equal(f.auth.status().signedIn, false)
+  assert.ok(!JSON.stringify(f.auth.status()).includes('secret'))
+  store.failWrite = false
+  f.auth.logout()
+  await f.auth.start()
+  await f.poll()
+  const rebooted = f.restart(),
+    before = f.requests.length
+  store.failClear = true
+  await assert.rejects(rebooted.credentials(), { code: 'subscription_sign_in_required' })
+  assert.equal(f.requests.length, before)
+  assert.equal(rebooted.status().state, 'storage-error')
+  assert.equal((await rebooted.start()).state, 'storage-error')
+  store.failClear = false
+  assert.equal(rebooted.logout().state, 'signed-out')
+  assert.equal(f.restart().status().signedIn, false)
+})
+
+test('malformed stored identities, read errors and rejected or rebound refreshes require sign-in', async () => {
+  const store = savedStore(),
+    f = authFixture(store)
+  await f.auth.start()
+  await f.poll()
+  const saved = store.read()
+  for (const change of [
+    { version: 2 },
+    { issuer: 'https://attacker.test' },
+    { clientId: 'other' },
+    { refreshToken: '' },
+    { accountId: '' },
+    { subject: '' },
+    { accessToken: 'forbidden' },
+    { label: 'x'.repeat(161) },
+  ]) {
+    store.write({ ...saved, ...change })
+    assert.equal(f.restart().status().state, 'storage-error')
+  }
+  store.write(saved)
+  const rebound = f.restart()
+  f.claims['https://api.openai.com/auth'].chatgpt_account_id = 'different-account'
+  await assert.rejects(rebound.credentials(), { code: 'subscription_sign_in_required' })
+  assert.equal(store.read(), undefined)
+  store.write(saved)
+  f.respond(async () => reply({}, 401))
+  await assert.rejects(f.restart().credentials(), { code: 'subscription_sign_in_required' })
+  assert.equal(store.read(), undefined)
+  const broken = authFixture({
+    available: () => true,
+    read() {
+      throw new Error('synthetic secret')
+    },
+  })
+  assert.equal(broken.auth.status().state, 'storage-error')
+  assert.ok(!JSON.stringify(broken.auth.status()).includes('secret'))
+})
 
 test('robot device authorization keeps secrets out of status and permits one pending attempt', async () => {
   const f = authFixture()

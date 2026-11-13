@@ -2,6 +2,7 @@ import fetch from 'realtimeConversation/http'
 import { closingDNS, guardSocketCallbacks } from 'realtimeConversation/http-core'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
+import store from 'realtimeConversation/subscription-store'
 import Base64 from 'base64'
 import RNG from 'rng'
 import TextDecoder from 'text/decoder'
@@ -9,6 +10,7 @@ import Timer from 'timer'
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const auth = new SubscriptionAuth({
+  store,
   fetch,
   schedule: (callback, delay) => Timer.set(callback, delay),
   cancel: (timer) => Timer.clear(timer),

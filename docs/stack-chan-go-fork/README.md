@@ -385,15 +385,36 @@ available when returning to **OpenAI (API key)**. Save settings, leave Settings
 and manually start LIVE. Switching the saved choice does not restart a call.
 Neither connection automatically falls back to the other, including for search.
 
-This initial R5 implementation keeps subscription grants only in RAM; restarting
-the robot requires sign-in again. No grant is stored in ordinary preferences,
-returned to the browser, or embedded in a distributed image. The browser is used
-for sign-in; it does not run the voice or reasoning connection.
+R5 can retain ChatGPT sign-in across restarts using a separate encrypted record
+in existing NVS storage. It saves only the refresh credential and bound account
+identity, sealed with AES-256-GCM using a device-bound key derived by the ESP32-S3
+HMAC peripheral. Access and identity tokens remain in RAM. After reboot, the
+robot renews independently before making a subscription request. No grant is
+returned to the browser or embedded in an image; the browser only handles sign-in.
+
+Secure storage requires an existing HMAC_UP eFuse key with read, write and purpose
+protection. If none is available, Settings shows **Secure sign-in storage needs
+setup** and refuses sign-in; it never writes plaintext subscription credentials.
+The application does not provision keys, burn fuses, activate flash encryption,
+change partitions or migrate existing API keys. Existing API-key preferences
+remain unencrypted. Hardware provisioning requires a separate device-specific
+decision; installing this application does not establish that the robot has a key.
+This storage protects against reading or editing the credential blob in a flash
+dump; it does not establish Secure Boot or protect against malicious firmware
+running on the robot. See Espressif's [HMAC](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-reference/peripherals/hmac.html)
+and [NVS security](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-reference/storage/nvs_flash.html#security-tampering-and-robustness) documentation.
+
+Before renewal, the robot commits an invalidation record. An interrupted rotation
+therefore restores either the complete replacement or a signed-out state requiring
+authorization again. **Sign out** deletes the local grant; if storage fails,
+Settings reports it and offers **Retry sign-out** rather than claiming deletion
+succeeded. Ordinary session Stop retains sign-in. Cloud grant revocation is not
+performed by local sign-out.
 
 The subscription path uses the private Codex Live contract and a single
 subscription Responses backend, `gpt-6.1-terra`, with hosted web search. It requires
 account access to those services. It does not make every API model available.
 Answers are bounded and search is reported as verified only after completed tool
 execution with HTTP(S) citation URLs. Service errors end or fail the selected
-operation; they do not use a saved API key. Protected persistent storage and real
-account/device qualification remain prerequisites for completing this feature.
+operation; they do not use a saved API key. Real account/device qualification,
+including actual protected-key availability and power-loss tests, remains required.
