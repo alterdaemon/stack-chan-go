@@ -156,6 +156,8 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
   const defaults = {
     auth: 'api-key',
     codexVoice: 'cove',
+    codexModel: 'gpt-6.1-terra',
+    codexEffort: 'medium',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'host-backend',
@@ -177,6 +179,8 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
   assert.deepEqual(loadPreferences(DOMAIN.openailive), {
     auth: 'api-key',
     codexVoice: 'cove',
+    codexModel: 'gpt-6.1-terra',
+    codexEffort: 'medium',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'saved-backend',
@@ -217,6 +221,8 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
   assert.deepEqual(fresh.default(DOMAIN.openailive), {
     auth: 'api-key',
     codexVoice: 'cove',
+    codexModel: 'gpt-6.1-terra',
+    codexEffort: 'medium',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'mod-backend',

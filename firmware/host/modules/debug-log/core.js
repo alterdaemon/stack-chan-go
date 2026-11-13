@@ -131,6 +131,10 @@ const STRING_FIELDS = new Set([
   'dtlsRole',
   'interruptionTrial',
   'voiceTrial',
+  'probe',
+  'effort',
+  'trialModel',
+  'trialEffort',
   'trialPitch',
   'trialVolume',
   'trialStandby',
@@ -271,7 +275,8 @@ export class DebugRecorder {
       const parameter = line === 'diag reset' ? 'reset' : parts[2]
       const raw = parts[3]
       const value =
-        ['noise', 'dtls', 'interruption', 'voice', 'style', 'prompt'].includes(parameter) || raw === 'saved'
+        ['noise', 'dtls', 'interruption', 'voice', 'style', 'prompt', 'probe', 'model', 'effort'].includes(parameter) ||
+        raw === 'saved'
           ? raw
           : Number(raw)
       const valid =
@@ -287,12 +292,16 @@ export class DebugRecorder {
             (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
             (parameter === 'interruption' && ['on', 'off', 'saved'].includes(value)) ||
             (parameter === 'voice' && /^[a-z]{3,12}$/.test(value)) ||
-            (['pitch', 'volume', 'standby', 'style', 'prompt'].includes(parameter) && value === 'saved') ||
+            (['pitch', 'volume', 'standby', 'style', 'prompt', 'model', 'effort'].includes(parameter) &&
+              value === 'saved') ||
             (parameter === 'pitch' && Number.isInteger(value) && value >= -6 && value <= 6) ||
             (parameter === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) ||
             (parameter === 'standby' && Number.isInteger(value) && value >= 1 && value <= 3600) ||
             (parameter === 'style' && ['default', 'calm', 'expressive'].includes(value)) ||
             (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
+            (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
+            (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
+            (parameter === 'probe' && ['reasoning', 'search', 'english', 'polish'].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

@@ -48,6 +48,76 @@ describe('usePreferences', () => {
     expect(result.current.values['openailive.auth']).toBe('api-key')
   })
 
+  it('saves the independent subscription voice and discards its stale capability on reconnect', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => {
+      notify({ prop: 'openailive.auth', value: 'chatgpt' })
+      notify({ prop: 'openailive.codexVoice', value: 'unknown' })
+      notify({ prop: 'openailive.voice', value: 'marin' })
+      notify({ prop: 'openailive.realtimeVoice', value: 'cedar' })
+      result.current.update('openailive.codexVoice', 'cove')
+    })
+    expect(result.current.codexVoiceAvailable).toBe(true)
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({ _batch: { 'openailive.codexVoice': 'cove' } })
+    expect(result.current.values['openailive.voice']).toBe('marin')
+    expect(result.current.values['openailive.realtimeVoice']).toBe('cedar')
+    await act(() => result.current.connect())
+    expect(result.current.codexVoiceAvailable).toBe(false)
+    act(() => result.current.update('openailive.codexVoice', 'unknown'))
+    expect(result.current.values['openailive.codexVoice']).toBe('cove')
+  })
+
+  it('saves and validates independent subscription model and effort with no API override leakage', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => {
+      for (const [prop, value] of Object.entries({
+        'openailive.auth': 'chatgpt',
+        'openailive.codexModel': 'gpt-6.1-terra',
+        'openailive.codexEffort': 'medium',
+        'openailive.backendModel': 'api-model',
+        'openailive.reasoningEffort': 'max',
+      }))
+        notify({ prop, value })
+      result.current.update('openailive.codexModel', 'gpt-6-luna')
+      result.current.update('openailive.codexEffort', 'low')
+    })
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({
+      _batch: { 'openailive.codexModel': 'gpt-6-luna', 'openailive.codexEffort': 'low' },
+    })
+    expect(result.current.values['openailive.backendModel']).toBe('api-model')
+    expect(result.current.values['openailive.reasoningEffort']).toBe('max')
+    send.mockClear()
+    act(() => result.current.update('openailive.codexModel', ' '))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    expect(result.current.operation.status).toBe('error')
+    act(() => {
+      result.current.update('openailive.codexModel', 'gpt-6-luna')
+      result.current.update('openailive.codexEffort', 'invalid')
+    })
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    await act(() => result.current.connect())
+    expect(result.current.codexModelAvailable).toBe(false)
+    expect(result.current.codexEffortAvailable).toBe(false)
+  })
+
   it('saves full Realtime without rewriting either saved voice and rejects unsupported modes', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})

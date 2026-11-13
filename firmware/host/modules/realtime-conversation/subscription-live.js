@@ -179,6 +179,7 @@ export class SubscriptionLive {
   #job
   #closed = false
   #active = false
+  #ready = false
   #events = []
   #seen = []
   #unsubscribe
@@ -186,9 +187,10 @@ export class SubscriptionLive {
   #outputId
   #cleared = false
   #context = []
+  #speechProbe
 
-  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now, diagnose }) {
-    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose })
+  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now, diagnose, debug }) {
+    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose, debug })
     this.#unsubscribe = auth.onLogout(() => {
       this.dispose()
       onLogout?.()
@@ -318,6 +320,11 @@ export class SubscriptionLive {
 
   activate() {
     this.#active = true
+    this.debug?.registerTuner?.(this, {
+      set: (name, value) => this.probe(name, value),
+      reset: async () => this.cancelJob(),
+      snapshot: () => ({}),
+    })
     const queued = this.#events
     this.#events = []
     for (const event of queued) this.#receive(event)
@@ -336,8 +343,17 @@ export class SubscriptionLive {
       this.#seen.push(message.event_id)
       if (this.#seen.length > 16) this.#seen.shift()
     }
-    if (message.type === 'turn.done' && typeof message.turn?.transcript === 'string')
+    if (message.type === 'session.started') this.#ready = true
+    if (message.type === 'turn.done' && typeof message.turn?.transcript === 'string') {
       this.#remember(message.turn.role, message.turn.transcript)
+      if (this.#speechProbe && message.turn.role === 'assistant') {
+        this.diagnose?.('probe.output', () => ({
+          probe: this.#speechProbe,
+          accepted: (this.#speechProbe === 'english' ? /voice test/i : /test głosu/i).test(message.turn.transcript),
+        }))
+        this.#speechProbe = undefined
+      }
+    }
     if (message.type === 'output_transcript.added' && typeof message.item?.text === 'string') {
       const outputId = id(message.item.id) ? message.item.id : undefined
       if (outputId && outputId === this.#outputId) return
@@ -378,10 +394,48 @@ export class SubscriptionLive {
     this.#onMessage(message)
   }
 
-  async #delegate(delegationId, text) {
+  async probe(name, value) {
+    if (!this.debug?.enabled || !this.#ready || this.#closed || this.#job)
+      throw Object.assign(new Error('Subscription probe unavailable'), { code: 'not_connected' })
+    if (name === 'probe' && ['english', 'polish'].includes(value)) {
+      this.#speechProbe = value
+      // Codex V3 send_conversation_item_create maps to session.context.append.
+      this.#channel.send({
+        type: 'session.context.append',
+        channel: 'final',
+        content: [
+          {
+            type: 'input_text',
+            text:
+              value === 'english'
+                ? 'For this diagnostic only, say exactly: Hello. This is a voice test.'
+                : 'Na potrzeby tego testu powiedz dokładnie: Cześć. To jest test głosu.',
+          },
+        ],
+      })
+      return
+    }
+    const prompts = {
+      reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',
+      search: 'Search the web for the official OpenAI status page. Report what it says and cite its URL.',
+    }
+    if (name !== 'probe' || !Object.hasOwn(prompts, value)) throw new RangeError('Invalid subscription probe')
+    const result = await this.#delegate(this.uuid(), prompts[value], true)
+    if (
+      !result ||
+      (value === 'reasoning' && !/\b323\b/.test(result.answer)) ||
+      (value === 'search' && result.searched !== true)
+    )
+      throw Object.assign(new Error('Subscription probe failed'), { code: 'subscription_backend_error' })
+  }
+
+  async #delegate(delegationId, text, probe = false) {
     const job = { id: delegationId }
     this.#job = job
-    this.diagnose?.('backend.start')
+    this.diagnose?.('backend.start', () => ({
+      model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
+      effort: this.options.reasoningEffort ?? 'medium',
+    }))
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
       const credentials = await this.auth.credentials()
@@ -394,7 +448,8 @@ export class SubscriptionLive {
         responseFormat: 'subscription-response',
         timeoutMs: 45000,
         body: JSON.stringify({
-          model: SUBSCRIPTION_BACKEND,
+          model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
+          reasoning: { effort: this.options.reasoningEffort ?? 'medium' },
           instructions: `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
           input: [
             ...this.#context.map((item) => ({
@@ -424,6 +479,7 @@ export class SubscriptionLive {
       if (this.#job !== job || this.#closed) return
       const answer =
         result.answer + (result.searched ? '\nSources: ' + result.sources.map((source) => source.url).join(' ') : '')
+      if (probe) return result
       for (const event of subscriptionAppends(answer, delegationId)) this.#channel.send(event)
     } catch (error) {
       this.diagnose?.('backend.failed', () => ({
@@ -431,7 +487,7 @@ export class SubscriptionLive {
         providerCode: error?.providerCode,
         param: error?.param,
       }))
-      if (this.#job === job && !this.#closed)
+      if (!probe && this.#job === job && !this.#closed)
         for (const event of subscriptionAppends('I could not complete that request. Please try again.', delegationId))
           this.#channel.send(event)
     } finally {
@@ -451,6 +507,7 @@ export class SubscriptionLive {
   }
 
   cancelJob() {
+    this.#speechProbe = undefined
     const job = this.#job
     this.#job = undefined
     job?.request?.cancel?.()
@@ -463,6 +520,9 @@ export class SubscriptionLive {
   }
   dispose() {
     this.#closed = true
+    this.#ready = false
+    this.#speechProbe = undefined
+    this.debug?.unregisterTuner?.(this)
     this.cancelJob()
     this.#request?.cancel?.()
     this.#channel?.close()

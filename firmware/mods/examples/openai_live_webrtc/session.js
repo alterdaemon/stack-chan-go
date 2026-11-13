@@ -151,6 +151,9 @@ ${this.settings.instructions}`
         mode: this.settings.mode,
         ...(this.settings.auth === 'chatgpt' ? { auth: 'chatgpt' } : { apiKey: this.settings.apiKey }),
         model: this.settings.model,
+        ...(this.settings.auth === 'chatgpt'
+          ? { backendModel: this.settings.backendModel, reasoningEffort: this.settings.reasoningEffort }
+          : {}),
         voice: entry.voice ?? (entry.stage < 1 ? 'cove' : this.settings.voice),
         pitch: entry.stage < 3 ? 0 : (this.settings.pitch ?? 0),
         bargeIn: entry.bargeIn,

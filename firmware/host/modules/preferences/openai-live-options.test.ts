@@ -4,6 +4,7 @@ import {
   isLivePitch,
   isLiveVoicePreference,
   liveStyleInstructions,
+  OPENAI_CODEX_VOICES,
   OPENAI_LIVE_STYLES,
   OPENAI_LIVE_VOICES,
   OPENAI_REALTIME_VOICES,
@@ -53,4 +54,22 @@ test('default style preserves context exactly; selected styles add delivery with
     assert.ok(value.length > context.length)
   }
   assert.notEqual(...(variants as [string, string]))
+})
+
+test('Codex choices have an independent validator and never expand public API voices', () => {
+  for (const voice of OPENAI_CODEX_VOICES) assert.ok(isLiveVoicePreference('openailive.codexVoice', voice))
+  for (const voice of [undefined, '', 'unknown', 'marin', 'cedar'])
+    assert.equal(isLiveVoicePreference('openailive.codexVoice', voice), false)
+  assert.equal(isLiveVoicePreference('openailive.voice', 'cove'), false)
+  assert.equal(isLiveVoicePreference('openailive.realtimeVoice', 'cove'), false)
+})
+
+test('subscription model and effort settings reject malformed overrides', () => {
+  for (const value of ['gpt-6.1-terra', ' gpt-6-luna ', 'unavailable-model'])
+    assert.ok(isLiveVoicePreference('openailive.codexModel', value))
+  for (const value of ['', ' ', null, 0, 'model/path', 'a'.repeat(129)])
+    assert.equal(isLiveVoicePreference('openailive.codexModel', value), false)
+  for (const value of ['none', 'low', 'medium', 'high', 'xhigh', 'max'])
+    assert.ok(isLiveVoicePreference('openailive.codexEffort', value))
+  for (const value of ['', 'auto', null, 1]) assert.equal(isLiveVoicePreference('openailive.codexEffort', value), false)
 })

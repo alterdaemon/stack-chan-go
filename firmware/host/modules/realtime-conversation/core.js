@@ -196,7 +196,25 @@ export default class Conversation {
       throw new TypeError('Unsupported subscription model')
     if (subscription && typeof options.instructions === 'string' && options.instructions.length > 8192)
       throw new RangeError('Subscription prompt exceeds limit')
+    if (
+      subscription &&
+      options.backendModel !== undefined &&
+      (typeof options.backendModel !== 'string' || !/^[a-z0-9][a-z0-9._:-]{0,127}$/i.test(options.backendModel.trim()))
+    )
+      throw new TypeError('Unsupported subscription backend model')
+    if (
+      subscription &&
+      options.reasoningEffort !== undefined &&
+      !['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(options.reasoningEffort)
+    )
+      throw new TypeError('Unsupported subscription reasoning effort')
     this.#options = {
+      ...(subscription
+        ? {
+            backendModel: options.backendModel?.trim() ?? 'gpt-6.1-terra',
+            reasoningEffort: options.reasoningEffort ?? 'medium',
+          }
+        : {}),
       model:
         options.model ??
         (subscription ? 'gpt-live-1.1-codex' : undefined) ??
@@ -762,7 +780,10 @@ export default class Conversation {
         }
         case 'error': {
           if (this.#subscription)
-            throw new ConversationError('Subscription session failed', 'subscription_error', 'events')
+            throw attachErrorMetadata(
+              new ConversationError('Subscription session failed', 'subscription_error', 'events'),
+              message.error,
+            )
           if (
             this.#trial &&
             (message.error?.event_id === this.#trial.id || message.error?.client_event_id === this.#trial.id)

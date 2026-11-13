@@ -82,7 +82,7 @@ export default function start() {
       else if (parameter === 'stun') tune(6, value)
       else if (parameter === 'interruption') Debug.setInterruptionTrial(value)
       else if (parameter === 'voice') Debug.setVoiceTrial(value)
-      else if (['pitch', 'volume', 'standby', 'style', 'prompt'].includes(parameter))
+      else if (['pitch', 'volume', 'standby', 'style', 'prompt', 'model', 'effort'].includes(parameter))
         Debug.setLiveTrial(parameter, value)
       else await Debug.tune(parameter, value)
     },

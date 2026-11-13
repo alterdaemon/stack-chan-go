@@ -222,7 +222,15 @@ test('subscription selection never reads the API key and preserves shared prompt
   }
   const read = () =>
     readLiveSettings({ apiKey: 'unselected-paid-key' }, (domain, key) => {
-      assert.ok(!['ai.token', 'openailive.voice', 'openailive.realtimeVoice'].includes(`${domain}.${key}`))
+      assert.ok(
+        ![
+          'ai.token',
+          'openailive.voice',
+          'openailive.realtimeVoice',
+          'openailive.backendModel',
+          'openailive.reasoningEffort',
+        ].includes(`${domain}.${key}`),
+      )
       return saved[`${domain}.${key}`]
     })
   const settings = read()
@@ -233,8 +241,26 @@ test('subscription selection never reads the API key and preserves shared prompt
   assert.equal(settings.instructions, 'Speak Polish.')
   assert.equal(settings.voice, 'cove')
   assert.equal(settings.pitch, 3)
+  assert.equal(settings.backendModel, 'gpt-6.1-terra')
+  assert.equal(settings.reasoningEffort, 'medium')
+  saved['openailive.codexModel'] = '  gpt-6-luna  '
+  for (const effort of ['none', 'low', 'medium', 'high', 'xhigh', 'max']) {
+    saved['openailive.codexEffort'] = effort
+    assert.equal(read().backendModel, 'gpt-6-luna')
+    assert.equal(read().reasoningEffort, effort)
+  }
+  saved['openailive.codexEffort'] = 'invalid'
+  assert.throws(read, /Unsupported subscription reasoning effort/)
+  saved['openailive.codexEffort'] = 'medium'
+  saved['openailive.codexModel'] = ' '
+  assert.throws(read, /Unsupported subscription backend model/)
+  saved['openailive.codexModel'] = 'gpt-6.1-terra'
   saved['openailive.voice'] = 'unsupported'
   assert.equal(read().voice, 'cove')
+  saved['openailive.codexVoice'] = 'juniper'
+  assert.equal(read().voice, 'juniper')
+  saved['openailive.codexVoice'] = 'marin'
+  assert.throws(read, /Unsupported subscription voice/)
   saved['openailive.codexVoice'] = 'unsupported'
   assert.throws(read, /Unsupported subscription voice/)
 })

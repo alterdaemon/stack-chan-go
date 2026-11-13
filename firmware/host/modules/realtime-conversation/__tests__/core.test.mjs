@@ -870,6 +870,8 @@ await test('subscription readiness uses the control channel, keeps identities di
       control = callback
       equal(options.instructions, 'Speak Polish.')
       equal(options.voice, 'cove')
+      equal(options.backendModel, 'gpt-6.1-terra')
+      equal(options.reasoningEffort, 'medium')
       onAnswer({ callId: 'rtc_private', sdp: 'v=0 answer' })
       await new Promise((resolve) => {
         joinControl = resolve
@@ -960,6 +962,9 @@ await test('subscription readiness uses the control channel, keeps identities di
     { signaling: {} },
     { mode: 'realtime' },
     { model: 'gpt-live-1-codex' },
+    { backendModel: '' },
+    { backendModel: 'model/path' },
+    { reasoningEffort: 'invalid' },
   ]) {
     let rejected = false
     try {
@@ -1020,6 +1025,23 @@ await test('private failure and close matrix preserves selected credentials and 
       equal(h.c.state, 'error')
       check(h.errors.every((error) => !error.message.includes('untrusted')))
       check(!JSON.stringify(logged).includes('opaque-subscription-token'))
+      const safe = harness({ auth: 'chatgpt', apiKey: undefined }, () => ({
+        create: async (_sdp, _options, callback) => {
+          receive = callback
+          return { callId: 'rtc_fixture', sdp: 'v=0 answer' }
+        },
+        activate: () => receive({ type: 'session.started' }),
+        dispose() {},
+        cancelJob() {},
+        send() {},
+      }))
+      const started = safe.c.connect()
+      await safe.signal()
+      await started
+      receive({ type: 'error', error: { code: 'subscription_control_lost', param: 'session_id' } })
+      await flush()
+      equal(safe.errors[0].providerCode, 'subscription_control_lost')
+      equal(safe.errors[0].param, 'session_id')
     } else {
       const closing = h.c.close()
       h.timeout(3000)

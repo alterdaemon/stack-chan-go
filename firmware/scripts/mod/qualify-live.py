@@ -55,21 +55,26 @@ class Capture:
             time.sleep(0.03)
         raise RuntimeError('USB control acknowledgement timed out')
 
-    def command(self, text, action, **fields):
+    def command(self, text, action, timeout=7, **fields):
         self.pump()
         after = len(self.rows)
         self.child.stdin.write(text + '\n')
         self.child.stdin.flush()
-        return self.wait(lambda d: d.get('component') == 'debug' and d.get('action') == action and
-                         all(d.get(k) == v for k, v in fields.items()), after, seconds=7)
+        result = self.wait(lambda d: d.get('component') == 'debug' and d.get('action') == action and
+                           all((d.get(k) in ('applied', 'failed') if k == 'phase' and v == 'applied'
+                                else d.get(k) == v) for k, v in fields.items()), after, seconds=timeout)
+        if result.get('phase') == 'failed':
+            raise RuntimeError(f'USB control failed: {action}/{fields.get("parameter", "")}: {result.get("code", "failed")}')
+        return result
 
     def set(self, parameter, value):
-        self.command(f'diag set {parameter} {value}', 'set', parameter=parameter, phase='applied')
+        self.command(f'diag set {parameter} {value}', 'set', timeout=55 if parameter == 'probe' else 7,
+                     parameter=parameter, phase='applied')
 
     def reset(self):
         self.command('diag reset', 'set', parameter='reset', phase='applied')
 
-    def trial(self, name, profile='start', interruption='off', settings=None, hold=0):
+    def trial(self, name, profile='start', interruption='off', settings=None, hold=0, probes=()):
         self.reset()
         self.set('interruption', interruption)
         for parameter, value in (settings or {}).items():
@@ -82,6 +87,9 @@ class Capture:
         end = self.wait(lambda d: d.get('action') == 'live' and d.get('setting') == profile and
                         d.get('phase') in ('applied', 'failed'), after)
         elapsed = round(time.monotonic() - started, 3)
+        if end['phase'] == 'applied':
+            for probe in probes:
+                self.set('probe', probe)
         until = time.monotonic() + hold if end['phase'] == 'applied' else 0
         while time.monotonic() < until:
             self.pump()
@@ -92,7 +100,9 @@ class Capture:
                       phase=end['phase'], seconds=elapsed,
                       session=next((d for d in details if d.get('event') == 'call.session'), None),
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
-                      failures=[d for d in details if d.get('event') == 'failure'])
+                      failures=[d for d in details if d.get('event') == 'failure'],
+                      backend=[d for d in details if d.get('event', '').startswith('backend.')],
+                      probeOutputs=[d for d in details if d.get('event') == 'probe.output'])
         self.results.append(result)
         (self.args.output / 'results.json').write_text(json.dumps(self.results, indent=2) + '\n')
         print(json.dumps({k: result[k] for k in ('name', 'interruption', 'phase', 'seconds')}), flush=True)
@@ -123,7 +133,9 @@ def main():
     parser.add_argument('--port', required=True)
     parser.add_argument('--expected-sha', required=True, help='Running app ELF SHA256 from validated image')
     parser.add_argument('--output', required=True, type=Path, help='New private evidence directory')
-    parser.add_argument('--suite', choices=('voices', 'parameters', 'cycles', 'soak'), required=True)
+    parser.add_argument('--voices', nargs='+', choices=VOICES, help='Specific documented candidates to retest')
+    parser.add_argument('--interruption', choices=('off', 'on', 'both'), default='both')
+    parser.add_argument('--suite', choices=('voices', 'parameters', 'backend', 'audio', 'cycles', 'soak'), required=True)
     parser.add_argument('--duration', type=int, default=7200, help='USB lease-renewing capture bound, seconds')
     parser.add_argument('--cycles', type=int, default=100)
     parser.add_argument('--hold', type=int, default=3600, help='Connected soak duration in seconds')
@@ -137,16 +149,29 @@ def main():
         first = capture.wait(lambda d: d.get('action') == 'on', seconds=7)
         if first.get('app_sha256') != args.expected_sha:
             raise RuntimeError('Running image identity differs from the validated candidate')
-        if args.suite == 'voices':
-            passing = []
-            for voice in ['cove'] + [v for v in VOICES if v != 'cove']:
-                if capture.trial(voice, 'standard', settings={'voice': voice}):
-                    passing.append(voice)
-            for voice in passing:
-                capture.trial(voice, 'standard', 'on', {'voice': voice})
-            capture.trial('baseline-recheck', 'standard')
-        elif args.suite == 'parameters':
+        (args.output / 'identity.json').write_text(json.dumps(first, indent=2) + '\n')
+        if args.suite == 'backend':
             for mode in ('off', 'on'):
+                for model in ('gpt-6.1-terra', 'gpt-6-luna'):
+                    for effort in ('none', 'low', 'medium', 'high', 'xhigh', 'max'):
+                        if not capture.trial(f'{model}-{effort}', interruption=mode,
+                                             settings={'model': model, 'effort': effort}, probes=('reasoning',)):
+                            raise RuntimeError('Backend parameter qualification failed')
+                    if not capture.trial(f'{model}-search', interruption=mode,
+                                         settings={'model': model, 'effort': 'medium'}, probes=('search',)):
+                        raise RuntimeError('Search qualification failed')
+        elif args.suite == 'voices':
+            voices = args.voices or ['cove'] + [v for v in VOICES if v != 'cove']
+            for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
+                for voice in voices:
+                    capture.trial(voice, 'standard', mode, {'voice': voice})
+            capture.trial('baseline-recheck', 'standard')
+        elif args.suite == 'audio':
+            for mode in ('off', 'on'):
+                for probe in ('english', 'polish'):
+                    capture.trial(probe, interruption=mode, probes=(probe,), hold=10)
+        elif args.suite == 'parameters':
+            for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
                 for profile in ('standard', 'voice', 'prompt', 'pitch', 'start'):
                     capture.trial(profile, profile, mode)
                 for parameter, values in [('pitch', range(-6, 7)), ('style', ['default', 'calm', 'expressive']),

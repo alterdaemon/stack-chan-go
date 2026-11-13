@@ -20,6 +20,8 @@ describe('PreferencesPage', () => {
       openaiAvailable: true,
       subscriptionAvailable: false,
       codexVoiceAvailable: true,
+      codexModelAvailable: true,
+      codexEffortAvailable: true,
       modeAvailable: true,
       realtimeVoiceAvailable: true,
       bargeInAvailable: true,
@@ -72,10 +74,55 @@ describe('PreferencesPage', () => {
     expect(screen.getByRole('spinbutton', { name: '自動切断までの秒数' })).toBeVisible()
     expect(screen.queryByLabelText('OpenAI API key')).toBeNull()
     expect(screen.queryByRole('combobox', { name: '会話モード' })).toBeNull()
-    expect(screen.queryByRole('combobox', { name: '推論の強度' })).toBeNull()
-    expect(screen.queryByLabelText('モデル')).toBeNull()
+    expect(screen.getByRole('combobox', { name: '推論の強度' })).toHaveTextContent('medium')
+    expect(screen.getByLabelText('モデル')).toHaveValue('gpt-6.1-terra')
     expect(screen.getAllByText('OpenAI', { exact: true }).length).toBe(1)
     vi.unstubAllGlobals()
+  })
+
+  it('offers qualified Codex voices and edits only the subscription voice', async () => {
+    const user = userEvent.setup()
+    const { state } = renderPreferences({
+      subscriptionAvailable: true,
+      http: false,
+      values: {
+        ...DEFAULT_PREFERENCES,
+        'openailive.auth': 'chatgpt',
+        'openailive.voice': 'marin',
+        'openailive.realtimeVoice': 'cedar',
+      },
+    })
+    await user.click(screen.getByRole('combobox', { name: '声' }))
+    expect(screen.getByRole('option', { name: 'cove' })).toBeVisible()
+    expect(screen.getByRole('option', { name: 'viola' })).toBeVisible()
+    expect(screen.queryByRole('option', { name: 'marin' })).toBeNull()
+    expect(screen.queryByRole('option', { name: 'cedar' })).toBeNull()
+    await user.click(screen.getByRole('option', { name: 'juniper' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.codexVoice', 'juniper')
+    expect(state.values['openailive.voice']).toBe('marin')
+    expect(state.values['openailive.realtimeVoice']).toBe('cedar')
+  })
+
+  it('edits subscription reasoning settings without writing API model or effort', async () => {
+    const user = userEvent.setup()
+    const { state } = renderPreferences({
+      subscriptionAvailable: true,
+      values: {
+        ...DEFAULT_PREFERENCES,
+        'openailive.auth': 'chatgpt',
+        'openailive.backendModel': 'saved-api-model',
+        'openailive.reasoningEffort': 'high',
+      },
+    })
+    const model = screen.getByLabelText('モデル')
+    expect(model).toHaveAttribute('id', 'openailive.codexModel')
+    fireEvent.change(model, { target: { value: 'gpt-6-luna' } })
+    expect(state.update).toHaveBeenLastCalledWith('openailive.codexModel', 'gpt-6-luna')
+    await user.click(screen.getByRole('combobox', { name: '推論の強度' }))
+    await user.click(screen.getByRole('option', { name: 'low' }))
+    expect(state.update).toHaveBeenLastCalledWith('openailive.codexEffort', 'low')
+    expect(state.values['openailive.backendModel']).toBe('saved-api-model')
+    expect(state.values['openailive.reasoningEffort']).toBe('high')
   })
 
   it('directs a subscribed BLE device to Wi-Fi without showing an API key or browser sign-in', () => {

@@ -258,7 +258,15 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
             if (!message || typeof message.type !== 'string') throw new Error('Invalid subscription event')
             if (firstMessage) {
               firstMessage = false
-              diagnose('control.first_message', () => ({ value: frame.byteLength }))
+              diagnose('control.first_message', () => ({
+                value: frame.byteLength,
+                type:
+                  /^(?:(?:session|delegation|conversation|rate_limits)\.[a-z_.]+|(?:input|output)_[a-z_.]+|error)$/.test(
+                    message.type,
+                  ) && message.type.length <= 64
+                    ? message.type
+                    : 'other',
+              }))
             }
             onMessage(message)
           } catch {
@@ -283,6 +291,7 @@ export function createSubscription(options) {
   if (!auth.status().signedIn)
     throw Object.assign(new Error('Subscription sign-in required'), { code: 'subscription_sign_in_required' })
   return new SubscriptionLive({
+    debug: Debug,
     auth,
     fetch,
     openControl: openSubscriptionControl,

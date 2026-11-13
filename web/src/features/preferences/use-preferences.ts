@@ -79,6 +79,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     for (const key of [
       'openailive.auth',
       'openailive.codexVoice',
+      'openailive.codexModel',
+      'openailive.codexEffort',
       'openailive.mode',
       'openailive.realtimeVoice',
       'openailive.backendModel',
@@ -97,6 +99,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       ...current,
       'openailive.auth': 'api-key',
       'openailive.codexVoice': 'cove',
+      'openailive.codexModel': 'gpt-6.1-terra',
+      'openailive.codexEffort': 'medium',
       'openailive.mode': 'live',
       'openailive.realtimeVoice': 'marin',
       'openailive.backendModel': '',
@@ -144,6 +148,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       ([
         'openailive.auth',
         'openailive.codexVoice',
+        'openailive.codexModel',
+        'openailive.codexEffort',
         'openailive.mode',
         'openailive.realtimeVoice',
         'openailive.bargeIn',
@@ -231,7 +237,11 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
         'openailive.reasoningEffort',
       ] as const)
         delete payload[key]
-    } else delete payload['openailive.codexVoice']
+    } else {
+      delete payload['openailive.codexVoice']
+      delete payload['openailive.codexModel']
+      delete payload['openailive.codexEffort']
+    }
     return savePayload(payload, '設定を送信しました。')
   }, [savePayload, values])
 
@@ -253,6 +263,8 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
     subscriptionAvailable: currentValues.current['openailive.auth'] !== undefined,
+    codexModelAvailable: currentValues.current['openailive.codexModel'] !== undefined,
+    codexEffortAvailable: currentValues.current['openailive.codexEffort'] !== undefined,
     codexVoiceAvailable: currentValues.current['openailive.codexVoice'] !== undefined,
     modeAvailable: currentValues.current['openailive.mode'] !== undefined,
     realtimeVoiceAvailable: currentValues.current['openailive.realtimeVoice'] !== undefined,

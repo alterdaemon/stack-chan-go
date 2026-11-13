@@ -34,7 +34,36 @@ export const OPENAI_LIVE_VOICES: readonly string[] = Object.freeze([
   'willow',
 ])
 // Subscription choices are qualified separately from the public API voice lists.
-export const OPENAI_CODEX_VOICES: readonly string[] = Object.freeze(['cove'])
+// Codex 69231e11 RealtimeVoicesList V3, qualified on the subscription route.
+// https://github.com/openai/codex/blob/69231e119bfca0b14453515e97d99688ce1c47c9/codex-rs/protocol/src/protocol.rs
+export const OPENAI_CODEX_VOICES: readonly string[] = Object.freeze([
+  'cove',
+  'juniper',
+  'maple',
+  'spruce',
+  'ember',
+  'vale',
+  'breeze',
+  'arbor',
+  'sol',
+  'aube',
+  'bubbie',
+  'haetsal',
+  'hanul',
+  'himari',
+  'leher',
+  'miko',
+  'neer',
+  'porto',
+  'rindo',
+  'rio',
+  'rivage',
+  'selva',
+  'sonna',
+  'tinta',
+  'viola',
+])
+export const OPENAI_CODEX_EFFORTS: readonly string[] = Object.freeze(['none', 'low', 'medium', 'high', 'xhigh', 'max'])
 export const OPENAI_LIVE_STYLES: readonly string[] = Object.freeze(['default', 'calm', 'expressive'])
 // https://developers.openai.com/api/docs/guides/realtime-conversations#voice-options
 export const OPENAI_REALTIME_VOICES: readonly string[] = Object.freeze([
@@ -69,6 +98,9 @@ export function isLiveVoicePreference(prop: string, value: unknown): boolean {
     const seconds = Number(value)
     return Number.isInteger(seconds) && seconds >= OPENAI_LIVE_STANDBY_MIN && seconds <= OPENAI_LIVE_STANDBY_MAX
   }
+  if (prop === 'openailive.codexModel')
+    return typeof value === 'string' && /^[a-z0-9][a-z0-9._:-]{0,127}$/i.test(value.trim())
+  if (prop === 'openailive.codexEffort') return typeof value === 'string' && OPENAI_CODEX_EFFORTS.includes(value)
   if (prop === 'openailive.codexVoice') return typeof value === 'string' && OPENAI_CODEX_VOICES.includes(value)
   if (prop === 'openailive.voice') return typeof value === 'string' && OPENAI_LIVE_VOICES.includes(value)
   if (prop === 'openailive.pitch') return isLivePitch(value)

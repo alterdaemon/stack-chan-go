@@ -82,6 +82,8 @@ async function verifyLiveAPI() {
       active = false
     },
   })
+  Debug.setLiveTrial('model', 'gpt-6-luna')
+  Debug.setLiveTrial('effort', 'low')
   Debug.setLiveTrial('pitch', -6)
   Debug.setLiveTrial('style', 'expressive')
   Debug.setLiveTrial('volume', 0)
@@ -93,6 +95,8 @@ async function verifyLiveAPI() {
   if (observed.interruption !== false || observed.standard !== 4) throw new Error('Off override lost')
   if (
     observed.voice !== 'juniper' ||
+    observed.parameters.model !== 'gpt-6-luna' ||
+    observed.parameters.effort !== 'low' ||
     observed.parameters.pitch !== -6 ||
     observed.parameters.volume !== 0 ||
     observed.parameters.style !== 'expressive' ||

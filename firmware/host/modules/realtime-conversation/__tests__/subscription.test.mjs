@@ -966,3 +966,87 @@ test('subscription errors retain only structured code and parameter, including H
       !error.message.includes('private'),
   )
 })
+
+test('USB backend probes require enabled diagnostics and an active subscription and send no fake control events', async () => {
+  const f = liveFixture()
+  let tuner, removed
+  f.live.debug = {
+    enabled: false,
+    registerTuner(owner, value) {
+      assert.equal(owner, f.live)
+      tuner = value
+    },
+    unregisterTuner(owner) {
+      removed = owner
+    },
+  }
+  await assert.rejects(f.live.probe('probe', 'reasoning'), /unavailable/)
+  await f.live.create(
+    'v=0 offer',
+    { instructions: '', voice: 'cove' },
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  await assert.rejects(tuner.set('probe', 'reasoning'), /unavailable/)
+  f.live.debug.enabled = true
+  await assert.rejects(tuner.set('probe', 'reasoning'), /unavailable/)
+  f.receive({ type: 'session.started' })
+  await assert.rejects(tuner.set('probe', 'arbitrary'), /Invalid/)
+  const calculation = tuner.set('probe', 'reasoning')
+  await tick()
+  assert.equal(JSON.parse(f.requests.at(-1).options.body).input.at(-1).content[0].text.includes('17'), true)
+  await assert.rejects(tuner.set('probe', 'search'), /unavailable/)
+  f.finish({ answer: '323', searched: false })
+  await calculation
+  const search = tuner.set('probe', 'search')
+  await tick()
+  f.finish({ answer: 'Status checked.', searched: true, sources: [{ url: 'https://status.openai.com/' }] })
+  await search
+  assert.deepEqual(f.sent, [])
+  await tuner.set('probe', 'english')
+  assert.equal(f.sent[0].type, 'session.context.append')
+  assert.equal(f.sent[0].channel, 'final')
+  assert.ok(f.sent[0].content[0].text.includes('voice test'))
+  const missingSearch = tuner.set('probe', 'search')
+  await tick()
+  f.finish({ answer: 'I did not search.', searched: false })
+  await assert.rejects(missingSearch, /probe failed/)
+  f.live.dispose()
+  assert.equal(removed, f.live)
+  await assert.rejects(tuner.set('probe', 'reasoning'), /unavailable/)
+})
+
+test('subscription requests honor selected model and each effort without public API overrides', async () => {
+  for (const model of ['gpt-6.1-terra', 'gpt-6-luna']) {
+    for (const effort of ['none', 'low', 'medium', 'high', 'xhigh', 'max']) {
+      const f = liveFixture()
+      await f.live.create(
+        'v=0 offer',
+        { instructions: 'Context', voice: 'cove', backendModel: model, reasoningEffort: effort },
+        (event) => f.events.push(event),
+        () => true,
+      )
+      f.live.activate()
+      f.receive({
+        type: 'delegation.created',
+        item: {
+          id: 'item_fixture',
+          type: 'delegation',
+          target: 'client',
+          content: [{ type: 'input_text', text: 'A question' }],
+        },
+      })
+      await tick()
+      const body = JSON.parse(f.requests.at(-1).options.body)
+      assert.equal(body.model, model)
+      assert.deepEqual(body.reasoning, { effort })
+      assert.equal(body.store, false)
+      assert.equal(body.stream, true)
+      assert.deepEqual(body.tools, [{ type: 'web_search' }])
+      f.finish({ answer: 'An answer', searched: false })
+      await tick()
+      f.live.dispose()
+    }
+  }
+})

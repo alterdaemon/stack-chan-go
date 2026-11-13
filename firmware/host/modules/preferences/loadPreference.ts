@@ -50,6 +50,8 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
     const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}
     preference.auth = 'api-key'
     preference.codexVoice = 'cove'
+    preference.codexModel = 'gpt-6.1-terra'
+    preference.codexEffort = 'medium'
     preference.mode = 'live'
     preference.realtimeVoice = 'marin'
     preference.backendModel = live.backendModel

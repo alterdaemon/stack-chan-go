@@ -54,6 +54,8 @@ export function PreferencesPage() {
     (name === 'openailive.realtimeVoice' && !preferences.realtimeVoiceAvailable) ||
     (name === 'openailive.bargeIn' && !preferences.bargeInAvailable) ||
     (name === 'openailive.voice' && !preferences.voiceAvailable) ||
+    (name === 'openailive.codexModel' && !preferences.codexModelAvailable) ||
+    (name === 'openailive.codexEffort' && !preferences.codexEffortAvailable) ||
     (name === 'openailive.codexVoice' && !preferences.codexVoiceAvailable) ||
     (name === 'openailive.pitch' && !preferences.pitchAvailable) ||
     (name === 'openailive.style' && !preferences.styleAvailable) ||
@@ -318,20 +320,23 @@ export function PreferencesPage() {
                   {t('Realtimeは無音でも接続を維持します。モデルと推論の強度は検索に使用します。')}
                 </p>
               )}
-              {!subscription &&
-                inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
+              {inputField({
+                name: subscription ? 'openailive.codexModel' : 'openailive.backendModel',
+                label: 'モデル',
+                required: true,
+                pattern: '.*\\S.*',
+              })}
               {subscription && (
                 <p className="text-sm text-muted-foreground sm:col-span-2">
-                  ChatGPT subscription · GPT-Live voice with subscription reasoning and web search. Availability is
-                  checked when connecting.
+                  Model and thinking effort apply to ChatGPT subscription reasoning, web search and tools. Availability
+                  depends on your ChatGPT account.
                 </p>
               )}
-              {!subscription &&
-                selectField(
-                  'openailive.reasoningEffort',
-                  '推論の強度',
-                  OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
-                )}
+              {selectField(
+                subscription ? 'openailive.codexEffort' : 'openailive.reasoningEffort',
+                '推論の強度',
+                OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
+              )}
               {selectField(
                 subscription ? 'openailive.codexVoice' : realtime ? 'openailive.realtimeVoice' : 'openailive.voice',
                 '声',

@@ -47,7 +47,7 @@ See the [R5 changes](CHANGELOG-MOD.md#210-r5) for the local candidate and the
 [published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
-R5 also includes an experimental ChatGPT subscription connection; see the
+R5 also includes an experimental ChatGPT subscription connection with its own voice selection; see the
 [Wi-Fi sign-in procedure and limits](docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).
 
 - [Build, install, settings and branch guide](docs/stack-chan-go-fork/README.md)

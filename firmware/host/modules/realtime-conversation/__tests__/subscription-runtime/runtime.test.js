@@ -175,6 +175,7 @@ for (const event of [
 ])
   equal(networkEvents.filter((entry) => entry.event === event).length, 1)
 equal(networkEvents.find((entry) => entry.event === 'control.http').status, 101)
+equal(networkEvents.find((entry) => entry.event === 'control.first_message').type, 'session.started')
 assert(!JSON.stringify(networkEvents).includes('synthetic-secret'))
 assert(!JSON.stringify(networkEvents).includes('192.0.2.42'))
 globalThis.device.network.wss = { io: Socket, socket: { io: TLS } }

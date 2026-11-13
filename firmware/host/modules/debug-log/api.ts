@@ -118,8 +118,13 @@ export default {
       (name === 'volume' && typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) ||
       (name === 'standby' && Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 3600) ||
       (name === 'style' && ['default', 'calm', 'expressive'].includes(String(value))) ||
-      (name === 'prompt' && ['standard', 'long'].includes(String(value)))
-    if (!['pitch', 'volume', 'standby', 'style', 'prompt'].includes(name) || (value !== 'saved' && !valid))
+      (name === 'prompt' && ['standard', 'long'].includes(String(value))) ||
+      (name === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(String(value))) ||
+      (name === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(value)))
+    if (
+      !['pitch', 'volume', 'standby', 'style', 'prompt', 'model', 'effort'].includes(name) ||
+      (value !== 'saved' && !valid)
+    )
       throw new RangeError('Invalid LIVE trial')
     live.parameters ??= {}
     if (value === 'saved') delete live.parameters[name]
@@ -134,6 +139,8 @@ export default {
       trialStandby: live?.parameters?.standby ?? 'saved',
       trialStyle: live?.parameters?.style ?? 'saved',
       trialPrompt: live?.parameters?.prompt ?? 'saved',
+      trialModel: live?.parameters?.model ?? 'saved',
+      trialEffort: live?.parameters?.effort ?? 'saved',
       ...tuner?.value.snapshot(),
     }
   },

@@ -874,3 +874,21 @@ test('USB voice trial is captured per session and leaves manual preferences inta
   assert.equal(f.instances[1].options.voice, 'cove')
   await f.session.stop()
 })
+
+test('subscription forwards independent backend model and effort without changing the voice model', async () => {
+  const f = fixture({
+    settings: {
+      auth: 'chatgpt',
+      model: 'gpt-live-1.1-codex',
+      voice: 'cove',
+      backendModel: 'gpt-6-luna',
+      reasoningEffort: 'low',
+    },
+  })
+  await f.session.start()
+  assert.equal(f.instances[0].options.model, 'gpt-live-1.1-codex')
+  assert.equal(f.instances[0].options.backendModel, 'gpt-6-luna')
+  assert.equal(f.instances[0].options.reasoningEffort, 'low')
+  assert.equal(f.instances[0].options.apiKey, undefined)
+  await f.session.stop()
+})
