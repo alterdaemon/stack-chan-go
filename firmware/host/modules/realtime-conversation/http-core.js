@@ -53,7 +53,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       if (timer !== undefined) platform.cancel(timer)
       if (completionErrorTimer !== undefined) platform.cancel(completionErrorTimer)
       const connection = client
-      const observation = statistics ? { ...statistics } : undefined
+      const observation = statistics ? { ...statistics, ...stream?.observation } : undefined
       client = undefined
       body = undefined
       const failure = (cause) =>
@@ -96,7 +96,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       const headers = new Map(request.headers)
       headers.set('content-length', String(body.byteLength))
       headers.set('connection', 'close')
-      timer = platform.schedule(() => finish(new Error('HTTPS request timed out')), request.timeoutMs)
+      timer = platform.schedule(() => finish(new Error('HTTPS request timed out')), Math.min(request.timeoutMs, 45000))
       client = platform.createClient({
         host: request.host,
         port: request.port,
@@ -126,7 +126,13 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
           if (request.responseFormat === 'subscription-response' && code >= 200 && code < 300) {
             // Codex consumes the SSE body without requiring a Content-Type
             // header. Completion and answer validation remain authoritative.
-            stream = platform.createSubscriptionStream()
+            stream = platform.createSubscriptionStream(request.diagnostics)
+            // Codex permits five minutes of stream inactivity. The caller
+            // still bounds this entire job; connection/header wait stays 45s.
+            if (request.timeoutMs > 45000) {
+              platform.cancel(timer)
+              timer = platform.schedule(() => finish(new Error('HTTPS request timed out')), request.timeoutMs)
+            }
           }
           if (Number(incomingHeaders.get('content-length')) > (stream ? 2097152 : 131072))
             finish(new Error('HTTPS response exceeds limit'))

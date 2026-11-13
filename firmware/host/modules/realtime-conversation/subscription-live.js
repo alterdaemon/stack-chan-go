@@ -433,7 +433,7 @@ export class SubscriptionLive {
         method: 'POST',
         headers,
         responseFormat: 'subscription-response',
-        timeoutMs: 45000,
+        timeoutMs: 300000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
           reasoning: { effort: this.options.reasoningEffort ?? 'medium' },

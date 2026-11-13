@@ -24,6 +24,7 @@ const NUMBER_FIELDS = new Set([
   'socketReceived',
   'socketWritten',
   'socketBuffered',
+  'sseEvents',
   'tlsDrains',
   'progressDropped',
   'result',
@@ -101,6 +102,7 @@ const NUMBER_FIELDS = new Set([
   'tcpMaxPort',
 ])
 const STRING_FIELDS = new Set([
+  'sseEvent',
   'state',
   'phase',
   'mode',

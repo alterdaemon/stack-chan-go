@@ -20,10 +20,11 @@ const DrainingTLS = drainTLSSocket(
   () => tlsDrains++,
 )
 const platform = {
-  createSubscriptionStream: () =>
+  createSubscriptionStream: (observe) =>
     createSubscriptionStream(
       (bytes) => decoder.decode(bytes),
       (text) => ArrayBuffer.fromString(text),
+      observe,
     ),
   createClient: ({ certificate, drainTLS, statistics, ...options }) =>
     createClosingClient(device.network.https.client.io, {

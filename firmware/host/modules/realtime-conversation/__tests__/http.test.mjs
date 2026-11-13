@@ -30,6 +30,64 @@ test('HTTPS request bounds and header validation happen before IPC', () => {
   assert.equal(request.path, '/path?x=1')
   assert.deepEqual(request.headers, [['authorization', 'Bearer test']])
 })
+
+test('only subscription response streams accept a bounded five-minute job deadline', async () => {
+  assert.equal(post({ timeoutMs: 300000 }).timeoutMs, 45000)
+  assert.equal(post({ timeoutMs: 300000, responseFormat: 'web-search' }).timeoutMs, 45000)
+  assert.equal(post({ timeoutMs: 900000, responseFormat: 'subscription-response' }).timeoutMs, 300000)
+  let callbacks, stop
+  const timers = []
+  const request = requestHttps(
+    post({ timeoutMs: 300000, responseFormat: 'subscription-response' }),
+    {
+      createClient: () => ({
+        request: (value) => {
+          callbacks = value
+        },
+        close() {},
+      }),
+      createSubscriptionStream: () => ({}),
+      schedule: (callback, ms) => {
+        if (!ms) {
+          queueMicrotask(callback)
+          return -1
+        }
+        const timer = { callback, ms }
+        timers.push(timer)
+        return timer
+      },
+      cancel: (timer) => {
+        if (timer !== -1) timer.cancelled = true
+      },
+    },
+    (cancel) => {
+      stop = cancel
+    },
+  )
+  assert.equal(timers[0].ms, 45000, 'initial connection/header wait stays bounded')
+  callbacks.onHeaders(200, new Map())
+  assert.equal(timers[0].cancelled, true)
+  assert.equal(timers[1].ms, 300000, 'accepted SSE may finish after the old total deadline')
+  stop()
+  await assert.rejects(request, /cancelled/)
+  assert.equal(timers[1].cancelled, true)
+})
+
+test('stream observations export only fixed event categories while preserving completion', () => {
+  const stream = createSubscriptionStream(decode, encode, true)
+  for (const [type, category] of [
+    ['response.created', 'response.created'],
+    ['response.private-secret', 'other'],
+    [123, 'other'],
+    ['response.output_text.delta', 'text'],
+  ]) {
+    stream.write(new Uint8Array(encode(`data: ${JSON.stringify({ type })}\n\n`)))
+    assert.equal(stream.observation.sseEvent, category)
+  }
+  assert.equal(stream.observation.sseEvents, 4)
+  assert.equal(createSubscriptionStream(decode, encode).observation, undefined)
+  assert.ok(!JSON.stringify(stream.observation).includes('private'))
+})
 function fixture() {
   let callbacks,
     connection,

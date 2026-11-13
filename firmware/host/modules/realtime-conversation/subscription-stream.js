@@ -20,14 +20,16 @@ export function subscriptionErrorMetadata(text) {
 }
 
 // Subscription Responses SSE is reduced in the existing HTTP worker before IPC.
-export function createSubscriptionStream(decode, encode) {
+export function createSubscriptionStream(decode, encode, observe = false) {
   let pending = '',
     carry = new Uint8Array(),
     result,
     terminal = false,
     answer = '',
     answerBytes = 0,
-    searched = false
+    searched = false,
+    sseEvents = 0,
+    sseEvent = 'none'
   const sources = [],
     items = new Set()
   function acceptOnce(item, index) {
@@ -88,6 +90,27 @@ export function createSubscriptionStream(decode, encode) {
       .join('\n')
     if (!data || data === '[DONE]') return
     const value = JSON.parse(data)
+    if (observe) {
+      const type = typeof value.type === 'string' ? value.type : ''
+      sseEvents++
+      sseEvent = [
+        'response.created',
+        'response.in_progress',
+        'response.completed',
+        'response.failed',
+        'response.incomplete',
+        'error',
+        'response.output_item.done',
+      ].includes(type)
+        ? type
+        : type.startsWith('response.output_text.')
+          ? 'text'
+          : type.startsWith('response.reasoning')
+            ? 'reasoning'
+            : type.startsWith('response.web_search_call.')
+              ? 'search'
+              : 'other'
+    }
     if (['response.failed', 'response.incomplete', 'error'].includes(value.type)) {
       terminal = true
       result = {
@@ -121,6 +144,9 @@ export function createSubscriptionStream(decode, encode) {
     }
   }
   return {
+    get observation() {
+      return observe ? { sseEvents, sseEvent } : undefined
+    },
     get complete() {
       return terminal
     },

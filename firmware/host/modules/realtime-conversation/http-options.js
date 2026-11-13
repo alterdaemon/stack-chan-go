@@ -53,6 +53,24 @@ export function httpFailureMetadata(error) {
   if (Number.isInteger(error?.tlsDrains) && error.tlsDrains >= 0) metadata.tlsDrains = error.tlsDrains
   for (const name of ['socketReceived', 'socketWritten', 'socketBuffered'])
     if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
+  if (Number.isSafeInteger(error?.sseEvents) && error.sseEvents >= 0) metadata.sseEvents = error.sseEvents
+  if (
+    [
+      'none',
+      'response.created',
+      'response.in_progress',
+      'response.completed',
+      'response.failed',
+      'response.incomplete',
+      'error',
+      'response.output_item.done',
+      'text',
+      'reasoning',
+      'search',
+      'other',
+    ].includes(error?.sseEvent)
+  )
+    metadata.sseEvent = error.sseEvent
   return metadata
 }
 
@@ -92,6 +110,6 @@ export function normalizeRequest(url, options, encode, decodeCertificate) {
     responseFormat: ['web-search', 'subscription-response'].includes(options.responseFormat)
       ? options.responseFormat
       : undefined,
-    timeoutMs: Math.max(1000, Math.min(45000, requested)),
+    timeoutMs: Math.max(1000, Math.min(options.responseFormat === 'subscription-response' ? 300000 : 45000, requested)),
   }
 }
