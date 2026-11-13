@@ -1,7 +1,7 @@
 import fetch from 'realtimeConversation/http'
 import { closingDNS, guardSocketCallbacks } from 'realtimeConversation/http-core'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
-import { SubscriptionLive } from 'realtimeConversation/subscription-live'
+import { SubscriptionLive, subscriptionUpgradeError } from 'realtimeConversation/subscription-live'
 import store from 'realtimeConversation/subscription-store'
 import Base64 from 'base64'
 import Debug from 'device-debug'
@@ -40,6 +40,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       incoming = [],
       incomingSize = 0,
       upgradeStatus,
+      rejection = {},
       phase = network.dns?.io ? 'dns' : 'connect',
       firstMessage = true
     const diagnose = (event, fields) => Debug.event('subscription', event, fields)
@@ -89,10 +90,15 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       typeof Socket === 'function'
         ? class extends guardSocketCallbacks(Socket) {
             #statusLine = ''
+            #readable = 0
             constructor(options) {
               let ready = false
               super({
                 ...options,
+                onReadable(count) {
+                  this.#readable = count
+                  return options.onReadable?.call(this, count)
+                },
                 onWritable(count) {
                   if (!ready && !closed) {
                     ready = true
@@ -113,16 +119,33 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
             }
             read(data) {
               const value = data === undefined ? super.read() : super.read(data)
+              if (typeof value === 'number' && this.#readable) this.#readable--
               if (this.#statusLine !== undefined && typeof value === 'number') {
                 this.#statusLine += String.fromCharCode(value)
-                if (this.#statusLine.length === 13 || value === 10) {
+                if (this.#statusLine.length === 13) {
                   const match = /^HTTP\/1\.[01] ([1-5][0-9]{2}) $/.exec(this.#statusLine)
                   if (match) {
                     upgradeStatus = Number(match[1])
                     diagnose('control.http', () => ({ status: upgradeStatus }))
                   }
-                  this.#statusLine = undefined
                 }
+                if (value === 10) {
+                  this.#statusLine = undefined
+                  if (upgradeStatus >= 400 && this.#readable > 0) {
+                    const bytes = new Uint8Array(Math.min(this.#readable, 4096))
+                    let size = 0
+                    while (size < bytes.length) {
+                      const byte = super.read()
+                      if (typeof byte !== 'number') break
+                      bytes[size++] = byte
+                    }
+                    this.#readable -= size
+                    try {
+                      rejection = subscriptionUpgradeError(decoder.decode(bytes.subarray(0, size)))
+                    } catch {}
+                    diagnose('control.rejection', () => ({ status: upgradeStatus, ...rejection }))
+                  }
+                } else if (this.#statusLine?.length > 256) this.#statusLine = undefined
               }
               return value
             }
@@ -142,6 +165,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
           Object.assign(new Error('Subscription control connection failed'), {
             code: timedOut === true ? 'subscription_control_timeout' : 'subscription_control_failed',
             ...(upgradeStatus === undefined ? {} : { status: upgradeStatus }),
+            ...rejection,
           }),
         )
       else onMessage({ type: 'error', error: { code: 'subscription_control_lost' } })

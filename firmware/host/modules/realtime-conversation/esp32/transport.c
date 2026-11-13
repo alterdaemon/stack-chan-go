@@ -41,7 +41,7 @@ typedef struct {
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
 	atomic_uint workerStackMinimum;
-	atomic_uint peerPhase, iceRecords, iceSent, iceReceived, iceRejected, iceErrors;
+	atomic_uint peerPhase, iceRecords, iceReplyRecords, iceSent, iceReceived, iceRejected, iceErrors;
 	atomic_uint iceUdpSent, iceUdpReceived;
 	atomic_uint icePolls, iceReady, icePollErrors;
 	atomic_uint iceTcpRecords, iceTcpStarted, iceTcpConnected, iceTcpErrors, iceTcpSent, iceTcpReceived;
@@ -185,8 +185,10 @@ void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int
 		atomic_fetch_add(outgoing ? &t->iceSent : &t->iceReceived, 1);
 		if (kind == 0x111) atomic_fetch_add(&t->iceRejected, 1);
 	}
-	unsigned record = atomic_fetch_add(&t->iceRecords, 1);
-	if (record < 8) {
+	/* Reserve half the record budget for replies, including later replies after
+	 * retransmissions. Outgoing checks cannot consume the receive evidence. */
+	unsigned record = atomic_fetch_add(outgoing ? &t->iceRecords : &t->iceReplyRecords, 1);
+	if (record < 4) {
 		stackchanDebugTransition(DEBUG_ICE_DATAGRAM, !!outgoing, kind, result < 0 ? -error : code ? (int)code : result);
 		if (kind) {
 			unsigned usernameLength;

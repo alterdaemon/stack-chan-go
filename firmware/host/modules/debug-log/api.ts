@@ -9,8 +9,13 @@ type Recorder = {
 let recorder: Recorder | undefined
 type Tuner = { set(name: string, value: number | string): Promise<void>; reset(): Promise<void>; snapshot(): Fields }
 let tuner: { owner: object; value: Tuner } | undefined
-type LiveControl = { start(): Promise<boolean> | undefined; stop(): Promise<unknown>; warmup?(): Promise<void> }
-let live: { owner: object; value: LiveControl; controlled: boolean } | undefined
+type LiveControl = {
+  start(interruption?: boolean, stage?: number): Promise<boolean> | undefined
+  stop(): Promise<unknown>
+  warmup?(): Promise<void>
+  isActive?(): boolean
+}
+let live: { owner: object; value: LiveControl; controlled: boolean; interruption?: boolean } | undefined
 const context = { application: 'initialization', network: 'unknown' }
 export default {
   get enabled(): boolean {
@@ -34,7 +39,7 @@ export default {
   releaseLive(owner: object): void {
     if (live?.owner === owner) live.controlled = false
   },
-  async controlLive(action: 'start' | 'stop' | 'warmup'): Promise<void> {
+  async controlLive(action: 'start' | 'standard' | 'voice' | 'prompt' | 'pitch' | 'stop' | 'warmup'): Promise<void> {
     if (!recorder?.enabled || !live)
       throw Object.assign(new Error('LIVE control unavailable'), { code: 'live_unavailable' })
     const owner = live
@@ -42,8 +47,9 @@ export default {
       const stopped = owner.value.stop()
       owner.controlled = false
       await stopped
-    } else if (action === 'start') {
-      const started = owner.value.start()
+    } else if (['start', 'standard', 'voice', 'prompt', 'pitch'].includes(action)) {
+      const stage = ['standard', 'voice', 'prompt', 'pitch', 'start'].indexOf(action)
+      const started = owner.value.start(stage < 4 ? (owner.interruption ?? false) : owner.interruption, stage)
       if (!started) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
       owner.controlled = true
       if (!(await started)) {
@@ -65,10 +71,20 @@ export default {
     return tuner.value.set(name, value)
   },
   resetTuning(): Promise<void> {
+    if (live) live.interruption = undefined
     return tuner?.value.reset() ?? Promise.resolve()
   },
+  setInterruptionTrial(value: 'on' | 'off' | 'saved'): void {
+    if (!recorder?.enabled || !live || live.value.isActive?.() !== false)
+      throw Object.assign(new Error('LIVE must be stopped'), { code: 'live_active' })
+    if (!['on', 'off', 'saved'].includes(value)) throw new RangeError('Invalid interruption trial')
+    live.interruption = value === 'saved' ? undefined : value === 'on'
+  },
   tuningSnapshot(): Fields {
-    return tuner?.value.snapshot() ?? {}
+    return {
+      interruptionTrial: live?.interruption === undefined ? 'saved' : live.interruption ? 'on' : 'off',
+      ...tuner?.value.snapshot(),
+    }
   },
   event(component: string, event: string, fields?: Fields | (() => Fields)): void {
     try {

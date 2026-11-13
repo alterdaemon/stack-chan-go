@@ -84,10 +84,14 @@ export class LiveSession {
     this.history = []
   }
 
-  start() {
+  start(interruption = this.settings.bargeIn === true, stage = 4) {
+    if (typeof interruption !== 'boolean') throw new TypeError('Invalid interruption trial')
+    if (!Number.isInteger(stage) || stage < 0 || stage > 4) throw new TypeError('Invalid session profile')
     if (this.active) return this.active.starting
     const entry = {
       cancelled: false,
+      bargeIn: interruption,
+      stage,
       backend: new Map(),
       idleMs: (this.settings.standbySeconds ?? 60) * 1000,
       inputUntil: 0,
@@ -134,29 +138,33 @@ export class LiveSession {
       // Frame the configured persona as Mini's dialogue task, including its first greeting.
       // Build this in RAM; the saved prompt and GPT-Live instructions stay unchanged.
       const instructions =
-        this.settings.mode === 'realtime' && this.settings.instructions?.trim()
-          ? `# Task
+        entry.stage < 2
+          ? ''
+          : this.settings.mode === 'realtime' && this.settings.instructions?.trim()
+            ? `# Task
 Write and speak ONLY the next line of dialogue for the assistant described below. The user is the other participant. Answer the actual user question accurately. If a character or style is specified, this is a consensual performance and every line must embody it, including greetings.
 # Assistant specification
 ${this.settings.instructions}`
-          : this.settings.instructions
+            : this.settings.instructions
       const options = {
         mode: this.settings.mode,
         ...(this.settings.auth === 'chatgpt' ? { auth: 'chatgpt' } : { apiKey: this.settings.apiKey }),
         model: this.settings.model,
-        voice: this.settings.voice,
-        pitch: this.settings.pitch ?? 0,
-        bargeIn: this.settings.bargeIn === true,
-        instructions: this.settings.bargeIn
-          ? `${instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
-          : instructions,
-        input: this.history.length
-          ? this.history.map(({ role, text }) => ({
-              type: 'message',
-              role,
-              content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
-            }))
-          : undefined,
+        voice: entry.stage < 1 ? 'cove' : this.settings.voice,
+        pitch: entry.stage < 3 ? 0 : (this.settings.pitch ?? 0),
+        bargeIn: entry.bargeIn,
+        instructions:
+          entry.bargeIn && entry.stage >= 2
+            ? `${instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
+            : instructions,
+        input:
+          entry.stage === 4 && this.history.length
+            ? this.history.map(({ role, text }) => ({
+                type: 'message',
+                role,
+                content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
+              }))
+            : undefined,
         delegation:
           this.settings.auth === 'chatgpt'
             ? undefined
@@ -222,7 +230,7 @@ ${this.settings.instructions}`
       entry.conversation = conversation
       stage = 'audio'
       site = 'volume_set'
-      conversation.setVolume(this.settings.volume ?? 1)
+      conversation.setVolume(entry.stage < 4 ? 0.1 : (this.settings.volume ?? 1))
       stage = 'connect'
       site = 'connect_wait'
       await conversation.connect()

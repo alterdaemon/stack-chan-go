@@ -203,6 +203,39 @@ for (const [line, status] of [
   equal(failure.status, status)
   equal(failure.message, 'Subscription control connection failed')
 }
+class ErrorTLS extends TLS {
+  read(value) {
+    return value === undefined ? this.bytes.shift() : value
+  }
+}
+globalThis.device.network.wss = { io: Socket, socket: { io: ErrorTLS } }
+const deniedBody = JSON.stringify({
+  error: { code: 'call_id_not_found', message: 'synthetic-private-rejection', param: 'session.model' },
+})
+const rejectedUpgrade = openSubscriptionControl('rtc_structured', {}, () => {})
+const rejectedTransport = new socket.options.socket.io({
+  onReadable() {
+    for (const _character of 'HTTP/1.1 404 Not Found\r\n') this.read()
+    socket.options.onError()
+  },
+})
+rejectedTransport.bytes = Array.from(
+  new Uint8Array(
+    ArrayBuffer.fromString(
+      `HTTP/1.1 404 Not Found\r\nContent-Length: ${deniedBody.length}\r\nContent-Type: application/json\r\n\r\n${deniedBody}`,
+    ),
+  ),
+)
+rejectedTransport.options.onReadable.call(rejectedTransport, rejectedTransport.bytes.length)
+try {
+  await rejectedUpgrade
+  assert(false, 'denied upgrade connected')
+} catch (error) {
+  equal(error.status, 404)
+  equal(error.providerCode, 'call_id_not_found')
+  equal(error.param, 'session.model')
+}
+assert(!JSON.stringify(networkEvents).includes('synthetic-private-rejection'), 'error bodies never enter diagnostics')
 globalThis.device.network.wss = undefined
 try {
   await openSubscriptionControl('rtc_unavailable', {}, () => {})

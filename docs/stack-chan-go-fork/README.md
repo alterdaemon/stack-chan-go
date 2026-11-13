@@ -222,6 +222,16 @@ available, local suffix matches the offer, and local offer digest was available.
 lengths leave the device; borrowed ICE credentials and RAM-only SHA-256 digests
 are never logged or persisted. This startup crypto check is outside the
 allocation-free socket observers.
+For request-parameter isolation, run `diag reset` then `diag live standard`.
+This uses the saved subscription grant/current Codex model with Cove, pitch0,
+volume0.1, empty instructions, no history and Interruption Off. Normal manual
+starts keep saved settings. Use `diag set interruption on|off|saved` while stopped
+for a future USB start; reset/Off clears it. `call.session` reports only the
+actual model, voice and instruction/history lengths. Structured rejections
+preserve validated providerCode/param, never provider messages or raw bodies.
+The SDK closes rejected WebSockets before reading error bodies; observation is
+limited to4096 already-readable bytes before close, without an extra request or
+wait. Incomplete bodies retain only the HTTP status.
 While LIVE is stopped, `diag set stun 1` enables next-start public-address
 collection for subscription mode using only the SDK STUN client and
 `stun.cloudflare.com:3478` ([provider documentation](https://developers.cloudflare.com/realtime/turn/)).
@@ -521,3 +531,8 @@ Answers are bounded and search is reported as verified only after completed tool
 execution with HTTP(S) citation URLs. Service errors end or fail the selected
 operation; they do not use a saved API key. Real account/device qualification,
 including actual protected-key availability and power-loss tests, remains required.
+
+Diagnostic parameter profiles `diag live voice`, `diag live prompt` and
+`diag live pitch` restore saved voice, then prompt, then pitch cumulatively.
+`diag live start` restores the full configured session. Standard/voice keep
+instructions empty when comparing local Interruption Off and On.

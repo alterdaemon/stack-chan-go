@@ -69,6 +69,38 @@ async function verifyLiveAPI() {
   Debug.unregisterLive({})
   await Debug.controlLive('stop')
   if (stopped !== 2) throw new Error('Explicit Stop failed')
+  let active = false,
+    observed
+  Debug.registerLive(owner, {
+    isActive: () => active,
+    start: async (interruption, standard) => {
+      active = true
+      observed = { interruption, standard }
+      return true
+    },
+    stop: async () => {
+      active = false
+    },
+  })
+  Debug.setInterruptionTrial('off')
+  await Debug.controlLive('start')
+  if (observed.interruption !== false || observed.standard !== 4) throw new Error('Off override lost')
+  try {
+    Debug.setInterruptionTrial('on')
+    throw new Error('Active trial accepted')
+  } catch (error) {
+    if (error.code !== 'live_active') throw error
+  }
+  await Debug.controlLive('stop')
+  Debug.setInterruptionTrial('on')
+  await Debug.controlLive('standard')
+  if (observed.interruption !== true || observed.standard !== 0) throw new Error('Standard trial lost')
+  await Debug.controlLive('stop')
+  await Debug.resetTuning()
+  if (Debug.tuningSnapshot().interruptionTrial !== 'saved') throw new Error('Trial reset lost')
+  await Debug.controlLive('standard')
+  if (observed.interruption !== false || observed.standard !== 0) throw new Error('Baseline defaults lost')
+  await Debug.controlLive('stop')
   Debug.unregisterLive(owner)
 }
 try {

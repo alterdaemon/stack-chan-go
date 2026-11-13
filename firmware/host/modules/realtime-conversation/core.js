@@ -1152,6 +1152,8 @@ export default class Conversation {
       fields.playbackResponse = this.#playbackResponse
       fields.mode = this.#realtime ? 'realtime' : 'live'
       fields.model = this.#options.model
+      fields.voice = this.#options.voice
+      fields.pitch = this.#options.pitch
       fields.state = this.#state
       fields.bargeIn = this.#options.bargeIn
       fields.muted = this.#muted

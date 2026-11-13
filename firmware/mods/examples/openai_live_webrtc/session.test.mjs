@@ -809,3 +809,58 @@ test('subscription sign-in errors release audio and return an actionable sign-in
   assert.equal(f.states.at(-1), 'sign-in')
   assert.ok(f.events.includes('audio released'))
 })
+
+for (const interruption of [false, true]) {
+  test(`standard subscription trial uses reference defaults and interruption ${interruption} without editing settings`, async () => {
+    const settings = Object.freeze({
+      auth: 'chatgpt',
+      model: 'gpt-live-1.1-codex',
+      voice: 'marin',
+      pitch: -3,
+      bargeIn: !interruption,
+      instructions: 'Private persona',
+      volume: 0.7,
+    })
+    const f = fixture({ settings })
+    f.session.history = [{ role: 'user', text: 'Private history' }]
+    await f.session.start(interruption, 0)
+    const options = f.instances[0].options
+    assert.equal(options.voice, 'cove')
+    assert.equal(options.pitch, 0)
+    assert.equal(options.bargeIn, interruption)
+    assert.equal(options.input, undefined)
+    assert.ok(!options.instructions.includes('Private'))
+    assert.equal(options.instructions, '')
+    assert.equal(f.instances[0].volume, 0.1)
+    assert.equal(settings.pitch, -3)
+    await f.session.stop()
+    await f.session.start()
+    assert.equal(f.instances[1].options.voice, 'marin')
+    assert.equal(f.instances[1].options.pitch, -3)
+    assert.equal(f.instances[1].options.bargeIn, !interruption)
+    await f.session.stop()
+  })
+}
+
+test('parameter stages add saved voice, prompt and pitch in order without history or settings writes', async () => {
+  for (const stage of [0, 1, 2, 3]) {
+    const f = fixture({
+      settings: Object.freeze({
+        auth: 'chatgpt',
+        model: 'gpt-live-1.1-codex',
+        voice: 'marin',
+        pitch: -3,
+        instructions: 'Persona',
+        volume: 0.6,
+      }),
+    })
+    f.session.history = [{ role: 'user', text: 'Old' }]
+    await f.session.start(false, stage)
+    const options = f.instances[0].options
+    assert.equal(options.voice, stage >= 1 ? 'marin' : 'cove')
+    assert.equal(options.instructions, stage >= 2 ? 'Persona' : '')
+    assert.equal(options.pitch, stage >= 3 ? -3 : 0)
+    assert.equal(options.input, undefined)
+    await f.session.stop()
+  }
+})

@@ -5,7 +5,9 @@ import {
   parseSubscriptionCall,
   SubscriptionLive,
   subscriptionAppends,
+  subscriptionErrorMetadata,
   subscriptionSdpMetadata,
+  subscriptionUpgradeError,
 } from '../subscription-live.js'
 import { createSubscriptionStream } from '../subscription-stream.js'
 
@@ -932,4 +934,35 @@ test('startup diagnostics identify bootstrap, call metadata and control failures
     )
     live.dispose()
   }
+})
+
+test('subscription errors retain only structured code and parameter, including HTTP upgrade rejections', () => {
+  const body = JSON.stringify({
+    error: {
+      code: 'call_id_not_found',
+      param: 'session.audio.output.voice',
+      message: 'synthetic-private-body',
+      account: 'synthetic-private-account',
+    },
+  })
+  const expected = { providerCode: 'call_id_not_found', param: 'session.audio.output.voice' }
+  assert.deepEqual(subscriptionErrorMetadata(body), expected)
+  assert.deepEqual(
+    subscriptionUpgradeError(`Content-Length: ${body.length}\r\nContent-Type: application/json\r\n\r\n${body}`),
+    expected,
+  )
+  assert.deepEqual(
+    subscriptionUpgradeError(`Transfer-Encoding: chunked\r\n\r\n${body.length.toString(16)}\r\n${body}\r\n0\r\n\r\n`),
+    expected,
+  )
+  assert.deepEqual(subscriptionUpgradeError('Content-Length: 100\r\n\r\n{}'), {})
+  assert.deepEqual(subscriptionErrorMetadata(JSON.stringify({ error: { code: 'sk_private', param: 'arbitrary' } })), {})
+  assert.deepEqual(subscriptionErrorMetadata('x'.repeat(4097)), {})
+  assert.throws(
+    () => parseSubscriptionCall({ ok: false, status: 400 }, body),
+    (error) =>
+      error.providerCode === 'call_id_not_found' &&
+      error.param === expected.param &&
+      !error.message.includes('private'),
+  )
 })

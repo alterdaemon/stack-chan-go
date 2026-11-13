@@ -6,6 +6,55 @@ export const SUBSCRIPTION_MODEL = 'gpt-live-1.1-codex'
 export const SUBSCRIPTION_BACKEND = 'gpt-6.1-terra'
 const id = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value)
 
+export function subscriptionErrorMetadata(text) {
+  if (typeof text !== 'string' || text.length > 4096) return {}
+  try {
+    const source = JSON.parse(text)?.error
+    const result = {}
+    if (
+      typeof source?.code === 'string' &&
+      /^[a-z][a-z0-9_]{0,63}$/i.test(source.code) &&
+      !/sk_|bearer|password|secret/i.test(source.code)
+    )
+      result.providerCode = source.code
+    if (
+      typeof source?.param === 'string' &&
+      /^(?:session|delegation|model|audio|tools|reasoning)(?:[.[\]a-z0-9_]){0,96}$/i.test(source.param)
+    )
+      result.param = source.param
+    return result
+  } catch {
+    return {}
+  }
+}
+
+// Only an already-readable, bounded HTTP rejection tail; no extra request or
+// wait, and no raw headers/body leave the adapter. HTTP framing follows RFC9112.
+export function subscriptionUpgradeError(tail) {
+  if (typeof tail !== 'string' || tail.length > 4096) return {}
+  const split = tail.indexOf('\r\n\r\n')
+  if (split < 0) return {}
+  const headers = tail.slice(0, split)
+  const body = tail.slice(split + 4)
+  if (/^transfer-encoding:\s*chunked\s*$/im.test(headers)) {
+    let decoded = ''
+    for (let at = 0; at < body.length; ) {
+      const end = body.indexOf('\r\n', at)
+      if (end < 0 || !/^[0-9a-f]+(?:;[^\r\n]*)?$/i.test(body.slice(at, end))) return {}
+      const size = Number.parseInt(body.slice(at, end), 16)
+      if (!size) return subscriptionErrorMetadata(decoded)
+      at = end + 2
+      if (size > body.length - at || body.slice(at + size, at + size + 2) !== '\r\n') return {}
+      decoded += body.slice(at, at + size)
+      at += size + 2
+    }
+    return {}
+  }
+  const length = /^content-length:\s*(\d+)\s*$/im.exec(headers)
+  if (length && Number(length[1]) !== body.length) return {}
+  return subscriptionErrorMetadata(body)
+}
+
 // Diagnostic capabilities only. Never return ICE addresses/credentials, SDP,
 // fingerprints, call IDs or provider text from this observer.
 export function subscriptionSdpMetadata(sdp) {
@@ -77,6 +126,7 @@ export function parseSubscriptionCall(response, sdp) {
     throw Object.assign(new Error('Subscription call rejected'), {
       status: response.status,
       code: 'subscription_http_error',
+      ...subscriptionErrorMetadata(sdp),
     })
   const headers = response.headers ?? {}
   const location = response.location ?? headers.location
@@ -172,18 +222,25 @@ export class SubscriptionLive {
       this.accountId = credentials.accountId
       this.diagnose?.('call.offer', () => subscriptionSdpMetadata(sdp))
       this.diagnose?.('call.start')
+      const session = {
+        model: SUBSCRIPTION_MODEL,
+        instructions: options.instructions,
+        audio: { output: { voice: options.voice } },
+        delegation: { type: 'client' },
+        ...(options.input ? { initial_items: options.input } : {}),
+      }
+      this.diagnose?.('call.session', () => ({
+        model: session.model,
+        voice: session.audio.output.voice,
+        instructionsLength: (session.instructions ?? '').length,
+        initialItems: session.initial_items?.length ?? 0,
+      }))
       this.#request = this.fetch(CALL, {
         method: 'POST',
         headers,
         body: JSON.stringify({
           sdp,
-          session: {
-            model: SUBSCRIPTION_MODEL,
-            instructions: options.instructions,
-            audio: { output: { voice: options.voice } },
-            delegation: { type: 'client' },
-            ...(options.input ? { initial_items: options.input } : {}),
-          },
+          session,
         }),
       })
       const response = await this.#request
@@ -232,7 +289,12 @@ export class SubscriptionLive {
           )
           break
         } catch (error) {
-          this.diagnose?.('control.failed', () => ({ attempt, status: error?.status }))
+          this.diagnose?.('control.failed', () => ({
+            attempt,
+            status: error?.status,
+            providerCode: error?.providerCode,
+            param: error?.param,
+          }))
           // A newly created call may briefly be unavailable until ICE activates.
           // Retry this same call only; never create another call or change auth.
           if (error?.status !== 404 || attempt >= activationDelays.length || this.#closed || !current()) throw error
@@ -350,7 +412,11 @@ export class SubscriptionLive {
       const response = await job.request
       this.diagnose?.('backend.response', () => ({ status: response.status }))
       if (response.status === 401) this.auth.logout()
-      if (!response.ok) throw new Error('Subscription backend rejected')
+      if (!response.ok)
+        throw Object.assign(new Error('Subscription backend rejected'), {
+          status: response.status,
+          ...subscriptionErrorMetadata(await response.text()),
+        })
       const result = JSON.parse(await response.text())
       this.diagnose?.('backend.result', () => ({ accepted: !result.error, searched: result.searched === true }))
       if (result.error || typeof result.answer !== 'string' || result.answer.length > 3000)
@@ -359,8 +425,12 @@ export class SubscriptionLive {
       const answer =
         result.answer + (result.searched ? '\nSources: ' + result.sources.map((source) => source.url).join(' ') : '')
       for (const event of subscriptionAppends(answer, delegationId)) this.#channel.send(event)
-    } catch {
-      this.diagnose?.('backend.failed')
+    } catch (error) {
+      this.diagnose?.('backend.failed', () => ({
+        status: error?.status,
+        providerCode: error?.providerCode,
+        param: error?.param,
+      }))
       if (this.#job === job && !this.#closed)
         for (const event of subscriptionAppends('I could not complete that request. Please try again.', delegationId))
           this.#channel.send(event)

@@ -73,6 +73,9 @@ const NUMBER_FIELDS = new Set([
   'iceTcpReadPolls',
   'iceTcpReadReady',
   'iceTcpReadErrors',
+  'pitch',
+  'instructionsLength',
+  'initialItems',
   'iceUfragLength',
   'icePasswordLength',
   'iceSessionAttributes',
@@ -123,6 +126,9 @@ const STRING_FIELDS = new Set([
   'itemRole',
   'itemType',
   'dtlsRole',
+  'interruptionTrial',
+  'voice',
+  'param',
 ])
 const BOOL_FIELDS = new Set([
   'bargeIn',
@@ -222,7 +228,8 @@ export class DebugRecorder {
     else if (line?.startsWith('diag live ')) {
       if (!this.#enabled) return this.#control('enable_required')
       const action = line.slice(10)
-      if (!['start', 'stop', 'warmup'].includes(action) || !this.platform.live) return this.#control('invalid_command')
+      if (!['start', 'standard', 'voice', 'prompt', 'pitch', 'stop', 'warmup'].includes(action) || !this.platform.live)
+        return this.#control('invalid_command')
       if (action !== 'stop' && this.#livePending) return this.#control('command_pending')
       if (action !== 'stop') this.#livePending = true
       const capture = this.#capture
@@ -254,7 +261,7 @@ export class DebugRecorder {
       const parts = line.split(' ')
       const parameter = line === 'diag reset' ? 'reset' : parts[2]
       const raw = parts[3]
-      const value = parameter === 'noise' || parameter === 'dtls' ? raw : Number(raw)
+      const value = ['noise', 'dtls', 'interruption'].includes(parameter) ? raw : Number(raw)
       const valid =
         parameter === 'reset' ||
         (parts.length === 4 &&
@@ -266,6 +273,7 @@ export class DebugRecorder {
             (parameter === 'capture' && Number.isFinite(value) && value >= -27 && value <= 0) ||
             (parameter === 'nlp' && [0, 1, 2].includes(value)) ||
             (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
+            (parameter === 'interruption' && ['on', 'off', 'saved'].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')
