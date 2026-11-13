@@ -3,6 +3,7 @@ import { createSubscription, openSubscriptionControl } from 'realtimeConversatio
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
 import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
+import Debug from 'device-debug'
 import { assert, equal } from 'testing/assert'
 import TextDecoder from 'text/decoder'
 import Timer from 'timer'
@@ -106,10 +107,76 @@ assert(rejected)
 // The SDK hides upgrade failures. Observe only the bounded first status line;
 // subsequent headers/body must neither change the code nor enter the error.
 class TLS {
+  constructor(options) {
+    this.options = options
+  }
   read(value) {
     return value === undefined ? this.byte : value
   }
 }
+class TCP {
+  constructor(options) {
+    this.options = options
+  }
+}
+let dnsRequest
+class ObservedDNS {
+  resolve(request) {
+    dnsRequest = request
+  }
+}
+const networkEvents = []
+Debug.install({
+  enabled: true,
+  emit(_scope, event, fields) {
+    networkEvents.push({ event, ...(typeof fields === 'function' ? fields() : fields) })
+  },
+})
+globalThis.device.network.wss = { io: Socket, dns: { io: ObservedDNS }, socket: { io: TLS, TCP: { io: TCP } } }
+const observed = openSubscriptionControl('rtc_observed', {}, () => {})
+new socket.options.dns.io().resolve({ onResolved() {} })
+dnsRequest.onResolved('api.openai.com', '192.0.2.42')
+let writableCount = 0
+const tcp = new socket.options.socket.TCP.io({
+  onWritable(count) {
+    writableCount += count
+  },
+})
+tcp.options.onWritable(100)
+tcp.options.onWritable(100)
+equal(writableCount, 200)
+const tls = new socket.options.socket.io({
+  onWritable(count) {
+    writableCount += count
+  },
+})
+tls.options.onWritable(100)
+tls.options.onWritable(100)
+for (const character of 'HTTP/1.1 101 Switching Protocols\r\nprivate-header: synthetic-secret\r\n') {
+  tls.byte = character.charCodeAt(0)
+  tls.read()
+}
+socket.options.onWritable(4096)
+const observedChannel = await observed
+socket.readableFrame(ArrayBuffer.fromString('{"type":"session.started"}'), false)
+observedChannel.close()
+const closedEvents = networkEvents.length
+tls.options.onError(Object.assign(new Error('synthetic-sensitive-close'), { code: -3 }))
+equal(networkEvents.length, closedEvents, 'intentional close cannot become a new transport failure')
+for (const event of [
+  'control.dns.start',
+  'control.dns.ready',
+  'control.tcp.ready',
+  'control.tls.ready',
+  'control.http',
+  'control.ready',
+  'control.first_message',
+  'control.closed',
+])
+  equal(networkEvents.filter((entry) => entry.event === event).length, 1)
+equal(networkEvents.find((entry) => entry.event === 'control.http').status, 101)
+assert(!JSON.stringify(networkEvents).includes('synthetic-secret'))
+assert(!JSON.stringify(networkEvents).includes('192.0.2.42'))
 globalThis.device.network.wss = { io: Socket, socket: { io: TLS } }
 for (const [line, status] of [
   ['HTTP/1.1 403 Forbidden\r\n', 403],

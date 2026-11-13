@@ -1004,6 +1004,10 @@ await test('private failure and close matrix preserves selected credentials and 
     await h.signal()
     if (mode !== 'stop-during-start') await connecting
     if (mode === 'control-loss') {
+      h.message({ type: 'turn.done', turn: { transcript: 'synthetic-private-transcript' } })
+      check(logged.some((entry) => entry.type === 'turn.done'))
+      check(!JSON.stringify(logged).includes('synthetic-private-transcript'))
+      equal(h.transcripts.length, 0)
       receive({ type: 'error', error: { code: 'opaque-subscription-token', message: 'untrusted provider detail' } })
       await flush()
       equal(h.c.state, 'error')

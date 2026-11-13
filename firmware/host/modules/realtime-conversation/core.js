@@ -32,6 +32,13 @@ const DIAGNOSTIC_EVENTS = new Set([
   'conversation.item.created',
   'conversation.item.added',
   'conversation.item.done',
+  'delegation.created',
+  'output_transcript.added',
+  'turn.done',
+  'session.input_transcript.delta',
+  'session.output_transcript.delta',
+  'local.subscription.job.started',
+  'local.subscription.job.finished',
 ])
 
 export class ConversationError extends Error {
@@ -533,7 +540,17 @@ export default class Conversation {
         throw new ConversationError(`WebRTC failure (${event.code})`, 'transport_error', event.stage ?? 'transport')
       if (event.type === 'disconnected')
         throw new ConversationError('WebRTC disconnected before session.closed', 'connection_lost', 'transport')
-      if (event.type !== 'message' || (this.#subscription && !event.subscription)) return
+      if (event.type !== 'message') return
+      if (this.#subscription && !event.subscription) {
+        // Observe the unused channel without acting twice or exporting content.
+        if (this.#platform.debug?.enabled && typeof event.data === 'string' && event.data.length <= 131072) {
+          try {
+            const ignored = JSON.parse(event.data)
+            this.#diagnose('receive.ignored', { type: DIAGNOSTIC_EVENTS.has(ignored?.type) ? ignored.type : 'other' })
+          } catch {}
+        }
+        return
+      }
       if (typeof event.data !== 'string' || event.data.length > 131072)
         throw new ConversationError('Invalid event size', 'event_limit', 'events')
       let message
@@ -548,7 +565,13 @@ export default class Conversation {
         this.#diagnose(
           'receive',
           this.#subscription && message.type === 'error'
-            ? { type: 'error', error: { code: 'subscription_error' } }
+            ? {
+                type: 'error',
+                error: attachErrorMetadata(
+                  new ConversationError('Subscription error', 'subscription_error', 'control'),
+                  message.error,
+                ),
+              }
             : message,
         )
       this.#tools?.receive(message)
@@ -1118,6 +1141,8 @@ export default class Conversation {
       fields.detailType = response?.status_details?.type
       fields.reason = response?.status_details?.reason
       fields.errorCode = error?.code
+      fields.providerCode = error?.providerCode
+      fields.stage = error?.stage
       fields.status = error?.status
       fields.client_event_id = error?.event_id ?? message?.client_event_id
       fields.audio_start_ms = message?.audio_start_ms

@@ -186,6 +186,8 @@ test('USB trials require enable, validate bounds and settle only after the reque
     'diag set noise arbitrary',
     'diag set capture 5',
     'diag set nlp 3',
+    'diag set tcp 2',
+    'diag set dtls passive',
     'diag set speaker ',
   ])
     f.recorder.command(command)
@@ -197,13 +199,17 @@ test('USB trials require enable, validate bounds and settle only after the reque
     'diag set vad 0.6',
     'diag set silence 1000',
     'diag set noise near_field',
+    'diag set tcp 1',
+    'diag set tcp 0',
+    'diag set dtls actpass',
+    'diag set dtls active',
     'diag reset',
   ]) {
     f.recorder.command(command)
     for (let i = 0; i < 10; i++) await Promise.resolve()
     assert.equal(f.lines.at(-1).phase, 'applied')
   }
-  assert.equal(applied.length, 7)
+  assert.equal(applied.length, 11)
 })
 
 test('a trial cannot run after its USB session ends or report success in a later capture', async () => {

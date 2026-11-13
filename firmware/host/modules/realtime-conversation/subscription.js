@@ -4,6 +4,7 @@ import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
 import store from 'realtimeConversation/subscription-store'
 import Base64 from 'base64'
+import Debug from 'device-debug'
 import RNG from 'rng'
 import TextDecoder from 'text/decoder'
 import Timer from 'timer'
@@ -12,6 +13,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true })
 const auth = new SubscriptionAuth({
   store,
   fetch,
+  diagnose: (event, fields) => Debug.event('auth', event, fields),
   schedule: (callback, delay) => Timer.set(callback, delay),
   cancel: (timer) => Timer.clear(timer),
   decodeClaims(token) {
@@ -37,21 +39,90 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       queued = 0,
       incoming = [],
       incomingSize = 0,
-      upgradeStatus
+      upgradeStatus,
+      phase = network.dns?.io ? 'dns' : 'connect',
+      firstMessage = true
+    const diagnose = (event, fields) => Debug.event('subscription', event, fields)
+    const DNS = network.dns?.io
+    const CheckedDNS =
+      typeof DNS === 'function'
+        ? class extends closingDNS(DNS, () => closed) {
+            resolve(request) {
+              diagnose('control.dns.start')
+              return super.resolve({
+                ...request,
+                onResolved(...args) {
+                  phase = 'connect'
+                  diagnose('control.dns.ready')
+                  return request.onResolved?.apply(this, args)
+                },
+                onError(...args) {
+                  diagnose('control.dns.failed')
+                  return request.onError?.apply(this, args)
+                },
+              })
+            }
+          }
+        : DNS
+    const TCP = network.socket?.TCP?.io
+    const CheckedTCP =
+      typeof TCP === 'function'
+        ? class extends guardSocketCallbacks(TCP) {
+            constructor(options) {
+              let ready = false
+              super({
+                ...options,
+                onWritable(count) {
+                  if (!ready && !closed) {
+                    ready = true
+                    phase = 'tls'
+                    diagnose('control.tcp.ready')
+                  }
+                  return options.onWritable?.call(this, count)
+                },
+              })
+            }
+          }
+        : TCP
     const Socket = network.socket?.io
     const CheckedSocket =
       typeof Socket === 'function'
         ? class extends guardSocketCallbacks(Socket) {
             #statusLine = ''
+            constructor(options) {
+              let ready = false
+              super({
+                ...options,
+                onWritable(count) {
+                  if (!ready && !closed) {
+                    ready = true
+                    phase = 'upgrade'
+                    diagnose('control.tls.ready')
+                  }
+                  return options.onWritable?.call(this, count)
+                },
+                onError(error) {
+                  if (!closed)
+                    diagnose('control.socket.failed', () => ({
+                      phase,
+                      code: Number.isFinite(error?.code) ? error.code : undefined,
+                    }))
+                  return options.onError?.call(this, error)
+                },
+              })
+            }
             read(data) {
               const value = data === undefined ? super.read() : super.read(data)
               if (this.#statusLine !== undefined && typeof value === 'number') {
-                if (value === 10) {
-                  const match = /^HTTP\/1\.[01] ([1-5][0-9]{2}) /.exec(this.#statusLine)
-                  if (match) upgradeStatus = Number(match[1])
+                this.#statusLine += String.fromCharCode(value)
+                if (this.#statusLine.length === 13 || value === 10) {
+                  const match = /^HTTP\/1\.[01] ([1-5][0-9]{2}) $/.exec(this.#statusLine)
+                  if (match) {
+                    upgradeStatus = Number(match[1])
+                    diagnose('control.http', () => ({ status: upgradeStatus }))
+                  }
                   this.#statusLine = undefined
-                } else if (this.#statusLine.length < 32) this.#statusLine += String.fromCharCode(value)
-                else this.#statusLine = undefined
+                }
               }
               return value
             }
@@ -59,6 +130,12 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
         : Socket
     const queue = []
     const fail = (timedOut = false) => {
+      if (closed) return
+      diagnose('control.failed', () => ({
+        phase,
+        status: upgradeStatus,
+        reason: timedOut === true ? 'timeout' : 'socket',
+      }))
       channel.close()
       if (!opened)
         reject(
@@ -92,6 +169,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       close() {
         if (closed) return
         closed = true
+        diagnose('control.closed', () => ({ accepted: opened, phase }))
         Timer.clear(deadline)
         queue.length = 0
         incoming = []
@@ -103,10 +181,19 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
     }
     const deadline = Timer.set(() => fail(true), timeoutMs)
     try {
+      diagnose('control.start')
       socket = new Client({
         ...network,
-        ...(network.dns?.io ? { dns: { ...network.dns, io: closingDNS(network.dns.io, () => closed) } } : {}),
-        ...(typeof CheckedSocket === 'function' ? { socket: { ...network.socket, io: CheckedSocket } } : {}),
+        ...(typeof CheckedDNS === 'function' ? { dns: { ...network.dns, io: CheckedDNS } } : {}),
+        ...(typeof CheckedSocket === 'function'
+          ? {
+              socket: {
+                ...network.socket,
+                io: CheckedSocket,
+                ...(typeof CheckedTCP === 'function' ? { TCP: { ...network.socket.TCP, io: CheckedTCP } } : {}),
+              },
+            }
+          : {}),
         host: 'api.openai.com',
         path: `/v1/live/${encodeURIComponent(callId)}`,
         port: 443,
@@ -115,6 +202,8 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
           writable = count
           if (!opened && count) {
             opened = true
+            phase = 'control'
+            diagnose('control.ready')
             Timer.clear(deadline)
             resolve(channel)
           }
@@ -143,6 +232,10 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
             incoming = []
             incomingSize = 0
             if (!message || typeof message.type !== 'string') throw new Error('Invalid subscription event')
+            if (firstMessage) {
+              firstMessage = false
+              diagnose('control.first_message', () => ({ value: frame.byteLength }))
+            }
             onMessage(message)
           } catch {
             fail()
@@ -170,6 +263,7 @@ export function createSubscription(options) {
     fetch,
     openControl: openSubscriptionControl,
     wait: (delay) => new Promise((resolve) => Timer.set(resolve, delay)),
+    diagnose: (event, fields) => Debug.event('subscription', event, fields),
     uuid: () => {
       const bytes = new Uint8Array(RNG.get(16))
       bytes[6] = (bytes[6] & 15) | 64

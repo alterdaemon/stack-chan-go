@@ -43,7 +43,12 @@ void stackchanDebugNative(unsigned event, unsigned request, int value, int resul
 void xs_device_debug_tune(xsMachine *the) {
     unsigned parameter = xsmcToInteger(xsArg(0)), value = xsmcToInteger(xsArg(1));
     if (!atomic_load(&enabled)) xsUnknownError("Diagnostics are disabled");
-    if (!stackchanAudioDebugSet || stackchanAudioDebugSet(parameter, value)) xsUnknownError("Invalid audio trial");
+    if (parameter == DEBUG_TUNE_TCP || parameter == DEBUG_TUNE_DTLS) {
+        if (value > 1 || !stackchanLiveDebugSet || stackchanLiveDebugSet(parameter, value)) xsUnknownError("Invalid transport trial");
+    } else {
+        if (!stackchanAudioDebugSet || stackchanAudioDebugSet(parameter, value)) xsUnknownError("Invalid audio trial");
+        if (parameter == DEBUG_TUNE_RESET && stackchanLiveDebugSet) stackchanLiveDebugSet(parameter, 0);
+    }
 }
 void xs_device_debug_enable(xsMachine *the) {
     bool value = xsmcToBoolean(xsArg(0));
@@ -52,6 +57,7 @@ void xs_device_debug_enable(xsMachine *the) {
     head = count = dropped = 0;
     portEXIT_CRITICAL(&debugLock);
     if (!value && stackchanAudioDebugSet) stackchanAudioDebugSet(DEBUG_TUNE_RESET, 0);
+    if (!value && stackchanLiveDebugSet) stackchanLiveDebugSet(DEBUG_TUNE_RESET, 0);
 }
 void xs_device_debug_now(xsMachine *the) { xsmcSetNumber(xsResult, esp_timer_get_time() / 1000.0); }
 void xs_device_debug_stamp(xsMachine *the) {
@@ -88,6 +94,11 @@ void xs_device_debug_info(xsMachine *the) {
     NUMBER("freeHeap", heap_caps_get_free_size(MALLOC_CAP_8BIT));
     NUMBER("freeInternalHeap", heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     NUMBER("minimumHeap", heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
+    NUMBER("largestInternalBlock", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    NUMBER("freePsram", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    NUMBER("tcp", stackchanLiveDebugGet ? stackchanLiveDebugGet(DEBUG_TUNE_TCP) : 0);
+    xsmcSetString(xsVar(0), stackchanLiveDebugGet && stackchanLiveDebugGet(DEBUG_TUNE_DTLS) ? "actpass" : "active");
+    xsmcSet(xsResult, xsID("dtlsRole"), xsVar(0));
     NUMBER("resetReason", esp_reset_reason());
     portENTER_CRITICAL(&debugLock); unsigned lost = dropped; portEXIT_CRITICAL(&debugLock);
     NUMBER("nativeDropped", lost);

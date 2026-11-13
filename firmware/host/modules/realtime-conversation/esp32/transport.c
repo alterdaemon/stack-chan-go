@@ -33,13 +33,17 @@ typedef struct {
 	atomic_bool stopping, done, muted, flushPending;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
-	bool started, errorRead, captureOnly, bargeIn, realtime;
+	bool started, errorRead, captureOnly, bargeIn, realtime, tcp, dtlsActpass;
     int pitch;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
+	atomic_uint workerStackMinimum;
 	const char *failureStage;
 	esp_webrtc_handle_t rtc;
 	esp_peer_signaling_cfg_t signal;
+	esp_peer_ops_t observedPeer;
+	const esp_peer_ops_t *basePeer;
+	int (*peerState)(esp_peer_state_t, void *);
 	LiveAudioStats stats;
 	portMUX_TYPE lock;
 } LiveTransport;
@@ -48,9 +52,44 @@ typedef struct {
  * Workers can construct transports concurrently; retain this lease until every
  * native task has stopped, including constructor and startup failure paths. */
 static _Atomic(LiveTransport *) gOwner;
+static atomic_uint gLiveTrials;
 static bool gAdapters;
 extern int stackchanRealtimeMediaInit(void);
 extern int stackchanRealtimeCodecInit(void);
+
+/* Next-start RAM trials. A live owner keeps its immutable startup snapshot. */
+int stackchanLiveDebugSet(unsigned parameter, unsigned value)
+{
+	if (parameter == DEBUG_TUNE_RESET) { atomic_store(&gLiveTrials, 0); return 0; }
+	if (value > 1 || atomic_load(&gOwner)) return -1;
+	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : 0;
+	if (!bit) return -1;
+	if (value) atomic_fetch_or(&gLiveTrials, bit);
+	else atomic_fetch_and(&gLiveTrials, ~bit);
+	return 0;
+}
+unsigned stackchanLiveDebugGet(unsigned parameter)
+{
+	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : 0;
+	return !!(atomic_load(&gLiveTrials) & bit);
+}
+/* Espressif exposes fine-grained ICE/DTLS states on the peer callback, while
+ * esp_webrtc forwards only a subset. Preserve its callback and context exactly. */
+static int observePeerState(esp_peer_state_t state, void *ctx)
+{
+	LiveTransport *t = atomic_load(&gOwner);
+	stackchanDebugTransition(DEBUG_PEER_STATE, 0, state, 0);
+	return t && t->peerState ? t->peerState(state, ctx) : 0;
+}
+static int observePeerOpen(esp_peer_cfg_t *cfg, esp_peer_handle_t *peer)
+{
+	LiveTransport *t = atomic_load(&gOwner);
+	if (!t) return ESP_PEER_ERR_WRONG_STATE;
+	t->peerState = cfg->on_state;
+	esp_peer_cfg_t observed = *cfg;
+	observed.on_state = observePeerState;
+	return t->basePeer->open(&observed, peer);
+}
 
 static void fail(LiveTransport *t, int code)
 {
@@ -178,7 +217,11 @@ static void worker(void *ctx)
 		if ((err = esp_capture_start(provider.capture))) goto done;
 		goto running;
 	}
-	esp_peer_default_cfg_t peer = {.agent_recv_timeout = 500, .ice_use_lite_mode = false,
+	t->basePeer = esp_peer_get_default_impl();
+	if (!t->basePeer) { err = ESP_ERR_NO_MEM; goto done; }
+	t->observedPeer = *t->basePeer;
+	t->observedPeer.open = observePeerOpen;
+	esp_peer_default_cfg_t peer = {.agent_recv_timeout = 500, .ice_use_lite_mode = false, .tcp_support = t->tcp,
 		.rtp_cfg = {.audio_recv_jitter = {.cache_size = 32768}, .send_pool_size = 32768, .send_queue_num = 64}};
 	esp_webrtc_cfg_t cfg = {
 		.peer_cfg = {.audio_info = {.codec = ESP_PEER_AUDIO_CODEC_OPUS, .sample_rate = 16000, .channel = 1},
@@ -186,7 +229,7 @@ static void worker(void *ctx)
 			.enable_data_channel = true, .manual_ch_create = true, .no_auto_reconnect = true,
 			.on_custom_data = onData, .ctx = t, .extra_cfg = &peer, .extra_size = sizeof(peer)},
 		.signaling_cfg = {.extra_cfg = &t, .extra_size = sizeof(t)},
-		.peer_impl = esp_peer_get_default_impl(), .signaling_impl = &signaling
+		.peer_impl = &t->observedPeer, .signaling_impl = &signaling
 	};
 	if ((err = esp_webrtc_open(&cfg, &t->rtc))) goto done;
 	if ((err = esp_webrtc_set_media_provider(t->rtc, &provider))) goto done;
@@ -219,7 +262,10 @@ static void worker(void *ctx)
 			if (msg.type == kFlushOutput) err = liveAudioFlushOutput(audio);
 			else if (msg.type == kAnswer) {
 				esp_peer_signaling_msg_t answer = {.type = ESP_PEER_SIGNALING_MSG_SDP, .data = (uint8_t *)msg.data, .size = msg.size};
+				t->failureStage = "remote_sdp";
 				err = t->signal.on_msg(&answer, t->signal.ctx);
+				stackchanDebugTransition(DEBUG_SIGNAL_ANSWER, 0, msg.size, err);
+				if (!err) t->failureStage = "peer_connect";
 			}
 			else err = esp_webrtc_send_custom_data(t->rtc, ESP_WEBRTC_CUSTOM_DATA_VIA_DATA_CHANNEL, (uint8_t *)msg.data, msg.size);
 			free(msg.data);
@@ -241,6 +287,8 @@ done:
 	if (probeSink) esp_capture_stop(provider.capture);
 	if (t->rtc) { esp_webrtc_close(t->rtc); t->rtc = NULL; }
 	liveAudioClose(audio);
+	atomic_store(&t->workerStackMinimum, uxTaskGetStackHighWaterMark(NULL));
+	stackchanDebugTransition(DEBUG_WORKER_DONE, 0, atomic_load(&t->workerStackMinimum), err);
 	atomic_store(&t->done, true);
 	vTaskDelete(NULL);
 }
@@ -293,6 +341,9 @@ void xs_live_transport_start(xsMachine *the)
 	t->captureOnly = xsmcArgc && xsmcToBoolean(xsArg(0));
 	t->bargeIn = xsmcArgc > 1 && xsmcToBoolean(xsArg(1));
     t->realtime = xsmcArgc > 3 && xsmcToBoolean(xsArg(3));
+	unsigned trials = atomic_load(&gLiveTrials);
+	t->tcp = !!(trials & 1);
+	t->dtlsActpass = !!(trials & 2);
     if (xsmcArgc > 2) {
         double pitch = xsmcToNumber(xsArg(2));
         if (!(pitch >= -6 && pitch <= 6) || pitch != (int)pitch) xsRangeError("Invalid pitch");
@@ -384,6 +435,10 @@ void xs_live_transport_read(xsMachine *the)
 			xsmcSetString(xsVar(0), msg.data);
 			xsmcSet(xsResult, xsID(msg.type == kOffer ? "sdp" : "data"), xsVar(0));
 		}
+		if (msg.type == kOffer) {
+			xsmcSetBoolean(xsVar(0), t->dtlsActpass);
+			xsmcSet(xsResult, xsID("dtlsActpass"), xsVar(0));
+		}
 		if (msg.type == kError) {
 			xsmcSetInteger(xsVar(0), msg.code); xsmcSet(xsResult, xsID("code"), xsVar(0));
 			xsmcSetString(xsVar(0), t->failureStage ? t->failureStage : "webrtc"); xsmcSet(xsResult, xsID("stage"), xsVar(0));
@@ -421,6 +476,11 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("peerEvents", atomic_load(&t->peerEvents));
 	STAT("lastPeerEvent", atomic_load(&t->lastPeerEvent));
 	STAT("dataMessages", atomic_load(&t->dataMessages));
+	STAT("workerStackMinimum", atomic_load(&t->workerStackMinimum));
+	STAT("queueBytes", atomic_load(&t->queuedBytes));
+	STAT("queueEvents", uxQueueMessagesWaiting(t->events));
+	STAT("queueCommands", uxQueueMessagesWaiting(t->commands));
+	STAT("tcp", t->tcp);
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
     STAT("interruptions", stats.interruptions);

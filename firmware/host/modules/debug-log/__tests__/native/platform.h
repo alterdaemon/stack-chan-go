@@ -28,6 +28,8 @@ static inline const esp_app_desc_t *esp_app_get_description(void) { static esp_a
 static inline int esp_reset_reason(void) { return 0; }
 #define MALLOC_CAP_8BIT 1
 #define MALLOC_CAP_INTERNAL 2
+#define MALLOC_CAP_SPIRAM 4
 static inline unsigned heap_caps_get_free_size(int caps) { return 1000; }
 static inline unsigned heap_caps_get_minimum_free_size(int caps) { return 900; }
+static inline unsigned heap_caps_get_largest_free_block(int caps) { return 800; }
 #endif

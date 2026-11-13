@@ -142,6 +142,50 @@ Diagnostics Off, USB disconnect and lease expiry stop a session started through
 USB. A session started with the touch control remains under the user's control.
 These commands do not change saved settings or select another provider.
 
+`diag live warmup` renews/caches the selected ChatGPT subscription grant without
+opening media. It rejects API-key mode. This separates authorization time from
+peer startup without transferring credentials to the host.
+
+Two next-start transport trials are available while LIVE is stopped:
+
+```text
+diag set tcp 1
+diag set dtls actpass
+diag status
+diag live start
+diag live stop
+diag reset
+```
+
+Change one variable per trial. TCP accepts 0/1; DTLS accepts `active`/`actpass`.
+Defaults are TCP 0 and DTLS active. Wait for `set`/`applied` and check status
+before starting. Active owners reject these changes. Reset, Off, lease loss and
+reboot restore defaults for future starts; an active call keeps its startup
+snapshot. These controls do not change certificates, saved settings or providers.
+They expose existing [Espressif peer options](https://github.com/espressif/esp-webrtc-solution/blob/main/components/esp_peer/include/esp_peer_default.h)
+and the SDP setup role defined by [RFC 5763](https://www.rfc-editor.org/rfc/rfc5763#section-5).
+
+Enable capture before starting and use the running ELF hash to select matching
+build provenance. Startup evidence is grouped by component:
+
+| Component/events | Evidence |
+| --- | --- |
+| `auth` | Protected record availability/load/save, cached access, refresh phase and numeric HTTP status. No account labels or tokens. |
+| `https` | Request IDs, worker creation/post/response/cancellation, actual idle acknowledgement and release. |
+| `subscription` | Call status/header presence, offer/answer codec rates, candidate counts and DTLS role; control DNS/TCP/TLS/upgrade/readiness and backend terminal states. |
+| `audio` | Native SDP acceptance result, fine-grained `peer.state`, coarse `peer.event`, audio stop and worker cleanup. |
+| `device` / final audio snapshot | Free/minimum heap, largest internal block, PSRAM, queue occupancy and native worker stack minimum. |
+
+`peer.state` uses the bundled Espressif peer enum; `peer.event` uses the distinct
+WebRTC event enum. Decode them against the matching build's SDK headers. For
+`esp_peer` 1.5.5, peer states 3/4/5/6/7/8 mean gathering/pairing/paired/connecting/
+connected/failed. A failure before pairing does not establish a DTLS failure.
+SDP logs contain capability numbers only: no addresses, ICE passwords,
+fingerprints, session descriptions or speech content. Dropped records or an
+unexpected diagnostic Off invalidate a trial. Consult matching primary SDK and
+provider sources before selecting a repair; upstream issue reports alone do not
+establish the robot's cause.
+
 To investigate repeated answers, keep Interruption On and the microphone on.
 First say “Hello, are you there?” once and stay silent for ten seconds. Next set
 speaker to zero and repeat once: silence from the speaker is expected, while the

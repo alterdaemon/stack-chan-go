@@ -4,6 +4,7 @@
 import { normalizeRequest } from 'realtimeConversation/http-options'
 import { createHttpProxy } from 'realtimeConversation/http-proxy'
 import Base64 from 'base64'
+import Debug from 'device-debug'
 import TextDecoder from 'text/decoder'
 import Time from 'time'
 import Timer from 'timer'
@@ -12,6 +13,7 @@ import Worker from 'worker'
 const decoder = new TextDecoder()
 
 export default createHttpProxy({
+  diagnose: (event, fields) => Debug.event('https', event, fields),
   createWorker: () =>
     new Worker('realtimeConversation/http-worker', {
       static: 512 * 1024,

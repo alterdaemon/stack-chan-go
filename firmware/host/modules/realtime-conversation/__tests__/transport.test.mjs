@@ -97,6 +97,9 @@ test('CoreS3 offers initiate DTLS without changing other SDP attributes', async 
   f.events.push({ type: 'offer', sdp })
   f.timers[0].callback(f.timers[0])
   assert.equal(seen[0].sdp, sdp.replaceAll('a=setup:actpass', 'a=setup:active'))
+  f.events.push({ type: 'offer', sdp, dtlsActpass: true })
+  f.timers[0].callback(f.timers[0])
+  assert.equal(seen[1].sdp, sdp, 'the bounded next-start trial preserves the original offer')
 })
 test('native release resolves close and does not reschedule a cleared timer', async () => {
   const f = fixture()

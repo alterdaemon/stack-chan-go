@@ -6,6 +6,24 @@ export const SUBSCRIPTION_MODEL = 'gpt-live-1-codex'
 export const SUBSCRIPTION_BACKEND = 'gpt-6.1-terra'
 const id = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value)
 
+// Diagnostic capabilities only. Never return ICE addresses/credentials, SDP,
+// fingerprints, call IDs or provider text from this observer.
+export function subscriptionSdpMetadata(sdp) {
+  const audio = /^m=audio ([0-9]{1,5}) /m.exec(sdp)
+  const application = /^m=application ([0-9]{1,5}) /m.exec(sdp)
+  const opus = /^a=rtpmap:[0-9]+ opus\/([0-9]{1,6})(?:\/([0-9]{1,2}))?\r?$/im.exec(sdp)
+  return {
+    audioPort: audio ? Number(audio[1]) : undefined,
+    applicationPort: application ? Number(application[1]) : undefined,
+    udpCandidates: (sdp.match(/^a=candidate:\S+ [0-9]+ udp /gim) ?? []).length,
+    tcpCandidates: (sdp.match(/^a=candidate:\S+ [0-9]+ tcp /gim) ?? []).length,
+    dtlsRole: /^a=setup:(active|passive|actpass)\r?$/m.exec(sdp)?.[1],
+    iceLite: /^a=ice-lite\r?$/m.test(sdp),
+    opusRate: opus ? Number(opus[1]) : undefined,
+    opusChannels: opus?.[2] ? Number(opus[2]) : undefined,
+  }
+}
+
 export function parseSubscriptionCall(response, sdp) {
   if (!response.ok)
     throw Object.assign(new Error('Subscription call rejected'), {
@@ -71,8 +89,8 @@ export class SubscriptionLive {
   #cleared = false
   #context = []
 
-  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now }) {
-    Object.assign(this, { auth, fetch, openControl, uuid, wait, now })
+  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now, diagnose }) {
+    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose })
     this.#unsubscribe = auth.onLogout(() => {
       this.dispose()
       onLogout?.()
@@ -81,7 +99,9 @@ export class SubscriptionLive {
 
   async create(sdp, options, onMessage, current, onAnswer) {
     this.#onMessage = onMessage
+    this.diagnose?.('auth.start')
     const credentials = await this.auth.credentials()
+    this.diagnose?.('auth.ready')
     if (this.#closed || !current()) throw new Error('Subscription start cancelled')
     let stage = 'bootstrap'
     try {
@@ -102,6 +122,8 @@ export class SubscriptionLive {
       }
       this.headers = headers
       this.accountId = credentials.accountId
+      this.diagnose?.('call.offer', () => subscriptionSdpMetadata(sdp))
+      this.diagnose?.('call.start')
       this.#request = this.fetch(CALL, {
         method: 'POST',
         headers,
@@ -117,6 +139,11 @@ export class SubscriptionLive {
         }),
       })
       const response = await this.#request
+      this.diagnose?.('call.response', () => ({
+        status: response.status,
+        locationPresent: typeof (response.location ?? response.headers?.location) === 'string',
+        sessionHeaderPresent: typeof response.headers?.['openai-session-id'] === 'string',
+      }))
       if (response.status === 401) this.auth.logout()
       let bootstrap
       try {
@@ -135,6 +162,7 @@ export class SubscriptionLive {
         throw error
       }
       this.#request = undefined
+      this.diagnose?.('call.answer', () => ({ status: response.status, ...subscriptionSdpMetadata(bootstrap.sdp) }))
       // ICE activation must progress while the control socket joins the call.
       // Conversation keeps capture muted until the control session is ready.
       if (!this.#closed && current()) onAnswer?.(bootstrap)
@@ -147,6 +175,7 @@ export class SubscriptionLive {
         if (remaining <= 0)
           throw Object.assign(new Error('Subscription control timed out'), { code: 'subscription_control_timeout' })
         try {
+          this.diagnose?.('control.join', () => ({ attempt }))
           this.#channel = await this.openControl(
             bootstrap.callId,
             headers,
@@ -155,6 +184,7 @@ export class SubscriptionLive {
           )
           break
         } catch (error) {
+          this.diagnose?.('control.failed', () => ({ attempt, status: error?.status }))
           // A newly created call may briefly be unavailable until ICE activates.
           // Retry this same call only; never create another call or change auth.
           if (error?.status !== 404 || attempt >= activationDelays.length || this.#closed || !current()) throw error
@@ -241,6 +271,7 @@ export class SubscriptionLive {
   async #delegate(delegationId, text) {
     const job = { id: delegationId }
     this.#job = job
+    this.diagnose?.('backend.start')
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
       const credentials = await this.auth.credentials()
@@ -269,9 +300,11 @@ export class SubscriptionLive {
         }),
       })
       const response = await job.request
+      this.diagnose?.('backend.response', () => ({ status: response.status }))
       if (response.status === 401) this.auth.logout()
       if (!response.ok) throw new Error('Subscription backend rejected')
       const result = JSON.parse(await response.text())
+      this.diagnose?.('backend.result', () => ({ accepted: !result.error, searched: result.searched === true }))
       if (result.error || typeof result.answer !== 'string' || result.answer.length > 3000)
         throw new Error('Subscription answer incomplete')
       if (this.#job !== job || this.#closed) return
@@ -279,6 +312,7 @@ export class SubscriptionLive {
         result.answer + (result.searched ? '\nSources: ' + result.sources.map((source) => source.url).join(' ') : '')
       for (const event of subscriptionAppends(answer, delegationId)) this.#channel.send(event)
     } catch {
+      this.diagnose?.('backend.failed')
       if (this.#job === job && !this.#closed)
         for (const event of subscriptionAppends('I could not complete that request. Please try again.', delegationId))
           this.#channel.send(event)
@@ -286,6 +320,7 @@ export class SubscriptionLive {
       if (this.#job === job) {
         this.#job = undefined
         this.#onMessage({ type: 'local.subscription.job.finished', id: delegationId })
+        this.diagnose?.('backend.finished')
       }
     }
   }
@@ -301,6 +336,7 @@ export class SubscriptionLive {
     const job = this.#job
     this.#job = undefined
     job?.request?.cancel?.()
+    if (job) this.diagnose?.('backend.cancelled')
     if (job) this.#onMessage?.({ type: 'local.subscription.job.finished', id: job.id })
   }
 

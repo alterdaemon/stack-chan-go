@@ -130,7 +130,8 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
         }
         // This CoreS3 peer must initiate DTLS. Advertising actpass can leave both
         // peers waiting and starve the JS transport poll during negotiation.
-        if (event.type === 'offer') event.sdp = event.sdp.replace(/^a=setup:actpass(\r?)$/gm, 'a=setup:active$1')
+        if (event.type === 'offer' && !event.dtlsActpass)
+          event.sdp = event.sdp.replace(/^a=setup:actpass(\r?)$/gm, 'a=setup:active$1')
         this.#callback?.(event)
       }
     }

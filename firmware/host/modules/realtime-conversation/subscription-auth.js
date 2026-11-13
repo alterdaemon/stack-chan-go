@@ -20,12 +20,13 @@ export class SubscriptionAuth {
   #storageError = false
   #storageAvailable = false
 
-  constructor({ fetch, schedule, cancel, decodeClaims, store, now = Date.now, clientId = CLIENT }) {
-    Object.assign(this, { fetch, schedule, cancel, decodeClaims, now, clientId })
+  constructor({ fetch, schedule, cancel, decodeClaims, store, now = Date.now, clientId = CLIENT, diagnose }) {
+    Object.assign(this, { fetch, schedule, cancel, decodeClaims, now, clientId, diagnose })
     this.#store = store
     if (!store) return // Pure-helper fixtures may explicitly exercise volatile authorization.
     try {
       this.#storageAvailable = store.available()
+      this.diagnose?.('storage.available', () => ({ accepted: this.#storageAvailable }))
       if (!this.#storageAvailable) return
       const saved = store.read()
       if (saved === undefined) return
@@ -46,8 +47,10 @@ export class SubscriptionAuth {
       // No access/identity token is persisted. Reboot always requires independent renewal.
       this.#record = { ...saved, expiresAt: 0 }
       this.#state = 'signed-in'
+      this.diagnose?.('storage.loaded')
     } catch {
       this.#storageError = true
+      this.diagnose?.('storage.failed')
     }
   }
 
@@ -72,6 +75,8 @@ export class SubscriptionAuth {
   }
 
   async #post(path, data, operation, encoded = false) {
+    const kind = path === '/oauth/token' ? (data.grant_type === 'refresh_token' ? 'refresh' : 'exchange') : 'device'
+    this.diagnose?.('request.start', () => ({ kind }))
     const request = this.fetch(`${ISSUER}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': encoded ? 'application/x-www-form-urlencoded' : 'application/json' },
@@ -79,8 +84,15 @@ export class SubscriptionAuth {
       timeoutMs: 30000,
     })
     operation.request = request
-    const response = await request
+    let response
+    try {
+      response = await request
+    } catch (error) {
+      this.diagnose?.('request.failed', () => ({ kind }))
+      throw error
+    }
     operation.request = undefined
+    this.diagnose?.('request.response', () => ({ kind, status: response.status }))
     // Never follow redirects or expose provider error bodies (which may contain secrets).
     if (!response.ok) return { status: response.status }
     const text = await response.text()
@@ -222,6 +234,7 @@ export class SubscriptionAuth {
       }
     }
     this.#record = record
+    this.diagnose?.('storage.saved', () => ({ accepted: !!this.#store }))
   }
 
   #finishAttempt(attempt, state) {
@@ -244,24 +257,32 @@ export class SubscriptionAuth {
     const record = this.#record
     if (!record)
       throw Object.assign(new Error('Subscription sign-in required'), { code: 'subscription_sign_in_required' })
-    if (record.expiresAt > this.now() + 60000) return { accessToken: record.accessToken, accountId: record.accountId }
+    if (record.expiresAt > this.now() + 60000) {
+      this.diagnose?.('access.cached')
+      return { accessToken: record.accessToken, accountId: record.accountId }
+    }
     const operation = { generation: this.#generation }
     this.#renewal = operation
     operation.promise = (async () => {
+      let phase = 'invalidate'
       try {
         // Invalidate disk state BEFORE sending a potentially rotating refresh token.
         // A reset at any subsequent point yields the new complete record or reauthorization.
         // Stop does not invalidate auth; logout changes generation and blocks late commits.
         this.#store?.clear()
+        phase = 'exchange'
         const response = await this.#post(
           '/oauth/token',
           { grant_type: 'refresh_token', refresh_token: record.refreshToken, client_id: record.clientId },
           operation,
           true,
         )
+        phase = 'validate_store'
         await this.#install(response.value, operation.generation, record)
+        this.diagnose?.('refresh.complete')
         return { accessToken: this.#record.accessToken, accountId: this.#record.accountId }
       } catch {
+        this.diagnose?.('refresh.failed', () => ({ phase }))
         if (operation.generation === this.#generation) this.logout()
         throw Object.assign(new Error('Subscription sign-in required'), { code: 'subscription_sign_in_required' })
       } finally {

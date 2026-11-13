@@ -9,9 +9,13 @@ static inline void stackchanDebugTransition(unsigned event, unsigned request, in
 }
 enum {
     DEBUG_INTERRUPT = 1, DEBUG_FLUSH_BEGIN, DEBUG_FLUSH_END, DEBUG_RESUME,
-    DEBUG_AUDIO_STOP, DEBUG_OUTPUT_RECOVER, DEBUG_PEER_EVENT, DEBUG_TRANSPORT_FAILURE
+    DEBUG_AUDIO_STOP, DEBUG_OUTPUT_RECOVER, DEBUG_PEER_EVENT, DEBUG_TRANSPORT_FAILURE,
+    DEBUG_SIGNAL_ANSWER, DEBUG_PEER_STATE, DEBUG_WORKER_DONE
 };
-enum { DEBUG_TUNE_RESET, DEBUG_TUNE_SPEAKER, DEBUG_TUNE_CAPTURE, DEBUG_TUNE_NLP };
+enum { DEBUG_TUNE_RESET, DEBUG_TUNE_SPEAKER, DEBUG_TUNE_CAPTURE, DEBUG_TUNE_NLP,
+       DEBUG_TUNE_TCP, DEBUG_TUNE_DTLS };
 extern int stackchanAudioDebugSet(unsigned parameter, unsigned value) __attribute__((weak));
 extern unsigned stackchanAudioDebugGet(unsigned parameter) __attribute__((weak));
+extern int stackchanLiveDebugSet(unsigned parameter, unsigned value) __attribute__((weak));
+extern unsigned stackchanLiveDebugGet(unsigned parameter) __attribute__((weak));
 #endif

@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SubscriptionAuth } from '../subscription-auth.js'
-import { parseSubscriptionCall, SubscriptionLive, subscriptionAppends } from '../subscription-live.js'
+import {
+  parseSubscriptionCall,
+  SubscriptionLive,
+  subscriptionAppends,
+  subscriptionSdpMetadata,
+} from '../subscription-live.js'
 import { createSubscriptionStream } from '../subscription-stream.js'
 
 const tick = async () => {
@@ -12,7 +17,7 @@ const reply = (value, status = 200) => ({
   status,
   text: async () => JSON.stringify(value),
 })
-function authFixture(store) {
+function authFixture(store, diagnose) {
   const timers = new Map(),
     requests = []
   let sequence = 0,
@@ -39,6 +44,7 @@ function authFixture(store) {
   const create = () =>
     new SubscriptionAuth({
       store,
+      diagnose,
       fetch: (url, options) => {
         requests.push({ url, options })
         return respond(url, options)
@@ -93,6 +99,32 @@ function savedStore() {
     },
   }
 }
+
+test('authorization diagnostics identify storage, renewal and cached access without credential content', async () => {
+  const logs = []
+  const f = authFixture(savedStore(), (event, fields) =>
+    logs.push({ event, ...(typeof fields === 'function' ? fields() : fields) }),
+  )
+  await f.auth.start()
+  await f.poll()
+  const reboot = f.restart()
+  await reboot.credentials()
+  await reboot.credentials()
+  assert.ok(logs.some((e) => e.event === 'storage.loaded'))
+  assert.ok(logs.some((e) => e.event === 'request.start' && e.kind === 'refresh'))
+  assert.ok(logs.some((e) => e.event === 'request.response' && e.kind === 'refresh' && e.status === 200))
+  assert.ok(logs.some((e) => e.event === 'refresh.complete'))
+  assert.ok(logs.some((e) => e.event === 'access.cached'))
+  f.time(1950000)
+  f.respond(async () => {
+    throw new Error('synthetic-sensitive-response')
+  })
+  await assert.rejects(reboot.credentials(), { code: 'subscription_sign_in_required' })
+  assert.ok(logs.some((e) => e.event === 'refresh.failed' && e.phase === 'exchange'))
+  const serialized = JSON.stringify(logs)
+  for (const privateValue of ['secret', 'person', 'account', 'private', 'ABCD', 'synthetic-sensitive'])
+    assert.ok(!serialized.includes(privateValue))
+})
 
 test('protected sign-in persists only the refresh credential and bound identity; reboot renews once', async () => {
   const store = savedStore()
@@ -446,6 +478,40 @@ test('private call identity is distinct from session ID, and UTF-8 appends stay 
     events = subscriptionAppends(text, 'd1')
   assert.equal(events.map((x) => x.content[0].text).join(''), text)
   assert.ok(events.every((x) => new TextEncoder().encode(x.content[0].text).length <= 500))
+})
+
+test('SDP diagnostics retain capability numbers and roles without private SDP fields', () => {
+  const sdp = [
+    'v=0',
+    'a=ice-lite',
+    'm=audio 9 UDP/TLS/RTP/SAVPF 111',
+    'a=rtpmap:111 opus/48000/2',
+    'a=setup:passive',
+    'a=ice-ufrag:synthetic-username',
+    'a=ice-pwd:synthetic-password',
+    'a=fingerprint:sha-256 synthetic-fingerprint',
+    'a=candidate:one 1 UDP 123 192.0.2.1 5000 typ host',
+    'a=candidate:two 1 TCP 123 192.0.2.2 443 typ host tcptype passive',
+    'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+    '',
+  ].join('\r\n')
+  assert.deepEqual(subscriptionSdpMetadata(sdp), {
+    audioPort: 9,
+    applicationPort: 9,
+    udpCandidates: 1,
+    tcpCandidates: 1,
+    dtlsRole: 'passive',
+    iceLite: true,
+    opusRate: 48000,
+    opusChannels: 2,
+  })
+  const serialized = JSON.stringify(subscriptionSdpMetadata(sdp))
+  for (const secret of ['synthetic', '192.0.2', 'fingerprint', 'ice-pwd', 'ice-ufrag', 'v=0'])
+    assert.ok(!serialized.includes(secret))
+  const absent = subscriptionSdpMetadata('v=0\r\n')
+  assert.equal(absent.audioPort, undefined)
+  assert.equal(absent.dtlsRole, undefined)
+  assert.equal(absent.udpCandidates, 0)
 })
 function liveFixture() {
   const requests = [],

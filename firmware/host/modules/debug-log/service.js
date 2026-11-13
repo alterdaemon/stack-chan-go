@@ -25,6 +25,9 @@ const nativeEvents = [
   'output.recover',
   'peer.event',
   'transport.failure',
+  'answer.applied',
+  'peer.state',
+  'worker.done',
 ]
 let serial,
   recorder,
@@ -68,6 +71,8 @@ export default function start() {
       } else if (parameter === 'speaker') tune(1, Math.round(value * 1024))
       else if (parameter === 'capture') tune(2, Math.round(1024 * 10 ** (value / 20)))
       else if (parameter === 'nlp') tune(3, value)
+      else if (parameter === 'tcp') tune(4, value)
+      else if (parameter === 'dtls') tune(5, value === 'actpass' ? 1 : 0)
       else await Debug.tune(parameter, value)
     },
     snapshot,

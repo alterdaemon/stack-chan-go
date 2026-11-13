@@ -15,7 +15,8 @@ async function verifyLiveAPI() {
   Debug.install(apiRecorder)
   const owner = {}
   let finishStart,
-    stopped = 0
+    stopped = 0,
+    warmed = 0
   Debug.registerLive(owner, {
     start: () =>
       new Promise((resolve) => {
@@ -25,6 +26,9 @@ async function verifyLiveAPI() {
       stopped++
       finishStart?.(false)
     },
+    warmup: async () => {
+      warmed++
+    },
   })
   try {
     await Debug.controlLive('start')
@@ -33,6 +37,8 @@ async function verifyLiveAPI() {
     if (error.code !== 'live_unavailable') throw error
   }
   apiEnabled = true
+  await Debug.controlLive('warmup')
+  if (warmed !== 1 || stopped || finishStart) throw new Error('Warmup changed the LIVE session')
   const starting = Debug.controlLive('start').catch((error) => error)
   await Debug.stopControlledLive()
   if ((await starting)?.code !== 'live_start_failed') throw new Error('Cancelled LIVE was reported connected')

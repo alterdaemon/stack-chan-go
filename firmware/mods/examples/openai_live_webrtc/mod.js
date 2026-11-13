@@ -252,7 +252,19 @@ export function onContextCreated(robot) {
     session.settings = readSettings()
     return session.start()
   }
-  debug?.registerLive(session, { start: startLive, stop: () => session.stop() })
+  debug?.registerLive(session, {
+    start: startLive,
+    stop: () => session.stop(),
+    async warmup() {
+      if (shuttingDown || session.active) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
+      if (readSettings().auth !== 'chatgpt')
+        throw Object.assign(new Error('Select ChatGPT subscription'), { code: 'not_subscription' })
+      const network = await robot.connectivity.network?.ready
+      if (network?.status !== 'connected')
+        throw Object.assign(new Error('Network unavailable'), { code: 'network_unavailable' })
+      await Modules.importNow('realtimeConversation/subscription').credentials()
+    },
+  })
   function toggleLive() {
     if (shuttingDown || session.active?.closing) return
     if (session.active) void session.stop()

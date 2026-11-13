@@ -9,7 +9,7 @@ type Recorder = {
 let recorder: Recorder | undefined
 type Tuner = { set(name: string, value: number | string): Promise<void>; reset(): Promise<void>; snapshot(): Fields }
 let tuner: { owner: object; value: Tuner } | undefined
-type LiveControl = { start(): Promise<boolean> | undefined; stop(): Promise<unknown> }
+type LiveControl = { start(): Promise<boolean> | undefined; stop(): Promise<unknown>; warmup?(): Promise<void> }
 let live: { owner: object; value: LiveControl; controlled: boolean } | undefined
 const context = { application: 'initialization', network: 'unknown' }
 export default {
@@ -34,7 +34,7 @@ export default {
   releaseLive(owner: object): void {
     if (live?.owner === owner) live.controlled = false
   },
-  async controlLive(action: 'start' | 'stop'): Promise<void> {
+  async controlLive(action: 'start' | 'stop' | 'warmup'): Promise<void> {
     if (!recorder?.enabled || !live)
       throw Object.assign(new Error('LIVE control unavailable'), { code: 'live_unavailable' })
     const owner = live
@@ -50,7 +50,8 @@ export default {
         owner.controlled = false
         throw Object.assign(new Error('LIVE did not connect'), { code: 'live_start_failed' })
       }
-    } else throw Object.assign(new Error('Invalid LIVE action'), { code: 'invalid_parameter' })
+    } else if (action === 'warmup' && owner.value.warmup) await owner.value.warmup()
+    else throw Object.assign(new Error('Invalid LIVE action'), { code: 'invalid_parameter' })
   },
   async stopControlledLive(): Promise<void> {
     if (!live?.controlled) return

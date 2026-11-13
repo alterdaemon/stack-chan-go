@@ -267,6 +267,7 @@ test('IPC and request capacity failures reject without creating an unbounded que
 test('the HTTP proxy releases its VM after actual request cleanup on success, failure, and caller timeout', async () => {
   for (const outcome of ['success', 'failure', 'timeout']) {
     const order = [],
+      diagnostics = [],
       callerTimers = new Set(),
       deferredClose = []
     let callbacks, clientOptions
@@ -301,6 +302,7 @@ test('the HTTP proxy releases its VM after actual request cleanup on success, fa
     })
     worker.postMessage = (message) => queueMicrotask(() => queue(message))
     const fetch = createHttpProxy({
+      diagnose: (event, fields) => diagnostics.push({ event, ...(typeof fields === 'function' ? fields() : fields) }),
       createWorker: () => worker,
       releaseWorker() {
         order.push('VM released')
@@ -317,6 +319,8 @@ test('the HTTP proxy releases its VM after actual request cleanup on success, fa
     const request = fetch('https://service.test/path', { method: 'POST' })
     const result = outcome === 'success' ? request : assert.rejects(request, /failed|timed out/)
     await new Promise(setImmediate)
+    assert.equal(diagnostics[0].event, 'worker.created')
+    assert.ok(diagnostics.some((e) => e.event === 'job.posted' && e.request === 1))
     if (outcome === 'timeout') {
       const timer = [...callerTimers][0]
       callerTimers.delete(timer)
@@ -333,6 +337,9 @@ test('the HTTP proxy releases its VM after actual request cleanup on success, fa
     deferredClose.shift()()
     await result
     await new Promise(setImmediate)
+    assert.equal(diagnostics.at(-1).event, 'worker.released')
+    assert.ok(diagnostics.some((e) => e.event === 'worker.idle'))
+    assert.ok(!JSON.stringify(diagnostics).includes('service.test'))
     assert.deepEqual(order, ['socket closed', 'worker idle', 'VM released'])
     assert.equal(callerTimers.size, 0)
   }

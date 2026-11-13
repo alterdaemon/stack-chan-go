@@ -58,6 +58,13 @@ async function run() {
   assert(control.x < app.width / 2 && control.y > app.height / 2, 'control is in the bottom-left corner')
   equal(control.first.string, 'LIVE OFF', 'starts visibly off')
   equal(acquired, 0, 'adding the control does not start a conversation')
+  try {
+    await Debug.controlLive('warmup')
+    assert(false, 'API mode must not access a subscription grant')
+  } catch (error) {
+    equal(error.code, 'not_subscription')
+  }
+  equal(acquired, 0, 'authorization warmup cannot acquire audio')
   const label = () => control.first.string
   const menu = buttons.get('openai-live:session')
   const point = () => [control.x + control.width / 2, control.y + control.height / 2]
