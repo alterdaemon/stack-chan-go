@@ -202,7 +202,7 @@ export default class Conversation {
         (subscription ? 'gpt-live-1.1-codex' : undefined) ??
         (this.#realtime ? 'gpt-realtime-2.1-mini' : 'gpt-live-1'),
       instructions: options.instructions ?? '',
-      voice: options.voice ?? 'marin',
+      voice: options.voice ?? (subscription ? 'cove' : 'marin'),
       pitch: options.pitch ?? 0,
       bargeIn: options.bargeIn === true,
       turnDetection: vad === undefined ? undefined : { ...vad },

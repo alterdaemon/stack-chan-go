@@ -10,12 +10,18 @@ let recorder: Recorder | undefined
 type Tuner = { set(name: string, value: number | string): Promise<void>; reset(): Promise<void>; snapshot(): Fields }
 let tuner: { owner: object; value: Tuner } | undefined
 type LiveControl = {
-  start(interruption?: boolean, stage?: number): Promise<boolean> | undefined
+  start(interruption?: boolean, stage?: number, voice?: string): Promise<boolean> | undefined
   stop(): Promise<unknown>
   warmup?(): Promise<void>
   isActive?(): boolean
 }
-let live: { owner: object; value: LiveControl; controlled: boolean; interruption?: boolean } | undefined
+let live: { owner: object; value: LiveControl; controlled: boolean; interruption?: boolean; voice?: string } | undefined
+// Codex V3 builtin candidates; USB trials are separate from qualified Settings voices.
+// openai/codex 69231e11, codex-rs/protocol/src/protocol.rs, RealtimeVoicesList::builtin.
+const voiceTrials =
+  'juniper maple spruce ember vale breeze arbor sol cove marin aube bubbie haetsal hanul himari leher miko neer porto rindo rio rivage selva sonna tinta viola'.split(
+    ' ',
+  )
 const context = { application: 'initialization', network: 'unknown' }
 export default {
   get enabled(): boolean {
@@ -49,7 +55,11 @@ export default {
       await stopped
     } else if (['start', 'standard', 'voice', 'prompt', 'pitch'].includes(action)) {
       const stage = ['standard', 'voice', 'prompt', 'pitch', 'start'].indexOf(action)
-      const started = owner.value.start(stage < 4 ? (owner.interruption ?? false) : owner.interruption, stage)
+      const started = owner.value.start(
+        stage < 4 ? (owner.interruption ?? false) : owner.interruption,
+        stage,
+        owner.voice,
+      )
       if (!started) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
       owner.controlled = true
       if (!(await started)) {
@@ -71,7 +81,10 @@ export default {
     return tuner.value.set(name, value)
   },
   resetTuning(): Promise<void> {
-    if (live) live.interruption = undefined
+    if (live) {
+      live.interruption = undefined
+      live.voice = undefined
+    }
     return tuner?.value.reset() ?? Promise.resolve()
   },
   setInterruptionTrial(value: 'on' | 'off' | 'saved'): void {
@@ -80,9 +93,16 @@ export default {
     if (!['on', 'off', 'saved'].includes(value)) throw new RangeError('Invalid interruption trial')
     live.interruption = value === 'saved' ? undefined : value === 'on'
   },
+  setVoiceTrial(value: string): void {
+    if (!recorder?.enabled || !live || live.value.isActive?.() !== false)
+      throw Object.assign(new Error('LIVE must be stopped'), { code: 'live_active' })
+    if (value !== 'saved' && !voiceTrials.includes(value)) throw new RangeError('Invalid voice trial')
+    live.voice = value === 'saved' ? undefined : value
+  },
   tuningSnapshot(): Fields {
     return {
       interruptionTrial: live?.interruption === undefined ? 'saved' : live.interruption ? 'on' : 'off',
+      voiceTrial: live?.voice ?? 'saved',
       ...tuner?.value.snapshot(),
     }
   },

@@ -84,7 +84,7 @@ export class LiveSession {
     this.history = []
   }
 
-  start(interruption = this.settings.bargeIn === true, stage = 4) {
+  start(interruption = this.settings.bargeIn === true, stage = 4, voice) {
     if (typeof interruption !== 'boolean') throw new TypeError('Invalid interruption trial')
     if (!Number.isInteger(stage) || stage < 0 || stage > 4) throw new TypeError('Invalid session profile')
     if (this.active) return this.active.starting
@@ -92,6 +92,7 @@ export class LiveSession {
       cancelled: false,
       bargeIn: interruption,
       stage,
+      voice,
       backend: new Map(),
       idleMs: (this.settings.standbySeconds ?? 60) * 1000,
       inputUntil: 0,
@@ -150,7 +151,7 @@ ${this.settings.instructions}`
         mode: this.settings.mode,
         ...(this.settings.auth === 'chatgpt' ? { auth: 'chatgpt' } : { apiKey: this.settings.apiKey }),
         model: this.settings.model,
-        voice: entry.stage < 1 ? 'cove' : this.settings.voice,
+        voice: entry.voice ?? (entry.stage < 1 ? 'cove' : this.settings.voice),
         pitch: entry.stage < 3 ? 0 : (this.settings.pitch ?? 0),
         bargeIn: entry.bargeIn,
         instructions:

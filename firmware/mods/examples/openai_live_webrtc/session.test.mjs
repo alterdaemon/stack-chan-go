@@ -864,3 +864,13 @@ test('parameter stages add saved voice, prompt and pitch in order without histor
     await f.session.stop()
   }
 })
+
+test('USB voice trial is captured per session and leaves manual preferences intact', async () => {
+  const f = fixture({ settings: Object.freeze({ auth: 'chatgpt', voice: 'cove' }) })
+  await f.session.start(false, 0, 'juniper')
+  assert.equal(f.instances[0].options.voice, 'juniper')
+  await f.session.stop()
+  await f.session.start()
+  assert.equal(f.instances[1].options.voice, 'cove')
+  await f.session.stop()
+})

@@ -73,18 +73,26 @@ async function verifyLiveAPI() {
     observed
   Debug.registerLive(owner, {
     isActive: () => active,
-    start: async (interruption, standard) => {
+    start: async (interruption, standard, voice) => {
       active = true
-      observed = { interruption, standard }
+      observed = { interruption, standard, voice }
       return true
     },
     stop: async () => {
       active = false
     },
   })
+  Debug.setVoiceTrial('juniper')
   Debug.setInterruptionTrial('off')
   await Debug.controlLive('start')
   if (observed.interruption !== false || observed.standard !== 4) throw new Error('Off override lost')
+  if (observed.voice !== 'juniper') throw new Error('Voice trial lost')
+  try {
+    Debug.setVoiceTrial('cove')
+    throw new Error('Active voice accepted')
+  } catch (error) {
+    if (error.code !== 'live_active') throw error
+  }
   try {
     Debug.setInterruptionTrial('on')
     throw new Error('Active trial accepted')
@@ -92,12 +100,19 @@ async function verifyLiveAPI() {
     if (error.code !== 'live_active') throw error
   }
   await Debug.controlLive('stop')
+  try {
+    Debug.setVoiceTrial('unknown')
+    throw new Error('Unknown voice accepted')
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+  }
   Debug.setInterruptionTrial('on')
   await Debug.controlLive('standard')
   if (observed.interruption !== true || observed.standard !== 0) throw new Error('Standard trial lost')
   await Debug.controlLive('stop')
   await Debug.resetTuning()
-  if (Debug.tuningSnapshot().interruptionTrial !== 'saved') throw new Error('Trial reset lost')
+  if (Debug.tuningSnapshot().interruptionTrial !== 'saved' || Debug.tuningSnapshot().voiceTrial !== 'saved')
+    throw new Error('Trial reset lost')
   await Debug.controlLive('standard')
   if (observed.interruption !== false || observed.standard !== 0) throw new Error('Baseline defaults lost')
   await Debug.controlLive('stop')

@@ -127,6 +127,7 @@ const STRING_FIELDS = new Set([
   'itemType',
   'dtlsRole',
   'interruptionTrial',
+  'voiceTrial',
   'voice',
   'param',
 ])
@@ -261,7 +262,7 @@ export class DebugRecorder {
       const parts = line.split(' ')
       const parameter = line === 'diag reset' ? 'reset' : parts[2]
       const raw = parts[3]
-      const value = ['noise', 'dtls', 'interruption'].includes(parameter) ? raw : Number(raw)
+      const value = ['noise', 'dtls', 'interruption', 'voice'].includes(parameter) ? raw : Number(raw)
       const valid =
         parameter === 'reset' ||
         (parts.length === 4 &&
@@ -274,6 +275,7 @@ export class DebugRecorder {
             (parameter === 'nlp' && [0, 1, 2].includes(value)) ||
             (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
             (parameter === 'interruption' && ['on', 'off', 'saved'].includes(value)) ||
+            (parameter === 'voice' && /^[a-z]{3,12}$/.test(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

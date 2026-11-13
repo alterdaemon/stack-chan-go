@@ -226,7 +226,7 @@ For request-parameter isolation, run `diag reset` then `diag live standard`.
 This uses the saved subscription grant/current Codex model with Cove, pitch0,
 volume0.1, empty instructions, no history and Interruption Off. Normal manual
 starts keep saved settings. Use `diag set interruption on|off|saved` while stopped
-for a future USB start; reset/Off clears it. `call.session` reports only the
+for a future USB start; reset/Off clears it. `diag set voice <name>|saved` selects a bounded Codex V3 voice candidate for USB starts only, requires stopped LIVE, and clears on reset/Off/reboot. Test documented candidates before exposing subscription voices; preserve independent API voices. `call.session` reports only the
 actual model, voice and instruction/history lengths. Structured rejections
 preserve validated providerCode/param, never provider messages or raw bodies.
 The SDK closes rejected WebSockets before reading error bodies; observation is

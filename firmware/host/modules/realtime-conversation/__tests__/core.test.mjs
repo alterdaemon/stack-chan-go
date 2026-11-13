@@ -869,6 +869,7 @@ await test('subscription readiness uses the control channel, keeps identities di
       equal(sdp, 'v=0 offer')
       control = callback
       equal(options.instructions, 'Speak Polish.')
+      equal(options.voice, 'cove')
       onAnswer({ callId: 'rtc_private', sdp: 'v=0 answer' })
       await new Promise((resolve) => {
         joinControl = resolve

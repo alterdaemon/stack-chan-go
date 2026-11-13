@@ -247,12 +247,12 @@ export function onContextCreated(robot) {
     debug?.unregisterLive(session)
     return session.stop()
   }
-  function startLive(interruption, stage) {
+  function startLive(interruption, stage, voice) {
     if (shuttingDown || session.active) return
     session.settings = readSettings()
-    if (stage < 4 && session.settings.auth !== 'chatgpt')
+    if ((stage < 4 || voice !== undefined) && session.settings.auth !== 'chatgpt')
       throw Object.assign(new Error('Select ChatGPT subscription'), { code: 'not_subscription' })
-    return session.start(interruption, stage)
+    return session.start(interruption, stage, voice)
   }
   debug?.registerLive(session, {
     isActive: () => shuttingDown || !!session.active,
