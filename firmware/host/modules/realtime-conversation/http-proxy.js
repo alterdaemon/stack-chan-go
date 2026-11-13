@@ -28,13 +28,18 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
       // A queue-expired request may have no reply: retain its acknowledgement
       // until the caller's later deadline removes the final pending request.
       if (message.idle !== undefined) {
-        diagnose?.('worker.idle', () => ({ request: message.idle }))
+        diagnose?.('worker.idle', () => ({ request: message.idle, progressDropped: message.progressDropped }))
         if (message.idle === lastPosted) lastIdle = message.idle
         releaseIdle(created)
         return
       }
       const job = pending.get(message.id)
       if (!job) return
+      if (message.progress) {
+        job.progress = message.progress
+        diagnose?.('job.progress', () => ({ request: message.id, ...message.progress }))
+        return
+      }
       const metadata = {
         status: message.status,
         errorCode: message.errorCode,
@@ -42,6 +47,8 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
         received: message.received,
         reason: message.reason,
         code: message.code,
+        tlsDrains: message.tlsDrains,
+        progressDropped: message.progressDropped,
       }
       diagnose?.(message.error ? 'job.failed' : 'job.response', () => ({ request: message.id, ...metadata }))
       pending.delete(message.id)
@@ -88,12 +95,14 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
         }
         reject(
           Object.assign(new Error(message), {
+            ...job.progress,
             errorCode: message === 'HTTPS request timed out' ? 'https_timeout' : 'https_cancelled',
           }),
         )
         diagnose?.('job.cancelled', () => ({
           request: id,
           kind,
+          ...job.progress,
           reason: message === 'HTTPS request timed out' ? 'timeout' : 'cancelled',
         }))
         releaseIdle(activeWorker)

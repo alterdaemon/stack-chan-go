@@ -698,3 +698,57 @@ test('Codex terminal events settle and close HTTPS without waiting for HTTP EOF'
     }
   }
 })
+
+test('HTTP progress is bounded metadata and caller deadlines retain the last observation', async () => {
+  const f = proxyFixture(),
+    pending = f.post()
+  f.worker.onmessage({ id: f.sent[0].id, progress: { phase: 'headers', status: 200, received: 0 } })
+  f.worker.onmessage({ id: f.sent[0].id, progress: { phase: 'read', status: 200, received: 1024 } })
+  assert.equal(f.timers[0].cancelled, undefined, 'progress cannot settle the request')
+  f.timers[0].callback()
+  await assert.rejects(
+    pending,
+    (error) =>
+      error.errorCode === 'https_timeout' && error.status === 200 && error.phase === 'read' && error.received === 1024,
+  )
+})
+
+test('HTTP milestones report first write, headers and first read only', async () => {
+  let callbacks
+  const milestones = []
+  const request = requestHttps(
+    post({ body: 'synthetic-private-request' }),
+    {
+      createClient: () => ({
+        request: (value) => {
+          callbacks = value
+        },
+        close() {},
+      }),
+      schedule: (callback, ms) => (ms ? 1 : queueMicrotask(callback)),
+      cancel() {},
+    },
+    undefined,
+    (fields) => milestones.push(fields),
+  )
+  const context = {
+    write() {},
+    read(view) {
+      view.fill(42)
+      return view.length
+    },
+  }
+  callbacks.onWritable.call(context, 2)
+  callbacks.onWritable.call(context, 100)
+  callbacks.onHeaders(200, new Map())
+  callbacks.onReadable.call(context, 2)
+  callbacks.onReadable.call(context, 1)
+  callbacks.onDone()
+  await request
+  assert.deepEqual(milestones, [
+    { phase: 'write', received: 0 },
+    { phase: 'headers', status: 200, received: 0 },
+    { phase: 'read', status: 200, received: 2 },
+  ])
+  assert.ok(!JSON.stringify(milestones).includes('synthetic-private'))
+})

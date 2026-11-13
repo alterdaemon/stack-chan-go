@@ -32,6 +32,7 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
         'http-core.js': `
         export const createClosingClient = (Client, options) => new Client(options)
         export const guardSocketCallbacks = (Socket) => Socket
+        export const drainTLSSocket = (Socket) => Socket
         export function requestHttps(request) {
           const state = globalThis.__httpWorkerDeadline
           state.executed.push(request)

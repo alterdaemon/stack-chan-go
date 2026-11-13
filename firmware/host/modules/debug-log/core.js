@@ -19,6 +19,8 @@ const NUMBER_FIELDS = new Set([
   'strength',
   'request',
   'received',
+  'tlsDrains',
+  'progressDropped',
   'result',
   'value',
   'audio_start_ms',

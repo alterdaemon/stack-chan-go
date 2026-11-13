@@ -7,6 +7,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
     queued = 0,
     lastReceived,
     lastNotified
+  let progressDropped = 0
   function notifyIdle(id) {
     return Promise.resolve()
       .then(() => {
@@ -14,7 +15,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
         // The caller may terminate this VM as soon as this message arrives.
         // Send outside the queue's async finally and any JS try/catch so XS
         // has already released their native exception frames before teardown.
-        onIdle(id)
+        onIdle(id, progressDropped)
         lastNotified = id
       })
       .catch(() => {
@@ -75,14 +76,27 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
         try {
           message = {
             id,
-            ...(await execute({ ...request, timeoutMs }, (cancelRequest) => {
-              job.cancel = cancelRequest
-              if (job.cancelled) cancelRequest()
-            })),
+            ...(await execute(
+              { ...request, timeoutMs },
+              (cancelRequest) => {
+                job.cancel = cancelRequest
+                if (job.cancelled) cancelRequest()
+              },
+              request.diagnostics
+                ? (progress) => {
+                    try {
+                      post({ id, progress })
+                    } catch {
+                      progressDropped++
+                    }
+                  }
+                : undefined,
+            )),
           }
         } catch (error) {
           message = { id, error: String(error), ...httpFailureMetadata(error) }
         }
+        if (progressDropped) message.progressDropped = progressDropped
         await reply(message, remaining)
       } finally {
         queued--

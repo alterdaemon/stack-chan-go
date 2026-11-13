@@ -277,6 +277,17 @@ On an active subscription call, `diag set probe reasoning|search` runs fixed dia
 
 USB backend parameter trials use `diag set model gpt-6.1-terra|gpt-6-luna|saved` and `diag set effort none|low|medium|high|xhigh|max|saved` while LIVE is stopped. They override only the independent subscription backend fields in RAM. `--suite backend` tests each fixed model/effort through actual reasoning and cited-search requests with both interruption settings. `--models` and `--efforts` select bounded subsets and skip the repeated standard baseline. Isolated case failures are retained; native failures, capture loss or account-limit codes stop the run. Capture `backend.start` model/effort and terminal validated results; a request being sent is not a passing result.
 
+HTTP captures emit bounded `https/job.progress` milestones for first request write,
+response headers and first body bytes only while USB diagnostics are enabled.
+A timeout retains its last observed phase/status; the first-body byte count is not
+the complete response size. Any `progressDropped` invalidates qualification.
+`tlsDrains` counts completion-driven buffered TLS read resumptions; that count
+alone does not identify a server error or prove an empty record occurred.
+Native abort capture retains only code PCs/core/backtrace addresses for private
+symbolication against the matching validated ELF, excluding registers, stack words
+and other console text.
+
+
 ## Conversation lights and head movement
 
 On CoreS3, Live, Realtime standard and Realtime mini use all 12 head LEDs:

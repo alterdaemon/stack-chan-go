@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Shinya Ishikawa
 // SPDX-License-Identifier: Apache-2.0
 // Standard ECMA-419 HTTP callbacks, bounded response and deterministic close.
-export function requestHttps(request, platform, setCancel = () => {}) {
+export function requestHttps(request, platform, setCancel = () => {}, progress) {
   return new Promise((resolve, reject) => {
     let client,
       timer,
@@ -71,6 +71,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         host: request.host,
         port: request.port,
         certificate: request.certificate,
+        drainTLS: request.responseFormat === 'subscription-response',
         onError(error) {
           finish(transportFailure('HTTPS connection failed', error))
         },
@@ -90,6 +91,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
             const header = incomingHeaders.get(name)
             if (typeof header === 'string' && header.length <= 4096) responseHeaders[name] = header
           }
+          progress?.({ phase, status, received })
           if (request.responseFormat === 'subscription-response' && code >= 200 && code < 300) {
             // Codex consumes the SSE body without requiring a Content-Type
             // header. Completion and answer validation remain authoritative.
@@ -104,8 +106,10 @@ export function requestHttps(request, platform, setCancel = () => {}) {
           try {
             count = Math.min(count, body.byteLength - offset)
             if (count) {
+              const first = offset === 0
               this.write(new DataView(body, offset, count))
               offset += count
+              if (first) progress?.({ phase, received })
             }
           } catch {
             finish(new Error('HTTPS write failed'))
@@ -122,7 +126,9 @@ export function requestHttps(request, platform, setCancel = () => {}) {
               while (count) {
                 const view = chunk.subarray(0, Math.min(count, chunk.length))
                 if (this.read(view) !== view.length) throw new Error('HTTPS short read')
+                const first = received === 0
                 received += view.length
+                if (first) progress?.({ phase, status, received })
                 stream.write(view)
                 if (stream.complete) return finish()
                 count -= view.length
@@ -137,7 +143,9 @@ export function requestHttps(request, platform, setCancel = () => {}) {
             }
             const read = this.read(buffer.subarray(received, end))
             if (read !== count) throw new Error('HTTPS short read')
+            const first = received === 0
             received = end
+            if (first) progress?.({ phase, status, received })
           } catch (error) {
             finish(error)
           }
@@ -193,6 +201,78 @@ export function guardSocketCallbacks(Socket) {
           }
         }
       super(guarded)
+    }
+  }
+}
+
+// Resume buffered TLS records only after progress; no polling or protocol change.
+export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
+  return class extends Socket {
+    #state
+    constructor(options) {
+      const state = { pending: 0, closed: false, timer: undefined }
+      function arm() {
+        const tcp = state.tcp
+        if (state.closed || state.pending || !tcp?.readable || state.timer !== undefined) return
+        state.timer = schedule(() => {
+          state.timer = undefined
+          if (state.closed || state.pending || !tcp.readable) return
+          try {
+            onDrain()
+            state.readable.call(tcp, tcp.readable)
+          } catch (error) {
+            state.onError?.call(tcp, error)
+          }
+        }, 0)
+      }
+      state.arm = arm
+      const TCP = options.TCP.io
+      class DrainingTCP extends TCP {
+        constructor(tcpOptions) {
+          function readable(count) {
+            if (state.closed) return
+            const result = tcpOptions.onReadable?.call(this, count)
+            if (this.readable > 0 && this.readable < count) arm()
+            return result
+          }
+          super({ ...tcpOptions, onReadable: readable })
+          state.tcp = this
+          state.readable = readable
+          state.onError = tcpOptions.onError
+        }
+      }
+      super({
+        ...options,
+        TCP: { ...options.TCP, io: DrainingTCP },
+        onReadable(count) {
+          state.pending = count
+          return options.onReadable?.call(this, count)
+        },
+      })
+      this.#state = state
+    }
+    read(count) {
+      const result = count === undefined ? super.read() : super.read(count)
+      if (result !== undefined) {
+        this.#state.pending = Math.max(
+          0,
+          this.#state.pending -
+            (this.format === 'number' ? 1 : typeof result === 'number' ? result : result.byteLength),
+        )
+        // The SDK's own deferred read may encounter an empty record too.
+        // One pending guard covers that path without polling or changing order.
+        this.#state.arm()
+      }
+      return result
+    }
+    close() {
+      const state = this.#state
+      if (state) {
+        state.closed = true
+        if (state.timer !== undefined) cancel(state.timer)
+        state.timer = undefined
+      }
+      super.close()
     }
   }
 }

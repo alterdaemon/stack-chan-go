@@ -264,3 +264,33 @@ test('cancellation stops active HTTPS work and prevents canceled queued jobs fro
   assert.equal(starts, 1)
   assert.deepEqual(replies, [])
 })
+
+test('progress is disabled by default and failed diagnostic IPC never changes request results', async () => {
+  const enabled = [],
+    replies = [],
+    idle = []
+  const queue = createHttpQueue({
+    execute: async (_request, _cancel, progress) => {
+      enabled.push(!!progress)
+      progress?.({ phase: 'headers', status: 200, received: 0 })
+      return { status: 200, body: new ArrayBuffer(0) }
+    },
+    post: (message) => {
+      if (message.progress) throw new Error('IPC full')
+      replies.push(message)
+    },
+    schedule: () => assert.fail('response delivery succeeds'),
+    elapsed: () => 0,
+    onIdle: (id, dropped) => idle.push({ id, dropped }),
+  })
+  await queue({ id: 1, started: 0, request: { timeoutMs: 1000 } })
+  await queue({ id: 2, started: 0, request: { timeoutMs: 1000, diagnostics: true } })
+  assert.deepEqual(enabled, [false, true])
+  assert.equal(replies.length, 2)
+  assert.equal(replies[1].status, 200)
+  assert.equal(replies[1].progressDropped, 1)
+  assert.deepEqual(idle, [
+    { id: 1, dropped: 0 },
+    { id: 2, dropped: 1 },
+  ])
+})

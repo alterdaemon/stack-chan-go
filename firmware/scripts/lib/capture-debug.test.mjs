@@ -14,7 +14,7 @@ test('USB capture retains record-loss maxima after Off resets device counters', 
       [
         '-c',
         String.raw`import json, os, pty, select, subprocess, sys, time
-for index, (dropped, native, late) in enumerate([(0,0,False), (3,0,False), (0,5,False), (3,5,False), (0,7,True)]):
+for index, (dropped, native, progress, late) in enumerate([(0,0,0,False), (3,0,0,False), (0,5,0,False), (3,5,0,False), (0,7,0,True), (0,0,4,True)]):
     master, slave = pty.openpty()
     process = subprocess.Popen([sys.executable, sys.argv[1], '--port', os.ttyname(slave),
         '--duration', '0.2', '--output', os.path.join(sys.argv[2], str(index)+'.jsonl')],
@@ -30,27 +30,28 @@ for index, (dropped, native, late) in enumerate([(0,0,False), (3,0,False), (0,5,
                 command = command.strip()
                 if command not in (b'diag on', b'diag off'): continue
                 event = dict(component='debug', event='control', action='on' if command==b'diag on' else 'off',
-                             enabled=command==b'diag on', dropped=0, nativeDropped=native if late and command==b'diag off' else 0)
+                             enabled=command==b'diag on', dropped=0, nativeDropped=native if late and command==b'diag off' else 0,
+                             progressDropped=progress if late and command==b'diag off' else 0)
                 os.write(master, ('@diag '+json.dumps(event)+'\n').encode())
                 if command == b'diag on':
                     os.write(master, ('@diag '+json.dumps(dict(component='device', event='snapshot',
-                        dropped=dropped, nativeDropped=0 if late else native))+'\n').encode())
+                        dropped=dropped, nativeDropped=0 if late else native, progressDropped=0 if late else progress))+'\n').encode())
         stdout, stderr = process.communicate(timeout=2)
         summary = json.loads(stdout.strip().splitlines()[-1])
-        assert summary['dropped']==dropped and summary['nativeDropped']==native, (stdout,stderr)
-        assert (process.returncode==0)==(dropped==0 and native==0), (stdout,stderr)
+        assert summary['dropped']==dropped and summary['nativeDropped']==native and summary['progressDropped']==progress, (stdout,stderr)
+        assert (process.returncode==0)==(dropped==0 and native==0 and progress==0), (stdout,stderr)
         assert summary['acknowledged']
     finally:
         if process.poll() is None: process.kill(); process.communicate()
         os.close(master); os.close(slave)
-print('passed 5 PTY captures')
+print('passed 6 PTY captures')
 `,
         fileURLToPath(new URL('../mod/capture-debug.py', import.meta.url)),
         directory,
       ],
       { encoding: 'utf8', timeout: 15000 },
     )
-    assert.match(result, /passed 5 PTY captures/)
+    assert.match(result, /passed 6 PTY captures/)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

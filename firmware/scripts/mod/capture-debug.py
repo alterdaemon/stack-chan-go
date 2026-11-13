@@ -46,22 +46,26 @@ def main():
     records = 0
     max_dropped = 0
     max_native_dropped = 0
+    max_progress_dropped = 0
     acknowledged = False
     requested_off = False
     last_control = None
     pending = bytearray()
 
     def retain(event):
-        nonlocal records, max_dropped, max_native_dropped
+        nonlocal records, max_dropped, max_native_dropped, max_progress_dropped
         if not isinstance(event, dict):
             return False
         records += 1
         dropped = event.get('dropped', 0)
         native_dropped = event.get('nativeDropped', 0)
+        progress_dropped = event.get('progressDropped', 0)
         if type(dropped) is int:
             max_dropped = max(max_dropped, dropped)
         if type(native_dropped) is int:
             max_native_dropped = max(max_native_dropped, native_dropped)
+        if type(progress_dropped) is int:
+            max_progress_dropped = max(max_progress_dropped, progress_dropped)
         if output:
             output.write(json.dumps({'hostUtc': datetime.now(timezone.utc).isoformat(), 'device': event}) + '\n')
         return True
@@ -185,8 +189,9 @@ def main():
         if output:
             output.close()
         print(json.dumps({'records': records, 'acknowledged': acknowledged,
-                          'dropped': max_dropped, 'nativeDropped': max_native_dropped}), flush=True)
-        if args.command == 'capture' and (max_dropped or max_native_dropped) and sys.exc_info()[0] is None:
+                          'dropped': max_dropped, 'nativeDropped': max_native_dropped,
+                          'progressDropped': max_progress_dropped}), flush=True)
+        if args.command == 'capture' and (max_dropped or max_native_dropped or max_progress_dropped) and sys.exc_info()[0] is None:
             raise RuntimeError('Diagnostic records were dropped; trial is incomplete')
 
 

@@ -45,7 +45,7 @@ class Capture:
                 if device.get('component') == 'native' and device.get('event') in ('abort', 'backtrace'):
                     self.valid = False
                     raise RuntimeError('Native failure invalidated qualification')
-                if device.get('dropped', 0) or device.get('nativeDropped', 0):
+                if device.get('dropped', 0) or device.get('nativeDropped', 0) or device.get('progressDropped', 0):
                     self.valid = False
                     raise RuntimeError('Lost diagnostic records; qualification is invalid')
 
@@ -122,6 +122,7 @@ class Capture:
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
                       failures=[d for d in details if d.get('event') == 'failure'],
                       backend=[d for d in details if d.get('event', '').startswith('backend.')],
+                      transport=[d for d in details if d.get('component') == 'https'],
                       nativeFailures=[d for d in details if d.get('component') == 'native'],
                       probeOutputs=[d for d in details if d.get('event') == 'probe.output'])
         self.results.append(result)

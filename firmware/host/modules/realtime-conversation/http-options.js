@@ -32,6 +32,7 @@ export function httpFailureMetadata(error) {
   if (['bad_response', 'bad_state', 'invalid_protocol', 'date_validation_failed', 'too_large'].includes(error?.reason))
     metadata.reason = error.reason
   if (Number.isInteger(error?.code) && Math.abs(error.code) <= 2147483647) metadata.code = error.code
+  if (Number.isInteger(error?.tlsDrains) && error.tlsDrains >= 0) metadata.tlsDrains = error.tlsDrains
   return metadata
 }
 

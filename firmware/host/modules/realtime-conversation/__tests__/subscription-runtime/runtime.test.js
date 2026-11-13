@@ -1,5 +1,5 @@
 import RealtimeConversation from 'realtimeConversation'
-import { requestHttps } from 'realtimeConversation/http-core'
+import { drainTLSSocket, requestHttps } from 'realtimeConversation/http-core'
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
@@ -278,47 +278,107 @@ for (const value of codexEvents) {
     codexStream.write(new Uint8Array(bytes.slice(index, index + 1)))
 }
 equal(JSON.parse(decoder.decode(codexStream.finish())).answer, 'Żółw 🌍')
-let terminalCallbacks,
-  terminalCloses = 0
-const terminalRequest = requestHttps(
-  {
-    headers: [],
-    body: new ArrayBuffer(0),
-    timeoutMs: 1000,
-    responseFormat: 'subscription-response',
-  },
-  {
-    createClient: () => ({
-      request: (value) => {
-        terminalCallbacks = value
-      },
-      close: () => terminalCloses++,
-    }),
-    createSubscriptionStream: () =>
-      createSubscriptionStream(
-        (bytes) => decoder.decode(bytes),
-        (text) => ArrayBuffer.fromString(text),
-      ),
-    schedule: (callback, delay) => Timer.set(callback, delay),
-    cancel: (timer) => Timer.clear(timer),
-  },
-)
-terminalCallbacks.onHeaders(200, new Map())
-const terminalBytes = new Uint8Array(
-  ArrayBuffer.fromString(codexEvents.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('')),
-)
-terminalCallbacks.onReadable.call(
-  {
-    read(view) {
-      view.set(terminalBytes)
-      return terminalBytes.length
+async function verifyTerminalAndTLS() {
+  let terminalCallbacks,
+    terminalCloses = 0
+  const terminalRequest = requestHttps(
+    {
+      headers: [],
+      body: new ArrayBuffer(0),
+      timeoutMs: 1000,
+      responseFormat: 'subscription-response',
     },
-  },
-  terminalBytes.length,
-)
-const terminalResponse = await terminalRequest
-equal(JSON.parse(decoder.decode(terminalResponse.body)).answer, 'Żółw 🌍')
-equal(terminalCloses, 1, 'terminal completion closes HTTP without waiting for EOF')
+    {
+      createClient: () => ({
+        request: (value) => {
+          terminalCallbacks = value
+        },
+        close: () => terminalCloses++,
+      }),
+      createSubscriptionStream: () =>
+        createSubscriptionStream(
+          (bytes) => decoder.decode(bytes),
+          (text) => ArrayBuffer.fromString(text),
+        ),
+      schedule: (callback, delay) => Timer.set(callback, delay),
+      cancel: (timer) => Timer.clear(timer),
+    },
+  )
+  terminalCallbacks.onHeaders(200, new Map())
+  const terminalBytes = new Uint8Array(
+    ArrayBuffer.fromString(codexEvents.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('')),
+  )
+  terminalCallbacks.onReadable.call(
+    {
+      read(view) {
+        view.set(terminalBytes)
+        return terminalBytes.length
+      },
+    },
+    terminalBytes.length,
+  )
+  const terminalResponse = await terminalRequest
+  equal(JSON.parse(decoder.decode(terminalResponse.body)).answer, 'Żółw 🌍')
+  equal(terminalCloses, 1, 'terminal completion closes HTTP without waiting for EOF')
+  let rawTLS,
+    tlsReads = 0,
+    tlsDelivered = 0
+  class RawTLS {
+    constructor(options) {
+      rawTLS = this
+      this.options = options
+    }
+  }
+  class BufferedTLS {
+    constructor(options) {
+      this.format = 'number'
+      const owner = this
+      new options.TCP.io({
+        onReadable(count) {
+          tlsReads++
+          this.readable = count - 1
+          if (count === 1) options.onReadable.call(owner, 1)
+          return 'read_result'
+        },
+      })
+    }
+    read() {
+      return 42
+    }
+    close() {}
+  }
+  const DrainingTLS = drainTLSSocket(
+    BufferedTLS,
+    (callback, delay) => Timer.set(callback, delay),
+    (timer) => Timer.clear(timer),
+  )
+  let drainingTLS = new DrainingTLS({
+    TCP: { io: RawTLS },
+    onReadable() {
+      equal(this, drainingTLS)
+      equal(this.read(), 42)
+      tlsDelivered++
+    },
+  })
+  equal(rawTLS.options.onReadable.call(rawTLS, 3), 'read_result')
+  await new Promise((resolve) => Timer.set(resolve, 10))
+  equal(tlsReads, 3)
+  equal(tlsDelivered, 1)
+  drainingTLS.close()
+  tlsReads = tlsDelivered = 0
+  drainingTLS = new DrainingTLS({
+    TCP: { io: RawTLS },
+    onReadable() {
+      tlsDelivered++
+    },
+  })
+  rawTLS.options.onReadable.call(rawTLS, 3)
+  drainingTLS.close()
+  await new Promise((resolve) => Timer.set(resolve, 10))
+  equal(tlsReads, 1, 'close cancels queued TLS draining')
+  equal(tlsDelivered, 0)
+}
+await verifyTerminalAndTLS()
 await new Promise((resolve) => Timer.set(resolve, 1))
 let lateDNS,
   connected = 0

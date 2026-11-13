@@ -27,8 +27,8 @@ export default createHttpProxy({
       core: 0,
     }),
   releaseWorker: (worker) => worker.terminate(),
-  normalize: (url, options) =>
-    normalizeRequest(
+  normalize: (url, options) => ({
+    ...normalizeRequest(
       url,
       options,
       (text) => ArrayBuffer.fromString(text),
@@ -38,6 +38,8 @@ export default createHttpProxy({
         return Base64.decode(match[1].replace(/\s/g, ''))
       },
     ),
+    diagnostics: Debug.enabled,
+  }),
   decode: (body) => decoder.decode(body),
   schedule: (fn, ms) => Timer.set(fn, ms),
   cancel: (timer) => Timer.clear(timer),
