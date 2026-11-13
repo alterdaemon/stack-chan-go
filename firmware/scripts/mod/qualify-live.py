@@ -211,7 +211,7 @@ def main():
                         failures += not passed
                         if any(d.get('event') in ('abort', 'backtrace') for d in capture.rows):
                             raise RuntimeError('Native failure invalidated qualification')
-                        if any(d.get('providerCode') in ('rate_limit_exceeded', 'insufficient_quota', 'usage_limit_reached')
+                        if any(d.get('status') in (402, 429) or d.get('providerCode') in ('rate_limit_exceeded', 'insufficient_quota', 'usage_limit_reached')
                                for d in capture.rows):
                             raise RuntimeError('Account limit stopped qualification; remaining cases untested')
             if failures:

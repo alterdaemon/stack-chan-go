@@ -128,3 +128,43 @@ print('passed all qualification outcomes')
   )
   assert.match(result, /passed all qualification outcomes/)
 })
+
+test('backend qualification stops at account limits even without a provider error code', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import importlib.util, sys, tempfile
+spec=importlib.util.spec_from_file_location('qualify_live',sys.argv[1])
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+for status in (402,429,401):
+    runs=[]; closed=[]
+    class Capture:
+        def __init__(self,args): self.rows=[]; self.valid=True
+        def wait(self,*args,**kwargs): return dict(app_sha256='a'*64)
+        def command(self,*args,**kwargs): return dict(phase='applied')
+        def trial(self,*args,**kwargs):
+            runs.append(args); self.rows.append(dict(status=status)); return False
+        def close(self): closed.append(True)
+    module.Capture=Capture
+    with tempfile.TemporaryDirectory() as directory:
+        module.sys.argv=['qualify-live.py','--port','unused','--expected-sha','a'*64,
+            '--suite','backend','--models','gpt-6-luna','--efforts','none','low',
+            '--interruption','off','--output',directory]
+        try: module.main(); raise AssertionError('Expected failed qualification')
+        except RuntimeError as error:
+            assert ('Account limit' in str(error)) == (status in (402,429))
+    assert len(runs)==(1 if status in (402,429) else 2)
+    assert closed==[True]
+print('passed account limits')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    },
+  )
+  assert.match(result, /passed account limits/)
+})

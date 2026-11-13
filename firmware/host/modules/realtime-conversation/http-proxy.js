@@ -45,6 +45,8 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
         errorCode: message.errorCode,
         phase: message.phase,
         received: message.received,
+        written: message.written,
+        expected: message.expected,
         reason: message.reason,
         code: message.code,
         tlsDrains: message.tlsDrains,

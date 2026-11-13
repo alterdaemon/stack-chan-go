@@ -713,7 +713,7 @@ test('HTTP progress is bounded metadata and caller deadlines retain the last obs
   )
 })
 
-test('HTTP milestones report first write, headers and first read only', async () => {
+test('HTTP milestones distinguish a partial request from a fully sent body without exposing data', async () => {
   let callbacks
   const milestones = []
   const request = requestHttps(
@@ -746,7 +746,8 @@ test('HTTP milestones report first write, headers and first read only', async ()
   callbacks.onDone()
   await request
   assert.deepEqual(milestones, [
-    { phase: 'write', received: 0 },
+    { phase: 'write', received: 0, written: 2, expected: 25 },
+    { phase: 'sent', received: 0, written: 25, expected: 25 },
     { phase: 'headers', status: 200, received: 0 },
     { phase: 'read', status: 200, received: 2 },
   ])

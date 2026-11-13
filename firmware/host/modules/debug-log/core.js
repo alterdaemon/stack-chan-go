@@ -19,6 +19,8 @@ const NUMBER_FIELDS = new Set([
   'strength',
   'request',
   'received',
+  'written',
+  'expected',
   'tlsDrains',
   'progressDropped',
   'result',

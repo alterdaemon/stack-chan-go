@@ -36,7 +36,8 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       const connection = client
       client = undefined
       body = undefined
-      const failure = (cause) => Object.assign(cause, { phase, status, received })
+      const failure = (cause) =>
+        Object.assign(cause, { phase, status, received, written: offset, expected: request.body.byteLength })
       // Leave the SDK callback before closing its current TLS/socket state.
       platform.schedule(() => {
         try {
@@ -109,7 +110,11 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
               const first = offset === 0
               this.write(new DataView(body, offset, count))
               offset += count
-              if (first) progress?.({ phase, received })
+              if (first) progress?.({ phase, received, written: offset, expected: body.byteLength })
+              if (offset === body.byteLength) {
+                phase = 'sent'
+                progress?.({ phase, received, written: offset, expected: body.byteLength })
+              }
             }
           } catch {
             finish(new Error('HTTPS write failed'))
