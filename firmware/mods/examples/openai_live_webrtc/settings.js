@@ -52,7 +52,9 @@ export function readLiveSettings(defaults, getPreference) {
     ...voiceSettings,
     mode,
     auth,
-    ...(subscription ? { model: 'gpt-live-1-codex', delegation: undefined, tools: undefined, search: undefined } : {}),
+    ...(subscription
+      ? { model: 'gpt-live-1.1-codex', delegation: undefined, tools: undefined, search: undefined }
+      : {}),
     ...(mode === 'realtime'
       ? {
           model: savedMode === 'realtime-full' ? 'gpt-realtime-2.1' : 'gpt-realtime-2.1-mini',

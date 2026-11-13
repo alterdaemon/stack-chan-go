@@ -228,7 +228,7 @@ test('subscription selection never reads the API key and preserves shared prompt
   const settings = read()
   assert.equal(settings.auth, 'chatgpt')
   assert.equal(settings.apiKey, undefined)
-  assert.equal(settings.model, 'gpt-live-1-codex')
+  assert.equal(settings.model, 'gpt-live-1.1-codex')
   assert.equal(settings.mode, 'live')
   assert.equal(settings.instructions, 'Speak Polish.')
   assert.equal(settings.voice, 'cedar')

@@ -192,14 +192,14 @@ export default class Conversation {
     this.#realtime = options.mode === 'realtime'
     if (options.mode !== undefined && options.mode !== 'live' && !this.#realtime) throw new TypeError('Invalid mode')
     if (this.#realtime && options.signaling) throw new TypeError('Realtime requires apiKey')
-    if (subscription && options.model !== undefined && options.model !== 'gpt-live-1-codex')
+    if (subscription && options.model !== undefined && options.model !== 'gpt-live-1.1-codex')
       throw new TypeError('Unsupported subscription model')
     if (subscription && typeof options.instructions === 'string' && options.instructions.length > 8192)
       throw new RangeError('Subscription prompt exceeds limit')
     this.#options = {
       model:
         options.model ??
-        (subscription ? 'gpt-live-1-codex' : undefined) ??
+        (subscription ? 'gpt-live-1.1-codex' : undefined) ??
         (this.#realtime ? 'gpt-realtime-2.1-mini' : 'gpt-live-1'),
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',

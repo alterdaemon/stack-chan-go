@@ -2,7 +2,7 @@
 // Protocol evidence: openai/codex 16e27626 and malhashemi/opencode-gpt-live c23101cf.
 const CALL = 'https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas'
 const BACKEND = 'https://chatgpt.com/backend-api/codex/responses'
-export const SUBSCRIPTION_MODEL = 'gpt-live-1-codex'
+export const SUBSCRIPTION_MODEL = 'gpt-live-1.1-codex'
 export const SUBSCRIPTION_BACKEND = 'gpt-6.1-terra'
 const id = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value)
 

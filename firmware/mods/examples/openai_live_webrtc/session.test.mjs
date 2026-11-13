@@ -800,7 +800,7 @@ for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
 }
 
 test('subscription sign-in errors release audio and return an actionable sign-in state', async () => {
-  const f = fixture({ settings: { auth: 'chatgpt', model: 'gpt-live-1-codex', voice: 'marin' } })
+  const f = fixture({ settings: { auth: 'chatgpt', model: 'gpt-live-1.1-codex', voice: 'marin' } })
   assert.equal(await f.session.start(), true)
   assert.equal(f.instances[0].options.apiKey, undefined)
   assert.equal(f.instances[0].options.auth, 'chatgpt')

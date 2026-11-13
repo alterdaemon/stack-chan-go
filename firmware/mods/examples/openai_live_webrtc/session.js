@@ -39,7 +39,7 @@ export function diagnostic(error, stage, site) {
 }
 
 export function liveModelLabel(mode, model) {
-  if (model === 'gpt-live-1-codex') return 'ChatGPT subscription'
+  if (model === 'gpt-live-1.1-codex') return 'ChatGPT subscription'
   if (mode !== 'realtime') return 'GPT-Live 1'
   return model === 'gpt-realtime-2.1' ? 'GPT-Realtime 2.1' : 'GPT-Realtime 2.1 Mini'
 }

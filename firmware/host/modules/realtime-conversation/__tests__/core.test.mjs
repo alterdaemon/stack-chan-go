@@ -954,7 +954,12 @@ await test('subscription readiness uses the control channel, keeps identities di
   equal((await closing).finalized, true)
   equal(disposed, 1)
   equal(timers.size, 0)
-  for (const extra of [{ apiKey: 'saved-paid-key' }, { signaling: {} }, { mode: 'realtime' }]) {
+  for (const extra of [
+    { apiKey: 'saved-paid-key' },
+    { signaling: {} },
+    { mode: 'realtime' },
+    { model: 'gpt-live-1-codex' },
+  ]) {
     let rejected = false
     try {
       new Conversation({ auth: 'chatgpt', ...extra }, platform)
