@@ -379,6 +379,44 @@ async function verifyTerminalAndTLS() {
   equal(tlsDelivered, 0)
 }
 await verifyTerminalAndTLS()
+async function verifySDKErrorOrder() {
+  for (const detailed of [true, false]) {
+    let callbacks,
+      clientCallbacks,
+      closes = 0
+    const request = requestHttps(
+      { headers: [], body: new ArrayBuffer(0), timeoutMs: 1000 },
+      {
+        createClient(options) {
+          clientCallbacks = options
+          return {
+            request(value) {
+              callbacks = value
+            },
+            close() {
+              closes++
+            },
+          }
+        },
+        schedule: (callback, delay) => Timer.set(callback, delay),
+        cancel: (timer) => Timer.clear(timer),
+      },
+    )
+    callbacks.onDone(new Error())
+    if (detailed) clientCallbacks.onError(new Error('recordProtocol: auth failed'))
+    let failure
+    try {
+      await request
+    } catch (error) {
+      failure = error
+    }
+    assert(failure)
+    equal(failure.reason, detailed ? 'tls_record_auth' : undefined)
+    await new Promise((resolve) => Timer.set(resolve, 5))
+    equal(closes, 1, 'generic fallback and detailed socket failure close once')
+  }
+}
+await verifySDKErrorOrder()
 await new Promise((resolve) => Timer.set(resolve, 1))
 let lateDNS,
   connected = 0

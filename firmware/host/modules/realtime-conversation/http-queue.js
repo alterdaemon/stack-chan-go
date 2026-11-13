@@ -8,14 +8,14 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
     lastReceived,
     lastNotified
   let progressDropped = 0
-  function notifyIdle(id) {
+  function notifyIdle(id, observation) {
     return Promise.resolve()
       .then(() => {
         if (queued || id !== lastReceived || id === lastNotified) return
         // The caller may terminate this VM as soon as this message arrives.
         // Send outside the queue's async finally and any JS try/catch so XS
         // has already released their native exception frames before teardown.
-        onIdle(id, progressDropped)
+        onIdle(id, progressDropped, observation)
         lastNotified = id
       })
       .catch(() => {
@@ -23,7 +23,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
         // The Timer only registers a reaction: its callback must return before
         // another acknowledgement can trigger external Worker termination.
         try {
-          schedule(() => notifyIdle(id), 25)
+          schedule(() => notifyIdle(id, observation), 25)
         } catch {}
       })
   }
@@ -66,7 +66,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
     queued++
     const job = { cancelled: false }
     jobs.set(id, job)
-    let idleID
+    let idleID, observation
     const remaining = () => (job.cancelled ? 0 : request.timeoutMs - elapsed(started))
     tail = tail.then(async () => {
       try {
@@ -96,6 +96,11 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
         } catch (error) {
           message = { id, error: String(error), ...httpFailureMetadata(error) }
         }
+        if (request.diagnostics) {
+          observation = httpFailureMetadata(message)
+          if (message.errorCode) observation.errorCode = message.errorCode
+          else delete observation.errorCode
+        }
         if (progressDropped) message.progressDropped = progressDropped
         await reply(message, remaining)
       } finally {
@@ -106,6 +111,6 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
     })
     // Notification failures are handled on a separate chain so they cannot
     // poison the processing tail or keep later HTTPS requests from starting.
-    return onIdle ? tail.then(() => (idleID === undefined ? undefined : notifyIdle(idleID))) : tail
+    return onIdle ? tail.then(() => (idleID === undefined ? undefined : notifyIdle(idleID, observation))) : tail
   }
 }

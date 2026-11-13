@@ -25,14 +25,17 @@ const platform = {
       (bytes) => decoder.decode(bytes),
       (text) => ArrayBuffer.fromString(text),
     ),
-  createClient: ({ certificate, drainTLS, ...options }) =>
+  createClient: ({ certificate, drainTLS, statistics, ...options }) =>
     createClosingClient(device.network.https.client.io, {
       ...device.network.https.client,
       ...options,
       socket: {
         ...device.network.https.client.socket,
         io: drainTLS ? DrainingTLS : device.network.https.client.socket.io,
-        TCP: { ...device.network.https.client.socket.TCP, io: CheckedTCP },
+        TCP: {
+          ...device.network.https.client.socket.TCP,
+          io: statistics ? guardSocketCallbacks(device.network.https.client.socket.TCP.io, statistics) : CheckedTCP,
+        },
         tls: { ...device.network.https.client.socket.tls, ...(certificate ? { ca: certificate } : {}) },
       },
     }),
@@ -43,7 +46,8 @@ self.onmessage = createHttpQueue({
   post: (message) => self.postMessage(message),
   // requestHttps resolves only after its deferred HTTP/TLS close. This also
   // acknowledges queued requests that expired without executing HTTPS.
-  onIdle: (id, progressDropped) => self.postMessage({ idle: id, ...(progressDropped ? { progressDropped } : {}) }),
+  onIdle: (id, progressDropped, observation) =>
+    self.postMessage({ idle: id, ...observation, ...(progressDropped ? { progressDropped } : {}) }),
   schedule: platform.schedule,
   elapsed: (started) => Time.delta(started, Time.ticks),
   async execute(request, setCancel, progress) {

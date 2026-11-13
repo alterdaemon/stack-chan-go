@@ -16,6 +16,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       phase = 'connect',
       finished = false
     let body = request.body
+    const statistics = request.diagnostics ? { socketReceived: 0, socketWritten: 0 } : undefined
     function transportFailure(message, cause) {
       const error = new Error(message)
       const tlsReasons = {
@@ -52,10 +53,18 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       if (timer !== undefined) platform.cancel(timer)
       if (completionErrorTimer !== undefined) platform.cancel(completionErrorTimer)
       const connection = client
+      const observation = statistics ? { ...statistics } : undefined
       client = undefined
       body = undefined
       const failure = (cause) =>
-        Object.assign(cause, { phase, status, received, written: offset, expected: request.body.byteLength })
+        Object.assign(cause, {
+          phase,
+          status,
+          received,
+          written: offset,
+          expected: request.body.byteLength,
+          ...observation,
+        })
       // Leave the SDK callback before closing its current TLS/socket state.
       platform.schedule(() => {
         try {
@@ -70,6 +79,8 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
               status,
               location,
               headers: responseHeaders,
+              received,
+              ...observation,
               body: stream ? stream.finish() : buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer(),
             })
           } catch (error) {
@@ -91,6 +102,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
         port: request.port,
         certificate: request.certificate,
         drainTLS: request.responseFormat === 'subscription-response',
+        statistics,
         onError(error) {
           finish(transportFailure('HTTPS connection failed', error))
         },
@@ -220,8 +232,8 @@ export function closingDNS(DNS, isClosed) {
 }
 
 // TLS authentication failures must reach HTTP onError, not escape an I/O callback.
-export function guardSocketCallbacks(Socket) {
-  return class extends Socket {
+export function guardSocketCallbacks(Socket, statistics) {
+  const Guarded = class extends Socket {
     constructor(options) {
       const guarded = { ...options }
       for (const name of ['onReadable', 'onWritable'])
@@ -233,6 +245,27 @@ export function guardSocketCallbacks(Socket) {
           }
         }
       super(guarded)
+    }
+  }
+  if (!statistics) return Guarded
+  let socket
+  Object.defineProperty(statistics, 'socketBuffered', { enumerable: true, get: () => socket?.readable ?? 0 })
+  return class extends Guarded {
+    constructor(options) {
+      super(options)
+      socket = this
+    }
+    read(value) {
+      const result = value === undefined ? super.read() : super.read(value)
+      if (result !== undefined)
+        statistics.socketReceived +=
+          typeof result === 'number' ? (this.format === 'number' ? 1 : result) : result.byteLength
+      return result
+    }
+    write(value, options) {
+      const result = super.write(value, options)
+      statistics.socketWritten += value.byteLength
+      return result
     }
   }
 }

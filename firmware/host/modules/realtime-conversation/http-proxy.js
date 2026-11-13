@@ -28,7 +28,8 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
       // A queue-expired request may have no reply: retain its acknowledgement
       // until the caller's later deadline removes the final pending request.
       if (message.idle !== undefined) {
-        diagnose?.('worker.idle', () => ({ request: message.idle, progressDropped: message.progressDropped }))
+        const { idle, ...observation } = message
+        diagnose?.('worker.idle', () => ({ request: idle, ...observation }))
         if (message.idle === lastPosted) lastIdle = message.idle
         releaseIdle(created)
         return

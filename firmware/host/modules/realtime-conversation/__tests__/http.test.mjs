@@ -374,6 +374,31 @@ test('TLS callback exceptions become socket errors without escaping the I/O task
   assert.deepEqual(errors, [failure])
 })
 
+test('socket observations count accepted bytes and expose the current buffered count without changing I/O', () => {
+  class Socket {
+    readable = 9
+    format = 'buffer'
+    constructor(options) {
+      this.options = options
+    }
+    read(value) {
+      return value === undefined ? new ArrayBuffer(3) : value.byteLength
+    }
+    write() {
+      return 17
+    }
+  }
+  const statistics = { socketReceived: 0, socketWritten: 0 }
+  const Observed = guardSocketCallbacks(Socket, statistics)
+  const socket = new Observed({})
+  assert.equal(socket.read().byteLength, 3)
+  assert.equal(socket.read(new Uint8Array(2)), 2)
+  assert.equal(socket.write(new ArrayBuffer(7)), 17)
+  assert.deepEqual({ ...statistics }, { socketReceived: 5, socketWritten: 7, socketBuffered: 9 })
+  socket.readable = 0
+  assert.equal(statistics.socketBuffered, 0)
+})
+
 test('fragmented responses preserve every byte up to the response limit', async () => {
   const f = fixture()
   let offset = 0

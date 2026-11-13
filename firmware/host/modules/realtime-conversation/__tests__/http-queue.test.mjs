@@ -294,3 +294,53 @@ test('progress is disabled by default and failed diagnostic IPC never changes re
     { id: 2, dropped: 1 },
   ])
 })
+
+test('canceled requests retain final byte observations in the idle acknowledgement only when enabled', async () => {
+  for (const diagnostics of [false, true]) {
+    let observation
+    const queue = createHttpQueue({
+      execute: (_request, setCancel) =>
+        new Promise((_resolve, reject) => {
+          setCancel(() =>
+            reject(
+              Object.assign(new Error('HTTPS request cancelled'), {
+                phase: 'read',
+                status: 200,
+                received: 12345,
+                socketReceived: 14000,
+                socketWritten: 2000,
+                socketBuffered: 222,
+                tlsDrains: 4,
+                body: 'private-secret',
+              }),
+            ),
+          )
+        }),
+      post: () => assert.fail('canceled requests do not reply'),
+      schedule() {},
+      elapsed: () => 0,
+      onIdle: (_id, _dropped, fields) => {
+        observation = fields
+      },
+    })
+    const done = queue({ id: 1, started: 0, request: { timeoutMs: 1000, diagnostics } })
+    await new Promise(setImmediate)
+    queue({ id: 1, cancel: true })
+    await done
+    assert.deepEqual(
+      observation,
+      diagnostics
+        ? {
+            errorCode: 'https_cancelled',
+            phase: 'read',
+            status: 200,
+            received: 12345,
+            socketReceived: 14000,
+            socketWritten: 2000,
+            socketBuffered: 222,
+            tlsDrains: 4,
+          }
+        : undefined,
+    )
+  }
+})
