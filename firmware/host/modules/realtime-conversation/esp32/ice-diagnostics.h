@@ -3,6 +3,45 @@
 #define STACKCHAN_ICE_DIAGNOSTICS_H
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+
+/* Borrow bounded SDP slices only for an on-device digest; never retain them. */
+static inline const uint8_t *liveIceAttribute(const uint8_t *sdp, size_t size, const char *name, size_t *length)
+{
+    size_t prefix = strlen(name);
+    for (size_t at = 0; at < size;) {
+        size_t end = at;
+        while (end < size && sdp[end] != '\r' && sdp[end] != '\n') end++;
+        if (end - at > prefix && !memcmp(sdp + at, name, prefix)) {
+            *length = end - at - prefix;
+            return *length <= 256 ? sdp + at + prefix : NULL;
+        }
+        at = end;
+        while (at < size && (sdp[at] == '\r' || sdp[at] == '\n')) at++;
+    }
+    return NULL;
+}
+
+/* The HMAC input excludes MESSAGE-INTEGRITY, while its header includes it.
+ * Bound that prefix independently from a complete datagram. */
+static inline const uint8_t *liveIceHmacUsername(const uint8_t *data, size_t size, size_t *length)
+{
+    if (!data || size < 20 || size > 65535 || data[0] || data[1] != 1 ||
+        memcmp(data + 4, "\x21\x12\xa4\x42", 4)) return NULL;
+    for (size_t at = 20; at < size;) {
+        if (size - at < 4) return NULL;
+        unsigned bytes = ((unsigned)data[at + 2] << 8) | data[at + 3];
+        size_t padded = (bytes + 3) & ~3U;
+        if (padded > size - at - 4) return NULL;
+        if (!data[at] && data[at + 1] == 6) {
+            *length = bytes;
+            return data + at + 4;
+        }
+        at += 4 + padded;
+    }
+    return NULL;
+}
 
 /* Metadata only, not STUN authentication. No payload, identifier or address is
  * retained. The peer implementation still validates every connectivity check. */

@@ -181,7 +181,13 @@ conn->connecting = false;
             conn->connected = true;
 int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);
 ret = recv(conn->fd, data + received, len - received, 0);
+int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
+int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
 `,
+      )
+      writeFileSync(
+        path.join(component, 'src/dtls_srtp_v6.c'),
+        'void utils_get_hmac_sha1(const char *input, size_t input_len, const char *key, size_t key_len, unsigned char *output)\n{\n}\n',
       )
     }
   }
@@ -234,6 +240,10 @@ ret = recv(conn->fd, data + received, len - received, 0);
     assert.ok(tcp.includes('stackchanObserveTcp(4, len - received, ret < 0 ? -errno : ret);'))
     assert.ok(tcp.includes('stackchanObserveTcp(5, conn->addr.port, ret < 0 ? -errno : ret);'))
     assert.ok(tcp.includes('errno = saved_errno;'))
+    assert.equal(count(tcp, 'stackchanObserveTcp(6, max_fd, ret < 0 ? -errno : ret);'), 2)
+    const crypto = readFileSync(path.join(components, 'esp_peer/src/dtls_srtp_v6.c'), 'utf8')
+    assert.ok(crypto.includes('stackchanLiveDebugHmac(input, input_len, key, key_len);'))
+    assert.ok(crypto.includes('errno = saved_errno;'))
     assert.ok(
       !readFileSync(path.join(solutionDirectory, 'components/esp_peer/src/transport/tcp.c'), 'utf8').includes(
         'stackchanObserveTcp',

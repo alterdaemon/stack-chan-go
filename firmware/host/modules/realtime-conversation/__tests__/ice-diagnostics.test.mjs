@@ -75,6 +75,20 @@ int main(void) {
     assert(liveIceChecks(sample, &usernameLength) == (1|8|16|32|256));
     memset(sample + sizeof(sample)-28, 0, 20);
     assert(liveIceChecks(sample, &usernameLength) == (1|8|16|32|128|256));
+    size_t n = 0;
+    const uint8_t sdp[] = "v=0\\r\\na=ice-pwd:example\\r\\na=ice-ufrag:peer\\r\\n";
+    const uint8_t *attribute = liveIceAttribute(sdp, sizeof(sdp)-1, "a=ice-pwd:", &n);
+    assert(attribute && n == 7 && !memcmp(attribute, "example", 7));
+    assert(!liveIceAttribute(sdp, sizeof(sdp)-1, "a=unknown:", &n));
+    const uint8_t *username = liveIceHmacUsername(sample, sizeof(sample)-32, &n);
+    assert(username && n == 9 && !memcmp(username, "evtj:h6vY", 9));
+    for (size_t length = 0; length < sizeof(sample); length++) {
+        uint8_t *bounded = malloc(length ? length : 1);
+        memcpy(bounded, sample, length);
+        liveIceHmacUsername(bounded, length, &n);
+        liveIceAttribute(bounded, length, "a=ice-pwd:", &n);
+        free(bounded);
+    }
     return 0;
 }
 `,

@@ -656,7 +656,13 @@ conn->connecting = false;
             conn->connected = true;
 int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);
 ret = recv(conn->fd, data + received, len - received, 0);
+int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
+int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
 `,
+    )
+    writeFileSync(
+      path.join(directory, 'src/dtls_srtp_v6.c'),
+      'void utils_get_hmac_sha1(const char *input, size_t input_len, const char *key, size_t key_len, unsigned char *output)\n{\n}\n',
     )
     return
   }

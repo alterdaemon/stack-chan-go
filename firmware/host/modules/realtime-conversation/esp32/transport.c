@@ -19,6 +19,7 @@
 #include "freertos/queue.h"
 #include "poll-watchdog.h"
 #include "ice-diagnostics.h"
+#include "mbedtls/md.h"
 #include <stdatomic.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -45,6 +46,9 @@ typedef struct {
 	atomic_uint icePolls, iceReady, icePollErrors;
 	atomic_uint iceTcpRecords, iceTcpStarted, iceTcpConnected, iceTcpErrors, iceTcpSent, iceTcpReceived;
 	atomic_uint iceTcpPolls, iceTcpReady;
+	atomic_uint iceTcpReadPolls, iceTcpReadReady, iceTcpReadErrors;
+	atomic_bool iceBindingKnown, iceBindingChecked, iceLocalKnown;
+	uint8_t icePasswordDigest[32], iceUfragDigest[32], iceLocalDigest[32];
 	const char *failureStage;
 	esp_webrtc_handle_t rtc;
 	esp_peer_signaling_cfg_t signal;
@@ -109,6 +113,53 @@ static int observePeerOpen(esp_peer_cfg_t *cfg, esp_peer_handle_t *peer)
 	return t->basePeer->open(&observed, peer);
 }
 
+static bool iceDigest(const void *input, size_t length, uint8_t output[32])
+{
+	const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+	return md && !mbedtls_md(md, input, length, output);
+}
+static void observeIceAnswer(LiveTransport *t, const uint8_t *sdp, size_t size)
+{
+	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
+	size_t passwordLength = 0, ufragLength = 0;
+	const uint8_t *password = liveIceAttribute(sdp, size, "a=ice-pwd:", &passwordLength);
+	const uint8_t *ufrag = liveIceAttribute(sdp, size, "a=ice-ufrag:", &ufragLength);
+	if (password && ufrag && iceDigest(password, passwordLength, t->icePasswordDigest) &&
+		iceDigest(ufrag, ufragLength, t->iceUfragDigest)) atomic_store(&t->iceBindingKnown, true);
+}
+/* One comparison at the actual SDK HMAC boundary. Only digests are retained in
+ * RAM; neither digests nor borrowed input/key values leave the device. This
+ * startup check is separate from the allocation-free socket observers. */
+void stackchanLiveDebugHmac(const char *input, size_t size, const char *key, size_t keyLength)
+{
+	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
+	LiveTransport *t = atomic_load(&gOwner);
+	if (!t || atomic_load(&t->peerPhase) != ESP_PEER_STATE_PAIRING ||
+		!atomic_load(&t->iceBindingKnown)) return;
+	size_t length = 0;
+	const uint8_t *data = (const uint8_t *)input;
+	const uint8_t *username = liveIceHmacUsername(data, size, &length);
+	if (!username || !key || keyLength > 256 || atomic_exchange(&t->iceBindingChecked, true)) return;
+	uint8_t digest[32];
+	unsigned flags = 8, localLength = 0;
+	if (iceDigest(key, keyLength, digest) && !memcmp(digest, t->icePasswordDigest, 32)) flags |= 1;
+	const uint8_t *colon = memchr(username, ':', length);
+	if (colon) {
+		localLength = length - (size_t)(colon + 1 - username);
+		if (iceDigest(username, colon - username, digest) && !memcmp(digest, t->iceUfragDigest, 32)) flags |= 2;
+		if (atomic_load(&t->iceLocalKnown)) {
+			flags |= 32;
+			if (iceDigest(colon + 1, localLength, digest) && !memcmp(digest, t->iceLocalDigest, 32)) flags |= 16;
+		}
+	}
+	if ((((unsigned)data[2] << 8) | data[3]) == size + 4) flags |= 4;
+	memset(digest, 0, sizeof(digest));
+	memset(t->icePasswordDigest, 0, sizeof(t->icePasswordDigest));
+	memset(t->iceUfragDigest, 0, sizeof(t->iceUfragDigest));
+	memset(t->iceLocalDigest, 0, sizeof(t->iceLocalDigest));
+	stackchanDebugTransition(DEBUG_ICE_BINDING, 0, flags, localLength);
+}
+
 /* Called by generated SDK UDP observers. No allocation, logging of payloads or
  * changes to socket results/errno; dormant outside diagnostic ICE pairing. */
 void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int result, int error)
@@ -154,6 +205,13 @@ void stackchanLiveDebugTcp(unsigned stage, int value, int result)
 	if (result < 0 && !(stage == 1 && result == -EINPROGRESS)) atomic_fetch_add(&t->iceTcpErrors, 1);
 	if (stage == 3 && result > 0) atomic_fetch_add(&t->iceTcpSent, 1);
 	if (stage == 4 && result > 0) atomic_fetch_add(&t->iceTcpReceived, 1);
+	if (stage == 6) {
+		unsigned poll = atomic_fetch_add(&t->iceTcpReadPolls, 1), errors = 0;
+		if (result > 0) atomic_fetch_add(&t->iceTcpReadReady, 1);
+		if (result < 0) errors = atomic_fetch_add(&t->iceTcpReadErrors, 1) + 1;
+		if (poll && !errors) return;
+		if (errors > 3) return;
+	}
 	if (stage == 5) {
 		atomic_fetch_add(&t->iceTcpPolls, 1);
 		if (result > 0) atomic_fetch_add(&t->iceTcpReady, 1);
@@ -200,8 +258,15 @@ static int signalStart(esp_peer_signaling_cfg_t *cfg, esp_peer_signaling_handle_
 }
 static int signalSend(esp_peer_signaling_handle_t handle, esp_peer_signaling_msg_t *msg)
 {
-	if (msg->type == ESP_PEER_SIGNALING_MSG_SDP)
+	if (msg->type == ESP_PEER_SIGNALING_MSG_SDP) {
+		LiveTransport *t = handle;
+		if (stackchanDebugIsEnabled && stackchanDebugIsEnabled()) {
+			size_t length = 0;
+			const uint8_t *ufrag = liveIceAttribute(msg->data, msg->size, "a=ice-ufrag:", &length);
+			if (ufrag && iceDigest(ufrag, length, t->iceLocalDigest)) atomic_store(&t->iceLocalKnown, true);
+		}
 		return enqueue(handle, kOffer, msg->data, msg->size);
+	}
 	return 0;
 }
 static int signalStop(esp_peer_signaling_handle_t handle) { return 0; }
@@ -335,6 +400,7 @@ static void worker(void *ctx)
 		if (xQueueReceive(t->commands, &msg, pdMS_TO_TICKS(20)) == pdPASS) {
 			if (msg.type == kFlushOutput) err = liveAudioFlushOutput(audio);
 			else if (msg.type == kAnswer) {
+				observeIceAnswer(t, (const uint8_t *)msg.data, msg.size);
 				esp_peer_signaling_msg_t answer = {.type = ESP_PEER_SIGNALING_MSG_SDP, .data = (uint8_t *)msg.data, .size = msg.size};
 				t->failureStage = "remote_sdp";
 				err = t->signal.on_msg(&answer, t->signal.ctx);
@@ -572,6 +638,9 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("iceTcpReceived", atomic_load(&t->iceTcpReceived));
 	STAT("iceTcpPolls", atomic_load(&t->iceTcpPolls));
 	STAT("iceTcpReady", atomic_load(&t->iceTcpReady));
+	STAT("iceTcpReadPolls", atomic_load(&t->iceTcpReadPolls));
+	STAT("iceTcpReadReady", atomic_load(&t->iceTcpReadReady));
+	STAT("iceTcpReadErrors", atomic_load(&t->iceTcpReadErrors));
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
     STAT("interruptions", stats.interruptions);

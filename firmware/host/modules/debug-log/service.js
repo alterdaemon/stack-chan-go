@@ -33,6 +33,7 @@ const nativeEvents = [
   'ice.crypto',
   'ice.poll',
   'ice.tcp',
+  'ice.binding',
 ]
 let serial,
   recorder,

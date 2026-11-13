@@ -184,8 +184,34 @@ static void stackchanObserveTcp(unsigned stage, int value, int result)
         'ret = recv(conn->fd, data + received, len - received, 0);',
         'ret = recv(conn->fd, data + received, len - received, 0);\n        stackchanObserveTcp(4, len - received, ret < 0 ? -errno : ret);',
       ],
+      [
+        'int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);',
+        'int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);\n    stackchanObserveTcp(6, max_fd, ret < 0 ? -errno : ret);',
+        2,
+      ],
     ]
     updates.push([tcp, patchPeerSource(originalTcp, tcpPatches, source)])
+    const crypto = 'src/dtls_srtp_v6.c'
+    const signature =
+      'void utils_get_hmac_sha1(const char *input, size_t input_len, const char *key, size_t key_len, unsigned char *output)\n{'
+    updates.push([
+      crypto,
+      patchPeerSource(
+        readFileSync(path.join(source, crypto), 'utf8'),
+        [
+          [
+            signature,
+            `#include <errno.h>
+extern void stackchanLiveDebugHmac(const char *, size_t, const char *, size_t) __attribute__((weak));
+${signature}
+    int saved_errno = errno;
+    if (stackchanLiveDebugHmac) stackchanLiveDebugHmac(input, input_len, key, key_len);
+    errno = saved_errno;`,
+          ],
+        ],
+        source,
+      ),
+    ])
   }
   const marker = '.stackchan-peer-implementation'
   const current = lstatSync(destination, { throwIfNoEntry: false })
@@ -203,10 +229,10 @@ static void stackchanObserveTcp(unsigned stage, int value, int result)
 
 function patchPeerSource(original, patches, source) {
   let generated = original
-  for (const [from, to] of patches) {
-    if (generated.split(from).length !== 2 || generated.includes(to))
+  for (const [from, to, occurrences = 1] of patches) {
+    if (generated.split(from).length !== occurrences + 1 || generated.includes(to))
       throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
-    generated = generated.replace(from, to)
+    generated = generated.replaceAll(from, to)
   }
   return generated
 }
