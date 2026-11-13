@@ -1,6 +1,7 @@
 import RealtimeConversation from 'realtimeConversation'
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
+import { SubscriptionLive } from 'realtimeConversation/subscription-live'
 import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
 import { assert, equal } from 'testing/assert'
 import TextDecoder from 'text/decoder'
@@ -45,6 +46,35 @@ try {
   lazySignInRequired = error.code === 'subscription_sign_in_required'
 }
 assert(lazySignInRequired, 'the host constructor loads the named factory through the actual XS namespace')
+let answered = false
+const ordering = new SubscriptionLive({
+  auth: {
+    credentials: async () => ({ accessToken: 'fixture', accountId: 'fixture' }),
+    onLogout: () => () => {},
+  },
+  uuid: () => 'id',
+  fetch: async () => ({
+    ok: true,
+    headers: { 'openai-session-id': 'rtc_ordering' },
+    text: async () => 'v=0 answer',
+  }),
+  openControl: async () => {
+    assert(answered, 'ICE activation must not wait for the sideband join')
+    await new Promise((resolve) => Timer.set(resolve, 1))
+    return { send() {}, close() {} }
+  },
+})
+await ordering.create(
+  'v=0 offer',
+  {},
+  () => {},
+  () => true,
+  (answer) => {
+    equal(answer.callId, 'rtc_ordering')
+    answered = true
+  },
+)
+ordering.dispose()
 const messages = []
 const pending = openSubscriptionControl('rtc_fixture', { Authorization: 'Bearer synthetic' }, (message) =>
   messages.push(message),

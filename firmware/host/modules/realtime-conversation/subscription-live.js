@@ -79,7 +79,7 @@ export class SubscriptionLive {
     })
   }
 
-  async create(sdp, options, onMessage, current) {
+  async create(sdp, options, onMessage, current, onAnswer) {
     this.#onMessage = onMessage
     const credentials = await this.auth.credentials()
     if (this.#closed || !current()) throw new Error('Subscription start cancelled')
@@ -135,6 +135,9 @@ export class SubscriptionLive {
         throw error
       }
       this.#request = undefined
+      // ICE activation must progress while the control socket joins the call.
+      // Conversation keeps capture muted until the control session is ready.
+      if (!this.#closed && current()) onAnswer?.(bootstrap)
       // Even a late create must acquire a bounded control connection to close the remote call.
       stage = 'control'
       this.#channel = await this.openControl(bootstrap.callId, headers, (message) => this.#receive(message))

@@ -546,12 +546,46 @@ test('late bootstrap closes the orphan call without accepting SDP', async () => 
     {},
     () => {},
     () => current,
+    () => assert.fail('a late answer must never be accepted'),
   )
   await Promise.resolve()
   current = false
   await assert.rejects(start, /cancelled/)
   assert.equal(f.sent[0].type, 'session.close')
   assert.equal(f.closes, 1)
+})
+
+test('the SDP answer is delivered before joining the control socket', async () => {
+  const steps = []
+  const live = new SubscriptionLive({
+    auth: {
+      credentials: async () => ({ accessToken: 'subscription-only', accountId: 'fixture' }),
+      onLogout: () => () => {},
+    },
+    uuid: () => 'id',
+    fetch: async () => ({
+      ok: true,
+      headers: { 'openai-session-id': 'rtc_fixture' },
+      text: async () => 'v=0 answer',
+    }),
+    openControl: async () => {
+      assert.deepEqual(steps, ['answer'])
+      steps.push('control')
+      return { send() {}, close() {} }
+    },
+  })
+  await live.create(
+    'v=0 offer',
+    {},
+    () => {},
+    () => true,
+    (answer) => {
+      assert.deepEqual(answer, { callId: 'rtc_fixture', sdp: 'v=0 answer' })
+      steps.push('answer')
+    },
+  )
+  assert.deepEqual(steps, ['answer', 'control'])
+  live.dispose()
 })
 
 test('subscription denial, quota and service failures never try a public endpoint', async () => {

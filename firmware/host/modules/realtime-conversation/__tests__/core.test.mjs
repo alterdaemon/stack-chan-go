@@ -852,6 +852,8 @@ await test('subscription readiness uses the control channel, keeps identities di
   let native,
     control,
     muted,
+    acceptCount = 0,
+    joinControl,
     disposed = 0,
     quiesced = 0
   const timers = new Map(),
@@ -860,10 +862,14 @@ await test('subscription readiness uses the control channel, keeps identities di
     sent = []
   let sequence = 0
   const adapter = {
-    async create(sdp, options, callback) {
+    async create(sdp, options, callback, _current, onAnswer) {
       equal(sdp, 'v=0 offer')
       control = callback
       equal(options.instructions, 'Speak Polish.')
+      onAnswer({ callId: 'rtc_private', sdp: 'v=0 answer' })
+      await new Promise((resolve) => {
+        joinControl = resolve
+      })
       return { callId: 'rtc_private', sdp: 'v=0 answer' }
     },
     activate() {
@@ -889,6 +895,7 @@ await test('subscription readiness uses the control channel, keeps identities di
         },
         acceptAnswer(answer) {
           equal(answer, 'v=0 answer')
+          acceptCount++
         },
         quiesce() {
           quiesced++
@@ -922,6 +929,11 @@ await test('subscription readiness uses the control channel, keeps identities di
   native({ type: 'message', data: JSON.stringify({ type: 'session.started', session: { id: 'wrong' } }) })
   equal(states, ['connecting'])
   native({ type: 'offer', sdp: 'v=0 offer' })
+  await flush()
+  equal(acceptCount, 1)
+  equal(muted, true)
+  equal(states, ['connecting'])
+  joinControl()
   const session = await started
   equal(session, { id: 'session_private', callId: 'rtc_private' })
   equal(muted, false)
@@ -956,13 +968,15 @@ await test('private failure and close matrix preserves selected credentials and 
       activated = 0,
       disposed = 0
     const adapter = {
-      async create(_sdp, _options, callback) {
+      async create(_sdp, _options, callback, current, onAnswer) {
         receive = callback
         if (mode === 'stop-during-start')
           await new Promise((resolve) => {
             finishStart = resolve
           })
-        return { callId: 'rtc_private', sdp: 'v=0\r\nanswer' }
+        const answer = { callId: 'rtc_private', sdp: 'v=0\r\nanswer' }
+        if (current()) onAnswer(answer)
+        return answer
       },
       activate() {
         activated++

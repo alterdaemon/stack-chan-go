@@ -394,15 +394,18 @@ export default class Conversation {
       let response
       if (this.#subscription) {
         this.#signaled = true
-        const result = await this.#subscription.create(
+        await this.#subscription.create(
           sdp,
           options,
           (message) => this.#receive({ type: 'message', data: JSON.stringify(message), subscription: true }),
           () => this.#state === 'connecting' && !this.#finishing && !this.#result,
+          (answer) => {
+            if (this.#finishing || this.#result || this.#state !== 'connecting') return
+            this.#callId = answer.callId
+            this.#transport.acceptAnswer(answer.sdp)
+          },
         )
         if (this.#finishing || this.#result || this.#state !== 'connecting') return
-        this.#callId = result.callId
-        this.#transport.acceptAnswer(result.sdp)
         this.#subscription.activate()
         return
       }
