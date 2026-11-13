@@ -1,3 +1,4 @@
+import RealtimeConversation from 'realtimeConversation'
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
@@ -37,6 +38,13 @@ try {
   signInRequired = error.code === 'subscription_sign_in_required'
 }
 assert(signInRequired, 'missing subscription grant fails before opening a peer or control socket')
+let lazySignInRequired = false
+try {
+  new RealtimeConversation({ auth: 'chatgpt' })
+} catch (error) {
+  lazySignInRequired = error.code === 'subscription_sign_in_required'
+}
+assert(lazySignInRequired, 'the host constructor loads the named factory through the actual XS namespace')
 const messages = []
 const pending = openSubscriptionControl('rtc_fixture', { Authorization: 'Bearer synthetic' }, (message) =>
   messages.push(message),

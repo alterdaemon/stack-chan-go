@@ -17,7 +17,7 @@ export default class RealtimeConversation extends Conversation {
       createSubscription: (options) => {
         if (!Modules.has('realtimeConversation/subscription'))
           throw new TypeError('Subscription unavailable on this build')
-        return Modules.importNow('realtimeConversation/subscription').createSubscription(options)
+        return Modules.importNow('realtimeConversation/subscription', true).createSubscription(options)
       },
       setTimeout: (callback, delay) => Timer.set(callback, delay),
       clearTimeout: (timer) => Timer.clear(timer),

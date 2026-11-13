@@ -4,10 +4,17 @@
     "../../../testing/manifest.json",
     "$(MODULES)/data/base64/manifest.json",
     "$(MODULES)/data/text/decoder/manifest.json",
-    "../../portable/manifest.json"
+    "../../portable/manifest.json",
+    "../../../debug-log/manifest.json",
+    "$(MODULES)/base/modules/manifest.json"
   ],
   "modules": {
     "main": "./runtime.test",
+    "realtimeConversation": "../../realtimeConversation",
+    "realtimeConversation/core": "../../core",
+    "realtimeConversation/tools": "../../tools",
+    "realtimeConversation/web-search": "../../web-search",
+    "realtimeConversation/transport": "./transport",
     "realtimeConversation/subscription": "../../subscription",
     "realtimeConversation/http": "./http",
     "realtimeConversation/subscription-store": "./store",

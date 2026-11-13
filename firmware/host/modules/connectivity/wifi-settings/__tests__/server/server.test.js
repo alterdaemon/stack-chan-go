@@ -310,6 +310,14 @@ try {
     200,
     'credentials survive service restart',
   )
+  server.close()
+  server = new WiFiSettingsServer({ port, getPreferences })
+  const lazyStatus = await request('/api/subscription', {
+    authorization: auth('new:secret'),
+    headers: jsonHeaders,
+  })
+  equal(lazyStatus.status, 200, 'lazy loading uses the actual XS default-export contract')
+  equal(values(lazyStatus).state, 'signed-out')
   trace('@@STACKCHAN_TEST:PASS@@\n')
 } catch (error) {
   trace(`@@STACKCHAN_TEST:FAIL@@ ${error}\n`)

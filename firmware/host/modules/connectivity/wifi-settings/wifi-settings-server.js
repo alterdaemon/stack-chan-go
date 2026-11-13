@@ -136,7 +136,7 @@ export class WiFiSettingsServer {
     )
       return context.text('Forbidden', 403)
     if (!this.#subscriptionAvailable()) return context.text('Subscription unavailable', 404)
-    this.#subscription ??= Modules.importNow('realtimeConversation/subscription').default
+    this.#subscription ??= Modules.importNow('realtimeConversation/subscription')
     if (context.req.method === 'get') return context.json(this.#subscription.status())
     if (context.req.method !== 'post') return context.text('Method Not Allowed', 405)
     if (!context.req.header('content-type')?.toLowerCase().startsWith('application/json'))

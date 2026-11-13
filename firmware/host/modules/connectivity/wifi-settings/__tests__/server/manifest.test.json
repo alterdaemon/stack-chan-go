@@ -10,7 +10,8 @@
     "main": "./server.test",
     "wifi-settings-server": "../../wifi-settings-server",
     "preference": "../../../../testing/fakes/preference",
-    "network-manager": "./network-manager"
+    "network-manager": "./network-manager",
+    "realtimeConversation/subscription": "./subscription"
   },
   "resources": {
     "*": ["./fixtures/*"]
