@@ -798,3 +798,14 @@ for (const model of ['gpt-realtime-2.1-mini', 'gpt-realtime-2.1']) {
     assert.equal(f.session.history.length, 0)
   })
 }
+
+test('subscription sign-in errors release audio and return an actionable sign-in state', async () => {
+  const f = fixture({ settings: { auth: 'chatgpt', model: 'gpt-live-1-codex', voice: 'marin' } })
+  assert.equal(await f.session.start(), true)
+  assert.equal(f.instances[0].options.apiKey, undefined)
+  assert.equal(f.instances[0].options.auth, 'chatgpt')
+  f.instances[0].options.onError({ code: 'subscription_sign_in_required', stage: 'auth' })
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+  assert.equal(f.states.at(-1), 'sign-in')
+  assert.ok(f.events.includes('audio released'))
+})

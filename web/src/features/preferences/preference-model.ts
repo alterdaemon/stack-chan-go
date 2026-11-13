@@ -15,6 +15,7 @@ export const PREFERENCE_KEYS = [
   'ai.token',
   'ai.context',
   'openailive.mode',
+  'openailive.auth',
   'openailive.realtimeVoice',
   'openailive.backendModel',
   'openailive.reasoningEffort',
@@ -48,6 +49,7 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   'ai.context': '',
   // Populated by the device, including its firmware defaults.
   'openailive.mode': 'live',
+  'openailive.auth': 'api-key',
   'openailive.realtimeVoice': 'marin',
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',

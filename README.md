@@ -25,7 +25,7 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 | Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
 | Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
-| Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
+| Personal settings | Password-protected Wi-Fi Settings and Bluetooth. One AI connection selector, shared instructions and voice controls, with an experimental ChatGPT sign-in flow in R5. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
@@ -34,6 +34,8 @@ See the [R5 changes](CHANGELOG-MOD.md#210-r5) for the local candidate and the
 [published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
 
 Add your Wi-Fi credentials and OpenAI API key in Settings to start chatting.
+R5 also includes an experimental ChatGPT subscription connection; see the
+[Wi-Fi sign-in procedure and limits](docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).
 
 - [Build, install, settings and branch guide](docs/stack-chan-go-fork/README.md)
 - [All fork release notes](CHANGELOG-MOD.md)

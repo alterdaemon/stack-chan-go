@@ -34,7 +34,9 @@ export function normalizeRequest(url, options, encode, decodeCertificate) {
     headers,
     body,
     certificate,
-    responseFormat: options.responseFormat === 'web-search' ? 'web-search' : undefined,
+    responseFormat: ['web-search', 'subscription-response'].includes(options.responseFormat)
+      ? options.responseFormat
+      : undefined,
     timeoutMs: Math.max(1000, Math.min(45000, requested)),
   }
 }

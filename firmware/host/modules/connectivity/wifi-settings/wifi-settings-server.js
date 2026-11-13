@@ -2,6 +2,7 @@ import Resource from 'Resource'
 import Base64 from 'base64'
 import { PREF_KEYS } from 'consts'
 import { HttpServerService, Response } from 'http-server-service'
+import Modules from 'modules'
 import { getNetworkConnection } from 'network-manager'
 import { isLiveVoicePreference } from 'openai-live-options'
 import Preference from 'preference'
@@ -37,8 +38,10 @@ export class WiFiSettingsServer {
   #assets
   #setupStarted
   #setupDuration
+  #subscription
 
-  constructor({ getPreferences, onPreferenceChanged, setupDurationMs = 0, port = 80 }) {
+  constructor({ getPreferences, onPreferenceChanged, setupDurationMs = 0, port = 80, subscription }) {
+    this.#subscription = subscription
     this.#getPreferences = getPreferences
     this.#onPreferenceChanged = onPreferenceChanged
     this.#setupStarted = Time.ticks
@@ -77,11 +80,14 @@ export class WiFiSettingsServer {
     }
 
     const path = context.req.path
+    if (path === '/api/subscription') return this.#authorize(context, configured)
     if (path === '/api/preferences') {
       if (context.req.method === 'get') {
         const preferences = configured ? this.#getPreferences() : {}
         return context.json(
-          PREF_KEYS.map(([domain, key]) => {
+          PREF_KEYS.filter(
+            ([domain, key]) => domain !== 'openailive' || key !== 'auth' || this.#subscriptionAvailable(),
+          ).map(([domain, key]) => {
             const prop = `${domain}.${key}`
             return {
               prop,
@@ -116,6 +122,43 @@ export class WiFiSettingsServer {
     })
   }
 
+  #subscriptionAvailable() {
+    return !!this.#subscription || Modules.has('realtimeConversation/subscription')
+  }
+
+  async #authorize(context, configured) {
+    const origin = context.req.header('origin')
+    const host = context.req.header('host')
+    if (
+      !configured ||
+      context.req.header('x-stackchan-settings') !== '1' ||
+      (origin && origin !== `http://${host}` && origin !== `https://${host}`)
+    )
+      return context.text('Forbidden', 403)
+    if (!this.#subscriptionAvailable()) return context.text('Subscription unavailable', 404)
+    this.#subscription ??= Modules.importNow('realtimeConversation/subscription').default
+    if (context.req.method === 'get') return context.json(this.#subscription.status())
+    if (context.req.method !== 'post') return context.text('Method Not Allowed', 405)
+    if (!context.req.header('content-type')?.toLowerCase().startsWith('application/json'))
+      return context.text('Forbidden', 403)
+    let body
+    try {
+      body = await context.req.json()
+    } catch {
+      return context.text('Invalid JSON', 400)
+    }
+    if (!body || Object.keys(body).length !== 1 || !['start', 'cancel', 'logout'].includes(body.action))
+      return context.text('Invalid action', 400)
+    try {
+      if (body.action === 'start') void this.#subscription.start().catch(() => this.#subscription.cancelSignIn())
+      else if (body.action === 'cancel') this.#subscription.cancelSignIn()
+      else this.#subscription.logout()
+      return context.json(this.#subscription.status())
+    } catch {
+      return context.text('Subscription authorization failed', 503)
+    }
+  }
+
   async #save(context, configured) {
     // Require a same-origin JSON request; never accept cross-site HTML form submissions.
     const origin = context.req.header('origin')
@@ -139,7 +182,8 @@ export class WiFiSettingsServer {
     // Validate the entire batch before changing anything.
     for (const [prop, value] of entries) {
       const entry = PREF_KEYS.find(([domain, key]) => prop === `${domain}.${key}`)
-      if (!entry || typeof value !== 'string') return context.text('Invalid preference', 400)
+      if (!entry || typeof value !== 'string' || (prop === 'openailive.auth' && !this.#subscriptionAvailable()))
+        return context.text('Invalid preference', 400)
       if (
         (!configured && prop !== 'www.password') ||
         (prop === 'driver.type' && preferences.driver?.typeLocked === true)

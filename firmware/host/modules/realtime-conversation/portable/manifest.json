@@ -1,5 +1,8 @@
 {
   "modules": {
-    "realtimeConversation/transport-core": "../transport-core"
+    "realtimeConversation/transport-core": "../transport-core",
+    "realtimeConversation/subscription-auth": "../subscription-auth",
+    "realtimeConversation/subscription-live": "../subscription-live",
+    "realtimeConversation/subscription-stream": "../subscription-stream"
   }
 }

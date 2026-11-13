@@ -4,6 +4,7 @@ import { createClosingClient, guardSocketCallbacks, requestHttps } from '../http
 import { normalizeRequest } from '../http-options.js'
 import { createHttpProxy } from '../http-proxy.js'
 import { createHttpQueue } from '../http-queue.js'
+import { createSubscriptionStream } from '../subscription-stream.js'
 
 const encode = (text) => new TextEncoder().encode(text).buffer
 const decode = (buffer) => new TextDecoder().decode(buffer)
@@ -436,4 +437,69 @@ test('canceling an active HTTPS request closes its socket exactly once', async (
   stop()
   await assert.rejects(request, /cancelled/)
   assert.equal(closes, 1)
+})
+
+test('HTTP worker reduces incremental SSE and returns only bounded answer plus call headers', async () => {
+  let callbacks,
+    closes = 0,
+    offset = 0
+  const bytes = new TextEncoder().encode(
+    'data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Cześć 🌍"}]}]}}\n\n',
+  )
+  const platform = {
+    createSubscriptionStream: () => createSubscriptionStream(decode, encode),
+    createClient: () => ({
+      request: (options) => {
+        callbacks = options
+      },
+      close: () => {
+        closes++
+      },
+    }),
+    schedule: (fn, ms) => (ms === 0 ? queueMicrotask(fn) : 1),
+    cancel() {},
+  }
+  const request = requestHttps(post({ responseFormat: 'subscription-response' }), platform)
+  callbacks.onHeaders(
+    200,
+    new Map([
+      ['content-type', 'text/event-stream; charset=utf-8'],
+      ['openai-session-id', 'rtc_fixture'],
+      ['set-cookie', 'must-not-cross-ipc'],
+    ]),
+  )
+  const context = {
+    read(view) {
+      view.set(bytes.subarray(offset, offset + view.length))
+      offset += view.length
+      return view.length
+    },
+  }
+  for (let index = 0; index < bytes.length; index++) callbacks.onReadable.call(context, 1)
+  callbacks.onDone()
+  const response = await request
+  assert.equal(JSON.parse(decode(response.body)).answer, 'Cześć 🌍')
+  assert.deepEqual(response.headers, {
+    'openai-session-id': 'rtc_fixture',
+    'content-type': 'text/event-stream; charset=utf-8',
+  })
+  assert.equal(closes, 1)
+  const oversized = requestHttps(post({ responseFormat: 'subscription-response' }), platform)
+  callbacks.onHeaders(
+    200,
+    new Map([
+      ['content-type', 'text/event-stream'],
+      ['content-length', '2097153'],
+    ]),
+  )
+  await assert.rejects(oversized, /exceeds limit/)
+  assert.equal(closes, 2)
+  let cancel
+  const cancelled = requestHttps(post({ responseFormat: 'subscription-response' }), platform, (value) => {
+    cancel = value
+  })
+  callbacks.onHeaders(200, new Map([['content-type', 'text/event-stream']]))
+  cancel()
+  await assert.rejects(cancelled, /cancelled/)
+  assert.equal(closes, 3)
 })

@@ -26,6 +26,7 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
         './http-core': './http-core.js',
         './http-queue': './http-queue.js',
         './web-search': './web-search.js',
+        './subscription-stream': './subscription-stream.js',
       },
       {
         'http-core.js': `
@@ -41,6 +42,7 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
       },
     )
     copyFileSync(new URL('../http-queue.js', import.meta.url), path.join(realtime, 'http-queue.js'))
+    copyFileSync(new URL('../subscription-stream.js', import.meta.url), path.join(realtime, 'subscription-stream.js'))
     copyFileSync(new URL('../web-search.js', import.meta.url), path.join(realtime, 'web-search.js'))
     modulePackage('text', { './decoder': './decoder.js' }, { 'decoder.js': 'export default TextDecoder' })
     modulePackage('time', './index.js', {

@@ -80,6 +80,7 @@ test('saved credentials and context are read afresh; deleting the key disables s
   assert.deepEqual(read(), {
     mode: 'live',
     apiKey: 'saved-key',
+    auth: 'api-key',
     instructions: 'Be brief.',
     volume: 0.35,
     bargeIn: false,
@@ -209,4 +210,29 @@ test('mode switches preserve separate voices and the shared key, instructions an
   saved.set('openailive.mode', 'live')
   assert.equal(read().model, 'gpt-live-1')
   assert.equal(read().voice, 'bossa')
+})
+
+test('subscription selection never reads the API key and preserves shared prompt and voice settings', () => {
+  const saved = {
+    'openailive.auth': 'chatgpt',
+    'openailive.mode': 'realtime-full',
+    'ai.context': 'Speak Polish.',
+    'openailive.voice': 'cedar',
+    'openailive.pitch': '3',
+  }
+  const read = () =>
+    readLiveSettings({ apiKey: 'unselected-paid-key' }, (domain, key) => {
+      assert.notEqual(`${domain}.${key}`, 'ai.token')
+      return saved[`${domain}.${key}`]
+    })
+  const settings = read()
+  assert.equal(settings.auth, 'chatgpt')
+  assert.equal(settings.apiKey, undefined)
+  assert.equal(settings.model, 'gpt-live-1-codex')
+  assert.equal(settings.mode, 'live')
+  assert.equal(settings.instructions, 'Speak Polish.')
+  assert.equal(settings.voice, 'cedar')
+  assert.equal(settings.pitch, 3)
+  saved['openailive.voice'] = 'unsupported'
+  assert.throws(read, /Unsupported subscription voice/)
 })

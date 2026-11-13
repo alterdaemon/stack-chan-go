@@ -18,6 +18,7 @@ describe('PreferencesPage', () => {
       connected: true,
       busy: false,
       openaiAvailable: true,
+      subscriptionAvailable: false,
       modeAvailable: true,
       realtimeVoiceAvailable: true,
       bargeInAvailable: true,
@@ -46,6 +47,46 @@ describe('PreferencesPage', () => {
     )
     return { ...rendered, state }
   }
+
+  it('keeps shared prompt and OpenAI controls in subscription mode and hides API overrides', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ state: 'signed-out', signedIn: false, volatile: true }) }))
+    )
+    renderPreferences({
+      subscriptionAvailable: true,
+      http: true,
+      values: {
+        ...DEFAULT_PREFERENCES,
+        'openailive.auth': 'chatgpt',
+        'openailive.mode': 'realtime-full',
+        'ai.context': 'Speak Polish.',
+      },
+    })
+    expect(screen.getByRole('combobox', { name: 'AI connection' })).toBeVisible()
+    expect(await screen.findByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible()
+    expect(screen.getByLabelText('システムロール')).toHaveValue('Speak Polish.')
+    expect(screen.getByRole('combobox', { name: '声' })).toBeVisible()
+    expect(screen.getByRole('slider', { name: 'ピッチ' })).toBeVisible()
+    expect(screen.getByRole('spinbutton', { name: '自動切断までの秒数' })).toBeVisible()
+    expect(screen.queryByLabelText('OpenAI API key')).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '会話モード' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '推論の強度' })).toBeNull()
+    expect(screen.queryByLabelText('モデル')).toBeNull()
+    expect(screen.getAllByText('OpenAI', { exact: true }).length).toBe(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('directs a subscribed BLE device to Wi-Fi without showing an API key or browser sign-in', () => {
+    renderPreferences({
+      subscriptionAvailable: true,
+      http: false,
+      values: { ...DEFAULT_PREFERENCES, 'openailive.auth': 'chatgpt' },
+    })
+    expect(screen.getByText('Open the robot’s Wi-Fi Settings page to sign in to ChatGPT or sign out.')).toBeVisible()
+    expect(screen.queryByLabelText('OpenAI API key')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Continue with ChatGPT' })).toBeNull()
+  })
 
   it('shows the MCP server token as a password field', () => {
     renderPreferences()

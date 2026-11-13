@@ -35,7 +35,7 @@ async function rejected(promise, code) {
 async function flush() {
   for (let i = 0; i < 12; i++) await Promise.resolve()
 }
-function harness(options = {}) {
+function harness(options = {}, createSubscription) {
   let callback,
     requests = [],
     sent = [],
@@ -65,6 +65,8 @@ function harness(options = {}) {
       ...options,
     },
     {
+      createSubscription,
+      debug: options.debug,
       createTransport(cb) {
         callback = cb
         return {
@@ -821,5 +823,183 @@ await test('saved text seeds a new session through input without altering instru
   h.message({ type: 'session.closed', reason: 'close_requested' })
   await closing
   equal(h.disposed, 1)
+})
+await test('subscription readiness uses the control channel, keeps identities distinct and never calls API endpoints', async () => {
+  let native,
+    control,
+    muted,
+    disposed = 0,
+    quiesced = 0
+  const timers = new Map(),
+    states = [],
+    transcripts = [],
+    sent = []
+  let sequence = 0
+  const adapter = {
+    async create(sdp, options, callback) {
+      equal(sdp, 'v=0 offer')
+      control = callback
+      equal(options.instructions, 'Speak Polish.')
+      return { callId: 'rtc_private', sdp: 'v=0 answer' }
+    },
+    activate() {
+      control({ type: 'session.started', session: { id: 'session_private' } })
+    },
+    send(message) {
+      sent.push(message)
+    },
+    cancelJob() {},
+    dispose() {
+      disposed++
+    },
+  }
+  const platform = {
+    createSubscription: () => adapter,
+    createTransport(callback) {
+      native = callback
+      return {
+        start() {},
+        setVolume() {},
+        setMuted(value) {
+          muted = value
+        },
+        acceptAnswer(answer) {
+          equal(answer, 'v=0 answer')
+        },
+        quiesce() {
+          quiesced++
+        },
+        close: async () => {},
+      }
+    },
+    fetch() {
+      throw new Error('API key path must never execute')
+    },
+    setTimeout(callback, delay) {
+      const id = ++sequence
+      timers.set(id, { callback, delay })
+      return id
+    },
+    clearTimeout(id) {
+      timers.delete(id)
+    },
+  }
+  const c = new Conversation(
+    {
+      auth: 'chatgpt',
+      instructions: 'Speak Polish.',
+      onStateChanged: (value) => states.push(value),
+      onTranscript: (value) => transcripts.push(value),
+    },
+    platform,
+  )
+  const started = c.connect()
+  equal(muted, true)
+  native({ type: 'message', data: JSON.stringify({ type: 'session.started', session: { id: 'wrong' } }) })
+  equal(states, ['connecting'])
+  native({ type: 'offer', sdp: 'v=0 offer' })
+  const session = await started
+  equal(session, { id: 'session_private', callId: 'rtc_private' })
+  equal(muted, false)
+  control({ type: 'input_transcript.added', item: { text: 'Cześć' } })
+  control({ type: 'session.input_transcript.delta', delta: 'Cześć' })
+  equal(transcripts, [])
+  control({ type: 'turn.done', turn: { role: 'user', transcript: 'Cześć' } })
+  equal(transcripts, [{ role: 'user', delta: 'Cześć' }])
+  await c.setMuted(true)
+  equal(muted, true)
+  const closing = c.close()
+  equal(quiesced, 1)
+  equal(sent, [{ type: 'session.close' }])
+  control({ type: 'session.closed', reason: 'client_request' })
+  equal((await closing).finalized, true)
+  equal(disposed, 1)
+  equal(timers.size, 0)
+  for (const extra of [{ apiKey: 'saved-paid-key' }, { signaling: {} }, { mode: 'realtime' }]) {
+    let rejected = false
+    try {
+      new Conversation({ auth: 'chatgpt', ...extra }, platform)
+    } catch {
+      rejected = true
+    }
+    check(rejected, 'conflicting authentication must fail before startup')
+  }
+})
+await test('private failure and close matrix preserves selected credentials and stops late startup', async () => {
+  for (const mode of ['control-loss', 'close-timeout', 'stop-during-start']) {
+    let receive,
+      finishStart,
+      activated = 0,
+      disposed = 0
+    const adapter = {
+      async create(_sdp, _options, callback) {
+        receive = callback
+        if (mode === 'stop-during-start')
+          await new Promise((resolve) => {
+            finishStart = resolve
+          })
+        return { callId: 'rtc_private', sdp: 'v=0\r\nanswer' }
+      },
+      activate() {
+        activated++
+        receive({ type: 'session.started' })
+      },
+      cancelJob() {},
+      send() {},
+      dispose() {
+        disposed++
+      },
+    }
+    const logged = []
+    const h = harness(
+      {
+        auth: 'chatgpt',
+        apiKey: undefined,
+        debug: { enabled: true, event: (_scope, _event, fields) => logged.push({ ...fields }) },
+      },
+      () => adapter,
+    )
+    const connecting = h.c.connect()
+    const cancelled = mode === 'stop-during-start' ? rejected(connecting, 'cancelled') : undefined
+    await h.signal()
+    if (mode !== 'stop-during-start') await connecting
+    if (mode === 'control-loss') {
+      receive({ type: 'error', error: { code: 'opaque-subscription-token', message: 'untrusted provider detail' } })
+      await flush()
+      equal(h.c.state, 'error')
+      check(h.errors.every((error) => !error.message.includes('untrusted')))
+      check(!JSON.stringify(logged).includes('opaque-subscription-token'))
+    } else {
+      const closing = h.c.close()
+      h.timeout(3000)
+      const result = await closing
+      equal(result.finalized, false)
+      equal(result.reason, 'close_timeout')
+      if (finishStart) {
+        finishStart()
+        await flush()
+        equal(activated, 0)
+        await cancelled
+      }
+    }
+    equal(disposed, 1)
+    equal(h.disposed, 1)
+    equal(h.requests.length, 0)
+  }
+  for (const status of [401, 403, 429, 500]) {
+    let subscriptionStarts = 0
+    const h = harness({}, () => {
+      subscriptionStarts++
+      throw new Error('unselected subscription grant')
+    })
+    h.reply(async () => ({ status, ok: false, text: async () => '{}' }))
+    const connecting = h.c.connect()
+    const failure = rejected(connecting, 'http_error')
+    await h.signal()
+    await failure
+    equal(subscriptionStarts, 0)
+    equal(h.requests.length, 1)
+    check(h.requests.every((request) => request.url.startsWith('https://api.openai.com/')))
+  }
 })
 console.log(`${count} tests passed`)

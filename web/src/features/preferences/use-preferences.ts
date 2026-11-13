@@ -77,6 +77,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     if (!activeClient) return
     // A new device must advertise these fields before they become editable.
     for (const key of [
+      'openailive.auth',
       'openailive.mode',
       'openailive.realtimeVoice',
       'openailive.backendModel',
@@ -93,6 +94,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     }
     setValues((current) => ({
       ...current,
+      'openailive.auth': 'api-key',
       'openailive.mode': 'live',
       'openailive.realtimeVoice': 'marin',
       'openailive.backendModel': '',
@@ -138,6 +140,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     if (
       readOnlyRef.current.has(key) ||
       ([
+        'openailive.auth',
         'openailive.mode',
         'openailive.realtimeVoice',
         'openailive.bargeIn',
@@ -215,6 +218,16 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
         payload[key] = values[key]
       }
     }
+    if (values['openailive.auth'] === 'chatgpt') {
+      for (const key of [
+        'ai.token',
+        'openailive.mode',
+        'openailive.realtimeVoice',
+        'openailive.backendModel',
+        'openailive.reasoningEffort',
+      ] as const)
+        delete payload[key]
+    }
     return savePayload(payload, '設定を送信しました。')
   }, [savePayload, values])
 
@@ -235,6 +248,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     values,
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
+    subscriptionAvailable: currentValues.current['openailive.auth'] !== undefined,
     modeAvailable: currentValues.current['openailive.mode'] !== undefined,
     realtimeVoiceAvailable: currentValues.current['openailive.realtimeVoice'] !== undefined,
     bargeInAvailable: currentValues.current['openailive.bargeIn'] !== undefined,

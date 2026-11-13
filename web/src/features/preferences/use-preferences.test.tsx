@@ -6,6 +6,48 @@ import { type PreferenceKey } from '@/features/preferences/preference-model'
 import { type PreferenceClient, type PreferenceValue } from '@/services/preferences/ble-preference-client'
 
 describe('usePreferences', () => {
+  it('subscription saves exclude hidden API overrides while retaining them for the explicit API choice', async () => {
+    let notify: (value: PreferenceValue) => void = () => {}
+    const send = vi.fn(async () => {})
+    const { result } = renderHook(() =>
+      usePreferences((onValue) => {
+        notify = onValue
+        return { connect: async () => {}, disconnect: async () => {}, isConnected: () => true, send }
+      })
+    )
+    act(() => {
+      for (const [prop, value] of Object.entries({
+        'openailive.auth': 'api-key',
+        'openailive.mode': 'live',
+        'openailive.backendModel': 'saved-model',
+        'openailive.reasoningEffort': 'high',
+        'ai.context': 'Shared prompt',
+        'ai.token': 'saved-key',
+      }))
+        notify({ prop, value })
+    })
+    act(() => {
+      result.current.update('openailive.backendModel', '')
+      result.current.update('openailive.reasoningEffort', 'invalid')
+      result.current.update('ai.token', 'edited-key')
+      result.current.update('openailive.auth', 'chatgpt')
+      result.current.update('ai.context', 'New shared prompt')
+    })
+    await act(() => result.current.save())
+    expect(send).toHaveBeenLastCalledWith({
+      _batch: { 'openailive.auth': 'chatgpt', 'ai.context': 'New shared prompt' },
+    })
+    expect(result.current.values['ai.token']).toBe('edited-key')
+    send.mockClear()
+    act(() => result.current.update('openailive.auth', 'api-key'))
+    await act(() => result.current.save())
+    expect(send).not.toHaveBeenCalled()
+    expect(result.current.operation.status).toBe('error')
+    await act(() => result.current.connect())
+    expect(result.current.subscriptionAvailable).toBe(false)
+    expect(result.current.values['openailive.auth']).toBe('api-key')
+  })
+
   it('saves full Realtime without rewriting either saved voice and rejects unsupported modes', async () => {
     let notify: (value: PreferenceValue) => void = () => {}
     const send = vi.fn(async () => {})

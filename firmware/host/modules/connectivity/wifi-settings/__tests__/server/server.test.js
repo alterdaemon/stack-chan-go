@@ -99,9 +99,36 @@ const save = (batch, authorization, headers = jsonHeaders) =>
   })
 const values = (response) => JSON.parse(String.fromArrayBuffer(response.body))
 
+let holdStart = false,
+  releaseStart
+let authStarts = 0,
+  authCancels = 0,
+  authLogouts = 0
+const subscription = {
+  status: () => ({
+    state: 'pending',
+    signedIn: false,
+    url: 'https://auth.openai.com/codex/device',
+    code: 'TEST-CODE',
+    volatile: true,
+  }),
+  start: async () => {
+    authStarts++
+    if (holdStart)
+      await new Promise((resolve) => {
+        releaseStart = resolve
+      })
+  },
+  cancelSignIn: () => {
+    authCancels++
+  },
+  logout: () => {
+    authLogouts++
+  },
+}
 let server
 try {
-  server = new WiFiSettingsServer({ port, getPreferences })
+  server = new WiFiSettingsServer({ port, subscription, getPreferences })
   equal((await request('/settings/')).status, 503, 'no password must fail closed outside physical setup')
   equal((await request('/api/preferences')).status, 503)
   equal(
@@ -128,7 +155,12 @@ try {
   assert(oversizedRejected, 'oversized header must close its connection')
   equal((await request('/api/preferences')).status, 503, 'server must remain usable after an oversized header')
   server.close()
-  server = new WiFiSettingsServer({ port, getPreferences, setupDurationMs: 1000 })
+  server = new WiFiSettingsServer({ port, subscription, getPreferences, setupDurationMs: 1000 })
+  equal(
+    (await request('/api/subscription', { headers: jsonHeaders })).status,
+    403,
+    'setup window cannot authorize an account',
+  )
   equal(server.address, '192.0.2.10')
   const bootstrap = await request('/api/preferences')
   equal(bootstrap.status, 200)
@@ -143,7 +175,7 @@ try {
   Timer.delay(1100)
   equal((await save({ 'www.password': 'too-late' })).status, 503, 'initial setup window expires')
   server.close()
-  server = new WiFiSettingsServer({ port, getPreferences, setupDurationMs: 300000 })
+  server = new WiFiSettingsServer({ port, subscription, getPreferences, setupDurationMs: 300000 })
   equal((await save({ 'www.password': 'first-secret' }, undefined, {})).status, 403, 'reject form/CSRF writes')
   equal((await save({ 'www.password': 'first-secret' })).status, 200)
   equal((await request('/api/preferences')).status, 401)
@@ -155,6 +187,51 @@ try {
     equal((await request('/api/preferences', { authorization: invalid })).status, 401)
   }
   const authorization = auth('first-secret', 'different-login')
+  equal((await request('/api/subscription', { headers: jsonHeaders })).status, 401)
+  equal((await request('/api/subscription', { authorization })).status, 403)
+  equal(
+    (
+      await request('/api/subscription', {
+        authorization,
+        headers: { ...jsonHeaders, Origin: 'https://attacker.test' },
+      })
+    ).status,
+    403,
+  )
+  const status = await request('/api/subscription', { authorization, headers: jsonHeaders })
+  equal(status.status, 200)
+  equal(values(status).code, 'TEST-CODE')
+  for (const action of ['start', 'cancel', 'logout']) {
+    equal((await request('/api/subscription', { authorization, headers: jsonHeaders, body: { action } })).status, 200)
+  }
+  equal(authStarts, 1)
+  equal(authCancels, 1)
+  equal(authLogouts, 1)
+  holdStart = true
+  equal(
+    (await request('/api/subscription', { authorization, headers: jsonHeaders, body: { action: 'start' } })).status,
+    200,
+    'start acknowledges while the provider challenge is pending',
+  )
+  equal(
+    (await request('/api/subscription', { authorization, headers: jsonHeaders, body: { action: 'cancel' } })).status,
+    200,
+    'cancel remains available during the challenge request',
+  )
+  releaseStart()
+  holdStart = false
+  equal(
+    (
+      await request('/api/subscription', {
+        authorization,
+        headers: jsonHeaders,
+        body: { action: 'start', access_token: 'synthetic-secret' },
+      })
+    ).status,
+    400,
+  )
+  equal((await save({ 'openailive.auth': 'chatgpt' }, authorization)).status, 200)
+  equal((await save({ 'openailive.auth': 'fallback' }, authorization)).status, 400)
   const loaded = await request('/api/preferences', { authorization })
   equal(loaded.status, 200, 'any login with the correct password is accepted')
   const loadedValues = values(loaded)
@@ -227,7 +304,7 @@ try {
   equal((await request('/api/preferences', { authorization })).status, 401, 'old password stops working')
   equal((await request('/api/preferences', { authorization: auth('new:secret') })).status, 200)
   server.close()
-  server = new WiFiSettingsServer({ port, getPreferences })
+  server = new WiFiSettingsServer({ port, subscription, getPreferences })
   equal(
     (await request('/api/preferences', { authorization: auth('new:secret') })).status,
     200,

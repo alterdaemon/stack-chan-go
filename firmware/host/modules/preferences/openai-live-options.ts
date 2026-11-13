@@ -59,6 +59,7 @@ export function isLivePitch(value: unknown): boolean {
 }
 
 export function isLiveVoicePreference(prop: string, value: unknown): boolean {
+  if (prop === 'openailive.auth') return value === 'api-key' || value === 'chatgpt'
   if (prop === 'openailive.mode') return value === 'live' || value === 'realtime' || value === 'realtime-full'
   if (prop === 'openailive.realtimeVoice') return typeof value === 'string' && OPENAI_REALTIME_VOICES.includes(value)
   if (prop === 'openailive.standbySeconds') {

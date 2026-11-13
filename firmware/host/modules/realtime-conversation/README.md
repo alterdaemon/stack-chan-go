@@ -42,3 +42,20 @@ A MOD opts in by calling `connect()`; no extra host profile or eager allocation 
 `npm run test:unit`で会話・HTTP・トランスポートの回帰テストを実行する。ネイティブ部分はCoreS3のビルドと実機プローブで検証する。UIの行単位吹き出しは独立した追加APIで、会話モジュールは依存しない。
 
 本モジュールはmeganetaaan名義で開発したSDK forkの新規追加モジュールを移したもの。移植元コミットと原本のハッシュは`source-provenance.json`に記録する。独自実装のSDK用テンプレートヘッダーを整理し、Apache-2.0を適用する。Moddable・ESP-IDF・Espressifのコード自体を再ライセンスするものではない。依存物の条件は[ライセンス記録](LICENSES.md)を参照。
+
+
+The integrated R5 MOD also selects an internal ChatGPT subscription adapter from
+its saved `openailive.auth` preference. The public API-key/signaling interface
+above is unchanged. Subscription bootstrap consumes raw SDP and a call ID;
+control uses one authenticated WSS connection. An actual session ID, if supplied,
+is kept separately. Native media events do not duplicate control messages.
+Only final `turn.done` transcripts enter the MOD's bounded history; optional transcript
+deltas do not repeat that history. Local capture stays muted until control
+readiness, and close retains the existing three-second finalization grace.
+
+Device authorization and serialized refresh run on the robot using the existing
+HTTPS worker. Grants live only in RAM in this initial implementation. The
+private Codex Live and Responses routes require account/device qualification;
+this adapter does not establish service entitlement or protected persistence.
+Neither subscription failure nor API-key failure selects the other connection.
+See the [Wi-Fi sign-in guide](../../../../docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).

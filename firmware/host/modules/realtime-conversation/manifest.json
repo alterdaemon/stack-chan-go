@@ -3,7 +3,8 @@
     "../debug-log/manifest.json",
     "./portable/manifest.json",
     "$(MODDABLE)/modules/data/base64/manifest.json",
-    "$(MODDABLE)/modules/data/text/decoder/manifest.json"
+    "$(MODDABLE)/modules/data/text/decoder/manifest.json",
+    "$(MODDABLE)/modules/base/modules/manifest.json"
   ],
   "modules": {
     "realtimeConversation": "./realtimeConversation",
@@ -15,7 +16,8 @@
     "realtimeConversation/http-options": "./http-options",
     "realtimeConversation/http-core": "./http-core",
     "realtimeConversation/http-worker": "./http-worker",
-    "realtimeConversation/http-queue": "./http-queue"
+    "realtimeConversation/http-queue": "./http-queue",
+    "realtimeConversation/subscription": "./subscription"
   },
   "platforms": {
     "...": {

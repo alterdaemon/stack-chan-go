@@ -39,6 +39,7 @@ export function diagnostic(error, stage, site) {
 }
 
 export function liveModelLabel(mode, model) {
+  if (model === 'gpt-live-1-codex') return 'ChatGPT subscription'
   if (mode !== 'realtime') return 'GPT-Live 1'
   return model === 'gpt-realtime-2.1' ? 'GPT-Realtime 2.1' : 'GPT-Realtime 2.1 Mini'
 }
@@ -104,7 +105,10 @@ export class LiveSession {
     let stage = 'configuration'
     let site = 'settings_check'
     try {
-      if (typeof this.settings.apiKey !== 'string' || !this.settings.apiKey.trim()) {
+      if (
+        this.settings.auth !== 'chatgpt' &&
+        (typeof this.settings.apiKey !== 'string' || !this.settings.apiKey.trim())
+      ) {
         entry.failure = 'configuration'
         return false
       }
@@ -138,7 +142,7 @@ ${this.settings.instructions}`
           : this.settings.instructions
       const options = {
         mode: this.settings.mode,
-        apiKey: this.settings.apiKey,
+        ...(this.settings.auth === 'chatgpt' ? { auth: 'chatgpt' } : { apiKey: this.settings.apiKey }),
         model: this.settings.model,
         voice: this.settings.voice,
         pitch: this.settings.pitch ?? 0,
@@ -153,14 +157,17 @@ ${this.settings.instructions}`
               content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
             }))
           : undefined,
-        delegation: {
-          type: 'responses',
-          responses: {
-            model: this.settings.backendModel ?? 'gpt-6.1-terra',
-            ...(this.settings.reasoningEffort ? { reasoning: { effort: this.settings.reasoningEffort } } : {}),
-            ...(this.settings.tools?.length ? { tools: this.settings.tools, tool_choice: 'auto' } : {}),
-          },
-        },
+        delegation:
+          this.settings.auth === 'chatgpt'
+            ? undefined
+            : {
+                type: 'responses',
+                responses: {
+                  model: this.settings.backendModel ?? 'gpt-6.1-terra',
+                  ...(this.settings.reasoningEffort ? { reasoning: { effort: this.settings.reasoningEffort } } : {}),
+                  ...(this.settings.tools?.length ? { tools: this.settings.tools, tool_choice: 'auto' } : {}),
+                },
+              },
         onError: (error) => {
           if (this.active !== entry) return
           // close() owns the terminal result once shutdown has started. A late
@@ -169,7 +176,9 @@ ${this.settings.instructions}`
             entry.diagnostic ??= diagnostic(error, 'close', 'close_event')
             return
           }
-          entry.failure = 'error'
+          entry.failure = ['subscription_sign_in_required', 'subscription_signed_out'].includes(error?.code)
+            ? 'sign-in'
+            : 'error'
           entry.diagnostic ??= diagnostic(error, 'events', 'event_on_error')
           void this.stop()
         },
@@ -186,10 +195,10 @@ ${this.settings.instructions}`
             !entry.conversation?.muted &&
             fragment.role === 'user' &&
             fragment.delta?.trim() &&
-            fragment.end_ms > fragment.start_ms &&
-            fragment.end_ms > entry.inputEnd
+            (this.settings.auth === 'chatgpt' ||
+              (fragment.end_ms > fragment.start_ms && fragment.end_ms > entry.inputEnd))
           ) {
-            entry.inputEnd = fragment.end_ms
+            if (Number.isFinite(fragment.end_ms)) entry.inputEnd = fragment.end_ms
             entry.inputUntil = this.now() + 1000
           }
           // Only the robot's words renew standby. Microphone noise, incoming
@@ -224,7 +233,9 @@ ${this.settings.instructions}`
       return true
     } catch (error) {
       if (!entry.cancelled) {
-        entry.failure = 'error'
+        entry.failure = ['subscription_sign_in_required', 'subscription_signed_out'].includes(error?.code)
+          ? 'sign-in'
+          : 'error'
         entry.diagnostic ??= diagnostic(error, stage, site)
       }
       return false
@@ -254,6 +265,14 @@ ${this.settings.instructions}`
 
   receive(entry, message) {
     if (this.active !== entry || entry.cancelled) return
+    if (
+      this.settings.auth === 'chatgpt' &&
+      ['input_transcript.added', 'session.input_transcript.delta'].includes(message.type) &&
+      entry.connected &&
+      entry.inputAvailable &&
+      !entry.conversation?.muted
+    )
+      entry.inputUntil = this.now() + 1000
     if (message.type === 'local.interruption') {
       entry.responseId = entry.searchId = undefined
       entry.pendingSuppressed = true
@@ -282,7 +301,12 @@ ${this.settings.instructions}`
         entry.searchId = undefined
     }
     const wasPending = entry.backend.size > 0
-    if (message.type === 'session.delegation.created') {
+    if (message.type === 'local.subscription.job.started') {
+      entry.pendingSuppressed = false
+      entry.backend.set(message.id, message.id)
+    } else if (message.type === 'local.subscription.job.finished') {
+      entry.backend.delete(message.id)
+    } else if (message.type === 'session.delegation.created') {
       entry.pendingSuppressed = false
       entry.backend.set(message.delegation.id, message.delegation.response_id)
     } else if (message.type === 'response.event') {

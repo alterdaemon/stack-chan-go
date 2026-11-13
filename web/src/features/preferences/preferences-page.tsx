@@ -30,6 +30,7 @@ import {
   OPENAI_LIVE_STANDBY_MAX,
   type PreferenceKey,
 } from '@/features/preferences/preference-model'
+import { SubscriptionAuth } from '@/features/preferences/subscription-auth'
 import { usePreferences } from '@/features/preferences/use-preferences'
 
 type FieldProps = Omit<ComponentProps<'input'>, 'id' | 'name' | 'value' | 'disabled' | 'onChange'> & {
@@ -42,7 +43,8 @@ export function PreferencesPage() {
   const { t } = useI18n()
   const preferences = usePreferences()
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
-  const realtime = ['realtime', 'realtime-full'].includes(preferences.values['openailive.mode'])
+  const subscription = preferences.subscriptionAvailable && preferences.values['openailive.auth'] === 'chatgpt'
+  const realtime = !subscription && ['realtime', 'realtime-full'].includes(preferences.values['openailive.mode'])
   const isDisabled = (name: PreferenceKey) =>
     !preferences.connected ||
     preferences.readOnly.has(name) ||
@@ -259,7 +261,28 @@ export function PreferencesPage() {
           {section(
             'AI',
             <>
-              {inputField({ name: 'ai.token', label: 'トークン', type: 'password' })}
+              {preferences.subscriptionAvailable &&
+                selectField(
+                  'openailive.auth',
+                  'AI connection',
+                  [
+                    { value: 'api-key', label: 'OpenAI (API key)', translate: false },
+                    { value: 'chatgpt', label: 'ChatGPT subscription', translate: false },
+                  ],
+                  'Applied on the next manual start. No automatic fallback.',
+                  true
+                )}
+              {subscription ? (
+                preferences.http ? (
+                  <SubscriptionAuth disabled={!preferences.connected || preferences.busy} />
+                ) : (
+                  <p className="text-sm sm:col-span-2">
+                    Open the robot’s Wi-Fi Settings page to sign in to ChatGPT or sign out.
+                  </p>
+                )
+              ) : (
+                inputField({ name: 'ai.token', label: 'OpenAI API key', type: 'password' })
+              )}
               <div className="grid gap-2 sm:col-span-2">
                 <Label htmlFor="ai.context">{t('システムロール')}</Label>
                 <Textarea
@@ -276,28 +299,37 @@ export function PreferencesPage() {
           {section(
             'OpenAI',
             <>
-              {selectField(
-                'openailive.mode',
-                '会話モード',
-                [
-                  { value: 'live', label: 'GPT-Live 1', translate: false },
-                  { value: 'realtime', label: 'GPT-Realtime 2.1 Mini', translate: false },
-                  { value: 'realtime-full', label: 'GPT-Realtime 2.1', translate: false },
-                ],
-                'モードは次回のLIVE開始時に適用されます。',
-                true
-              )}
+              {!subscription &&
+                selectField(
+                  'openailive.mode',
+                  '会話モード',
+                  [
+                    { value: 'live', label: 'GPT-Live 1', translate: false },
+                    { value: 'realtime', label: 'GPT-Realtime 2.1 Mini', translate: false },
+                    { value: 'realtime-full', label: 'GPT-Realtime 2.1', translate: false },
+                  ],
+                  'モードは次回のLIVE開始時に適用されます。',
+                  true
+                )}
               {realtime && (
                 <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
                   {t('Realtimeは無音でも接続を維持します。モデルと推論の強度は検索に使用します。')}
                 </p>
               )}
-              {inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
-              {selectField(
-                'openailive.reasoningEffort',
-                '推論の強度',
-                OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
+              {!subscription &&
+                inputField({ name: 'openailive.backendModel', label: 'モデル', required: true, pattern: '.*\\S.*' })}
+              {subscription && (
+                <p className="text-sm text-muted-foreground sm:col-span-2">
+                  ChatGPT subscription · GPT-Live voice with subscription reasoning and web search. Availability is
+                  checked when connecting.
+                </p>
               )}
+              {!subscription &&
+                selectField(
+                  'openailive.reasoningEffort',
+                  '推論の強度',
+                  OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
+                )}
               {selectField(
                 realtime ? 'openailive.realtimeVoice' : 'openailive.voice',
                 '声',

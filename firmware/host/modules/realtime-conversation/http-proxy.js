@@ -40,6 +40,7 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
           status: message.status,
           ok: message.status >= 200 && message.status < 300,
           location: message.location,
+          headers: message.headers,
           text: async () => decode(message.body),
         })
       releaseIdle(created)

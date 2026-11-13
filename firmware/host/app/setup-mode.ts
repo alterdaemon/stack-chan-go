@@ -52,12 +52,16 @@ function settingsWifiStatusFromNetworkState(state: NetworkState): SettingsStatus
 
 export function startSetupMode(application: SettingsApplication): Promise<SetupModeResult> {
   return new Promise((resolve) => {
+    const preferenceKeys = PREF_KEYS.filter(
+      ([domain, key]) =>
+        domain !== DOMAIN.openailive || key !== 'auth' || Modules.has('realtimeConversation/subscription'),
+    )
     const preferences = loadPreferenceConfig()
     preferences.time.timezone = applySystemTimezone(preferences.time.timezone)
     preferences.tts.volume = canonicalizeVolume(preferences.tts.volume)
     const status = createInitialSettingsStatus(preferences)
     const effectiveValues = Object.fromEntries(
-      PREF_KEYS.flatMap(([domain, key]) => {
+      preferenceKeys.flatMap(([domain, key]) => {
         const value = preferences[domain]?.[key]
         return value == null ? [] : [[`${domain}.${key}`, value]]
       }),
@@ -296,7 +300,7 @@ export function startSetupMode(application: SettingsApplication): Promise<SetupM
         status.ble = SettingsStatusValue.NOT_CONNECTED
         updateCurrentView()
       },
-      keys: PREF_KEYS,
+      keys: preferenceKeys,
       effectiveValues,
       readOnlyKeys: preferences.driver.typeLocked === true ? ['driver.type'] : [],
     })

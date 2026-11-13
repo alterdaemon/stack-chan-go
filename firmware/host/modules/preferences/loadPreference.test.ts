@@ -154,6 +154,7 @@ test('loadPreferences reads the selected time zone from preferences', async () =
 test('OpenAI preferences expose host defaults and stored overrides without changing AI preferences', async () => {
   const { loadPreferences, config, preference } = await setup()
   const defaults = {
+    auth: 'api-key',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'host-backend',
@@ -173,6 +174,7 @@ test('OpenAI preferences expose host defaults and stored overrides without chang
     'ai.context': 'shared-context',
   })
   assert.deepEqual(loadPreferences(DOMAIN.openailive), {
+    auth: 'api-key',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'saved-backend',
@@ -211,6 +213,7 @@ test('OpenAI preferences use the same whole MOD configuration override as GPT-Li
   modules.resetModules({ 'mod/config': { openaiLive: { backendModel: 'mod-backend' } } })
   const fresh = await import(new URL('./loadPreference.js?openai-mod', import.meta.url).href)
   assert.deepEqual(fresh.default(DOMAIN.openailive), {
+    auth: 'api-key',
     mode: 'live',
     realtimeVoice: 'marin',
     backendModel: 'mod-backend',

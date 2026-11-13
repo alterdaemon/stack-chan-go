@@ -113,6 +113,7 @@ export default class Conversation {
   #trialDirty = false
   #tools
   #signaling
+  #subscription
   #toolTimeout
   #realtime = false
   #callId
@@ -133,9 +134,24 @@ export default class Conversation {
   #liveResumed = false
 
   constructor(options, platform) {
-    if (!options || (!options.signaling && (typeof options.apiKey !== 'string' || !options.apiKey.trim())))
+    const subscription = options?.auth === 'chatgpt'
+    if (options?.auth !== undefined && !['api-key', 'chatgpt'].includes(options.auth))
+      throw new TypeError('Invalid authentication mode')
+    if (
+      subscription &&
+      (options.apiKey !== undefined ||
+        options.signaling !== undefined ||
+        options.mode === 'realtime' ||
+        options.tools ||
+        options.search)
+    )
+      throw new TypeError('Subscription authentication conflict')
+    if (
+      !subscription &&
+      (!options || (!options.signaling && (typeof options.apiKey !== 'string' || !options.apiKey.trim())))
+    )
       throw new TypeError('apiKey or signaling is required')
-    if ([options.signaling, options.apiKey].filter((v) => v !== undefined).length !== 1)
+    if (!subscription && [options.signaling, options.apiKey].filter((v) => v !== undefined).length !== 1)
       throw new TypeError('Choose apiKey or signaling')
     if (options.signaling) {
       const adapter = options.signaling
@@ -169,8 +185,15 @@ export default class Conversation {
     this.#realtime = options.mode === 'realtime'
     if (options.mode !== undefined && options.mode !== 'live' && !this.#realtime) throw new TypeError('Invalid mode')
     if (this.#realtime && options.signaling) throw new TypeError('Realtime requires apiKey')
+    if (subscription && options.model !== undefined && options.model !== 'gpt-live-1-codex')
+      throw new TypeError('Unsupported subscription model')
+    if (subscription && typeof options.instructions === 'string' && options.instructions.length > 8192)
+      throw new RangeError('Subscription prompt exceeds limit')
     this.#options = {
-      model: options.model ?? (this.#realtime ? 'gpt-realtime-2.1-mini' : 'gpt-live-1'),
+      model:
+        options.model ??
+        (subscription ? 'gpt-live-1-codex' : undefined) ??
+        (this.#realtime ? 'gpt-realtime-2.1-mini' : 'gpt-live-1'),
       instructions: options.instructions ?? '',
       voice: options.voice ?? 'marin',
       pitch: options.pitch ?? 0,
@@ -189,6 +212,14 @@ export default class Conversation {
     if (this.#realtime && !['gpt-realtime-2.1-mini', 'gpt-realtime-2.1'].includes(this.#options.model))
       throw new TypeError('Invalid Realtime model')
     this.#platform = platform
+    if (subscription) {
+      if (typeof platform.createSubscription !== 'function')
+        throw new TypeError('Subscription unavailable on this build')
+      this.#subscription = platform.createSubscription({
+        onLogout: () =>
+          this.#fail(new ConversationError('Subscription sign-in required', 'subscription_signed_out', 'auth')),
+      })
+    }
     this.#toolTimeout = options.toolTimeout ?? (this.#realtime ? 50000 : undefined)
     if (options.tools !== undefined && !Array.isArray(options.tools)) throw new TypeError('Invalid tools')
     const tools =
@@ -271,7 +302,7 @@ export default class Conversation {
       this.#transport = this.#platform.createTransport((event) => this.#receive(event))
       this.#transport.setVolume(this.#volume)
       // Realtime must acknowledge the requested prompt before receiving speech.
-      if (this.#realtime) this.#transport.setMuted(true)
+      if (this.#realtime || this.#subscription) this.#transport.setMuted(true)
       this.#connectTimer = this.#after(60000, () =>
         this.#fail(new ConversationError('Session startup timed out', 'connect_timeout', 'connect')),
       )
@@ -297,6 +328,7 @@ export default class Conversation {
     this.#transport?.quiesce?.()
     this.#cancelTimer(this.#connectTimer)
     this.#tools?.close()
+    this.#subscription?.cancelJob()
     this.#connection?.reject(new ConversationError('Connection cancelled', 'cancelled', 'connect'))
     this.#setState('closing')
     if (this.#realtime) {
@@ -330,7 +362,7 @@ export default class Conversation {
       return Promise.reject(new ConversationError('Session is not connected', 'not_connected', 'mute'))
     if (this.#mute) return Promise.reject(new ConversationError('A mute command is pending', 'command_pending', 'mute'))
     if (value === this.#muted) return Promise.resolve()
-    if (this.#realtime) {
+    if (this.#realtime || this.#subscription) {
       this.#transport.setMuted(value)
       this.#muted = value
       return Promise.resolve()
@@ -360,6 +392,20 @@ export default class Conversation {
     try {
       const options = this.#options
       let response
+      if (this.#subscription) {
+        this.#signaled = true
+        const result = await this.#subscription.create(
+          sdp,
+          options,
+          (message) => this.#receive({ type: 'message', data: JSON.stringify(message), subscription: true }),
+          () => this.#state === 'connecting' && !this.#finishing && !this.#result,
+        )
+        if (this.#finishing || this.#result || this.#state !== 'connecting') return
+        this.#callId = result.callId
+        this.#transport.acceptAnswer(result.sdp)
+        this.#subscription.activate()
+        return
+      }
       if (this.#signaling) {
         response = await this.#signaling.create(
           sdp,
@@ -484,7 +530,7 @@ export default class Conversation {
         throw new ConversationError(`WebRTC failure (${event.code})`, 'transport_error', event.stage ?? 'transport')
       if (event.type === 'disconnected')
         throw new ConversationError('WebRTC disconnected before session.closed', 'connection_lost', 'transport')
-      if (event.type !== 'message') return
+      if (event.type !== 'message' || (this.#subscription && !event.subscription)) return
       if (typeof event.data !== 'string' || event.data.length > 131072)
         throw new ConversationError('Invalid event size', 'event_limit', 'events')
       let message
@@ -495,7 +541,13 @@ export default class Conversation {
       }
       if (!message || typeof message.type !== 'string')
         throw new ConversationError('Invalid event', 'invalid_event', 'events')
-      if (this.#platform.debug?.enabled) this.#diagnose('receive', message)
+      if (this.#platform.debug?.enabled)
+        this.#diagnose(
+          'receive',
+          this.#subscription && message.type === 'error'
+            ? { type: 'error', error: { code: 'subscription_error' } }
+            : message,
+        )
       this.#tools?.receive(message)
       switch (message.type) {
         case 'input_audio_buffer.speech_started':
@@ -506,7 +558,7 @@ export default class Conversation {
           break
         case 'output_audio_buffer.cleared':
           if (
-            this.#realtime &&
+            (this.#realtime || this.#subscription) &&
             this.#options.bargeIn &&
             !this.#muted &&
             !this.#miniInterrupted &&
@@ -606,18 +658,47 @@ export default class Conversation {
           }
           break
         case 'session.started':
-          if (message.session?.id !== this.#sessionId)
+          if (this.#subscription && typeof message.session?.id === 'string') this.#sessionId = message.session.id
+          if (!this.#subscription && message.session?.id !== this.#sessionId)
             throw new ConversationError('Session ID mismatch', 'session_mismatch', 'events')
           this.#ready = true
+          if (this.#subscription) this.#transport.setMuted(this.#muted)
           this.#cancelTimer(this.#connectTimer)
           if (this.#state === 'closing') this.#sendClose()
           else {
             this.#setState('connected')
-            this.#connection.resolve({ id: this.#sessionId })
+            this.#connection.resolve({
+              ...(this.#sessionId ? { id: this.#sessionId } : {}),
+              ...(this.#subscription ? { callId: this.#callId } : {}),
+            })
           }
+          break
+        case 'input_transcript.added':
+        case 'output_transcript.added':
+          if (!this.#subscription) break
+          if (typeof message.item?.text !== 'string') break
+          if (message.item.text.length > 8192)
+            throw new ConversationError('Subscription transcript exceeds limit', 'event_limit', 'events')
+          if (message.type === 'output_transcript.added') {
+            this.#miniInterrupted = false
+            this.#transport.resumeOutput?.()
+          }
+          break
+        case 'turn.done':
+          if (
+            !this.#subscription ||
+            !['user', 'assistant'].includes(message.turn?.role) ||
+            typeof message.turn.transcript !== 'string'
+          )
+            break
+          if (message.turn.transcript.length > 8192)
+            throw new ConversationError('Subscription transcript exceeds limit', 'event_limit', 'events')
+          this.#notify('onTranscript', { role: message.turn.role, delta: message.turn.transcript })
           break
         case 'session.input_transcript.delta':
         case 'session.output_transcript.delta':
+          // Final turns are the private history; optional partial events may repeat them.
+          if (this.#subscription) break
           if (
             typeof message.delta !== 'string' ||
             !Number.isFinite(message.start_ms) ||
@@ -653,6 +734,8 @@ export default class Conversation {
           break
         }
         case 'error': {
+          if (this.#subscription)
+            throw new ConversationError('Subscription session failed', 'subscription_error', 'events')
           if (
             this.#trial &&
             (message.error?.event_id === this.#trial.id || message.error?.client_event_id === this.#trial.id)
@@ -789,6 +872,7 @@ export default class Conversation {
     if (this.#platform.debug?.enabled) this.#diagnose('interrupt.accept', { type: reason })
     this.#transport.interruptOutput?.()
     this.#tools?.cancelPending(true)
+    this.#subscription?.cancelJob()
     this.#cancelTimer(this.#continuationTimer)
     this.#continuation = this.#sentContinuation = undefined
     this.#continuationInFlight = false
@@ -832,6 +916,10 @@ export default class Conversation {
     }
   }
   #send(message) {
+    if (this.#subscription) {
+      this.#subscription.send(message)
+      return
+    }
     if (this.#platform.debug?.enabled) this.#diagnose('send.queue', message)
     if (this.#realtime && message.type === 'response.create') {
       this.#continuation = message
@@ -877,8 +965,13 @@ export default class Conversation {
   #fail(error) {
     if (this.#platform.debug?.enabled) this.#diagnose('failure', { type: 'error', error })
     if (this.#finishing || this.#result) return
-    if (!(error instanceof ConversationError))
-      error = new ConversationError(error?.message ?? 'Conversation failed', 'operation_failed', 'transport')
+    if (!(error instanceof ConversationError)) {
+      if (this.#subscription && error?.code === 'subscription_sign_in_required')
+        error = new ConversationError('Sign in to ChatGPT in Wi-Fi Settings', error.code, 'auth')
+      else if (this.#subscription && error?.code === 'subscription_http_error')
+        error = new ConversationError('Subscription request rejected', error.code, 'signaling', error.status)
+      else error = new ConversationError(error?.message ?? 'Conversation failed', 'operation_failed', 'transport')
+    }
     this.#connection?.reject(error)
     this.#notify('onError', error)
     void this.#finish({ finalized: false, reason: error.code, usage: this.#usage }, true)
@@ -917,6 +1010,7 @@ export default class Conversation {
     this.#rejectTrial(new ConversationError('Session ended', 'closed', 'tune'))
     this.#tools?.close()
     this.#signalRequest?.cancel?.()
+    this.#subscription?.dispose()
     this.#continuation = undefined
     this.#sentContinuation = undefined
     for (const timer of this.#timers) this.#platform.clearTimeout(timer)
@@ -930,7 +1024,7 @@ export default class Conversation {
     // Keep silent media clocks running while the peer ends its stream. Live
     // already reaches teardown after session.closed or its grace deadline.
     const confirmed = hangup ? await hangup : undefined
-    if (!this.#realtime && (!result.finalized || this.#signaling) && this.#sessionId)
+    if (!this.#subscription && !this.#realtime && (!result.finalized || this.#signaling) && this.#sessionId)
       void this.#hangup(this.#sessionId, this.#key)
     try {
       await transport?.close()

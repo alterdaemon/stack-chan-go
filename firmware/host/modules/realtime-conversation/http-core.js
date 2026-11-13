@@ -10,6 +10,8 @@ export function requestHttps(request, platform, setCancel = () => {}) {
       received = 0,
       status,
       location,
+      responseHeaders,
+      stream,
       finished = false
     let body = request.body
     function finish(error) {
@@ -27,7 +29,18 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         if (error) {
           buffer = undefined
           reject(error)
-        } else resolve({ status, location, body: buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer() })
+        } else {
+          try {
+            resolve({
+              status,
+              location,
+              headers: responseHeaders,
+              body: stream ? stream.finish() : buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer(),
+            })
+          } catch {
+            reject(new Error('Invalid subscription response stream'))
+          }
+        }
       }, 0)
     }
     try {
@@ -49,12 +62,23 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         method: 'POST',
         path: request.path,
         headers,
-        onHeaders(code, responseHeaders) {
+        onHeaders(code, incomingHeaders) {
           if (finished) return
           status = code
-          const value = responseHeaders.get('location')
+          const value = incomingHeaders.get('location')
           if (typeof value === 'string' && value.length <= 4096) location = value
-          if (Number(responseHeaders.get('content-length')) > 131072) finish(new Error('HTTPS response exceeds limit'))
+          responseHeaders = {}
+          for (const name of ['location', 'openai-session-id', 'content-type']) {
+            const header = incomingHeaders.get(name)
+            if (typeof header === 'string' && header.length <= 4096) responseHeaders[name] = header
+          }
+          if (request.responseFormat === 'subscription-response' && code >= 200 && code < 300) {
+            if (!/^text\/event-stream(?:;|$)/i.test(responseHeaders['content-type'] ?? ''))
+              return finish(new Error('Expected subscription event stream'))
+            stream = platform.createSubscriptionStream()
+          }
+          if (Number(incomingHeaders.get('content-length')) > (stream ? 2097152 : 131072))
+            finish(new Error('HTTPS response exceeds limit'))
         },
         onWritable(count) {
           if (finished || !count) return
@@ -72,6 +96,18 @@ export function requestHttps(request, platform, setCancel = () => {}) {
           if (finished || !count) return
           try {
             const end = received + count
+            if (stream) {
+              if (end > 2097152) throw new Error()
+              const chunk = new Uint8Array(Math.min(count, 1024))
+              while (count) {
+                const view = chunk.subarray(0, Math.min(count, chunk.length))
+                if (this.read(view) !== view.length) throw new Error()
+                stream.write(view)
+                count -= view.length
+              }
+              received = end
+              return
+            }
             if (end > 131072) throw new Error()
             if (!buffer || end > buffer.length) {
               const next = new Uint8Array(Math.min(131072, Math.max(end, (buffer?.length ?? 512) * 2)))
@@ -99,23 +135,26 @@ export function requestHttps(request, platform, setCancel = () => {}) {
 // late callbacks so closing a timed-out request cannot create a new socket.
 export function createClosingClient(Client, options) {
   let closed = false
-  class DNS extends options.dns.io {
-    resolve(request) {
-      const guarded = { ...request }
-      for (const name of ['onResolved', 'onError'])
-        guarded[name] = function (...args) {
-          if (!closed) request[name]?.apply(this, args)
-        }
-      return super.resolve(guarded)
-    }
-  }
-  const client = new Client({ ...options, dns: { ...options.dns, io: DNS } })
+  const client = new Client({ ...options, dns: { ...options.dns, io: closingDNS(options.dns.io, () => closed) } })
   return {
     request: (request) => client.request(request),
     close() {
       closed = true
       client.close()
     },
+  }
+}
+
+export function closingDNS(DNS, isClosed) {
+  return class extends DNS {
+    resolve(request) {
+      const guarded = { ...request }
+      for (const name of ['onResolved', 'onError'])
+        guarded[name] = function (...args) {
+          if (!isClosed()) request[name]?.apply(this, args)
+        }
+      return super.resolve(guarded)
+    }
   }
 }
 

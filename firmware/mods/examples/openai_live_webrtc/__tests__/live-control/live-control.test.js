@@ -62,7 +62,7 @@ async function run() {
   const edgePoint = () => [1, app.height - 1]
   function assertTranslucent() {
     const opacity = (control.first.skin.fill[0] & 0xff) / 255
-    assert(Math.abs(opacity - 0.25) < 0.005, 'LIVE background stays 75% transparent across session states')
+    assert(Math.abs(opacity - 0.25) < 0.005, `LIVE background opacity ${opacity} in ${label()} must stay 0.25`)
   }
   assertTranslucent()
   control.delegate('onLiveState', 'standby')

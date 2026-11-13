@@ -64,6 +64,29 @@ def build_full_image(bootloader, table, app, layout):
     return bytes(image)
 
 
+def require_credential_free(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = re.sub(r'[^a-z]', '', key.lower())
+            require(not (normalized in ('apikey', 'accesstoken', 'refreshtoken', 'idtoken',
+                                        'authorizationcode', 'deviceauthid', 'codeverifier', 'sessiontoken',
+                                        'websession', 'websessiontoken', 'sessioncookie', 'authorization',
+                                        'securenextauthsessiontoken') and item),
+                    'Do not embed credentials in a distributed image')
+            require_credential_free(item)
+    elif isinstance(value, list):
+        for item in value:
+            require_credential_free(item)
+
+
+def require_credential_free_image(image):
+    # Compiled strings/resources must not contain recognizable provisioned grants.
+    for pattern in (rb'sk-[A-Za-z0-9_-]{20,}',
+                    rb'eyJ[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{8,16384}\.[A-Za-z0-9_-]{8,4096}'):
+        require(re.search(pattern, image) is None,
+                'Do not embed credentials in a distributed image')
+
+
 def package_update(root, output):
     version = json.loads((root / 'firmware/package.json').read_text())['version']
     revision_version = re.fullmatch(r'\d+\.\d+\.\d+-R([1-9]\d*)', version)
@@ -74,6 +97,8 @@ def package_update(root, output):
     layout = json.loads((root / 'firmware/host/app/gpt-live-layout.json').read_text())
     requested = json.loads((root / 'firmware/host/app/manifest_openai_live_settings.json').read_text())['config']
     flat = json.loads((project / 'manifest_flat.json').read_text())
+    require_credential_free(requested)
+    require_credential_free(flat['config'])
     require(flat['config'].get('firmwareVersion') == version, 'Built firmware version differs from source')
     require(flat['config']['openaiLive'] == requested['openaiLive'], 'Built GPT-Live settings differ from source')
     require(not requested['openaiLive'].get('apiKey'), 'Do not embed an API key in a distributed image')
@@ -89,6 +114,7 @@ def package_update(root, output):
         require(key + '=y' not in sdkconfig, 'Unsupported security setting: ' + key)
     app_path = build / 'xs_esp32.bin'
     app = app_path.read_bytes()
+    require_credential_free_image(app)
     table = (build / 'partition_table/partition-table.bin').read_bytes()
     update = validate_update(app, table, layout)
     require({int(offset, 0): name for offset, name in flash['flash_files'].items()} == {

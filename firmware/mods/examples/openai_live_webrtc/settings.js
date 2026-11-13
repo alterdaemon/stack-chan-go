@@ -16,13 +16,16 @@ function copyConfig(value) {
 }
 
 export function readLiveSettings(defaults, getPreference) {
-  const token = getPreference('ai', 'token')
+  const auth = getPreference('openailive', 'auth') ?? 'api-key'
+  if (!['api-key', 'chatgpt'].includes(auth)) throw new Error('Invalid authentication mode')
+  const subscription = auth === 'chatgpt'
+  const token = subscription ? undefined : getPreference('ai', 'token')
   const context = getPreference('ai', 'context')
   const backendModel = getPreference('openailive', 'backendModel')
   const reasoningEffort = getPreference('openailive', 'reasoningEffort')
   const bargeIn = getPreference('openailive', 'bargeIn')
   const savedMode = getPreference('openailive', 'mode')
-  const mode = savedMode === 'realtime' || savedMode === 'realtime-full' ? 'realtime' : 'live'
+  const mode = !subscription && ['realtime', 'realtime-full'].includes(savedMode) ? 'realtime' : 'live'
   const realtimeVoice = getPreference('openailive', 'realtimeVoice')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
@@ -35,6 +38,8 @@ export function readLiveSettings(defaults, getPreference) {
   ]) {
     const prop = `openailive.${key}`
     const saved = getPreference('openailive', key)
+    if (subscription && key === 'voice' && !isLiveVoicePreference(prop, saved ?? defaults[key] ?? fallback))
+      throw new Error('Unsupported subscription voice')
     const value = isLiveVoicePreference(prop, saved)
       ? saved
       : isLiveVoicePreference(prop, defaults[key])
@@ -46,6 +51,8 @@ export function readLiveSettings(defaults, getPreference) {
     ...copyConfig(defaults),
     ...voiceSettings,
     mode,
+    auth,
+    ...(subscription ? { model: 'gpt-live-1-codex', delegation: undefined, tools: undefined, search: undefined } : {}),
     ...(mode === 'realtime'
       ? {
           model: savedMode === 'realtime-full' ? 'gpt-realtime-2.1' : 'gpt-realtime-2.1-mini',
@@ -55,7 +62,7 @@ export function readLiveSettings(defaults, getPreference) {
     bargeIn: bargeIn === 1 || bargeIn === '1',
     ...(typeof backendModel === 'string' && backendModel.trim() ? { backendModel: backendModel.trim() } : {}),
     ...(['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoningEffort) ? { reasoningEffort } : {}),
-    apiKey: typeof token === 'string' ? token.trim() : (defaults.apiKey ?? ''),
+    apiKey: subscription ? undefined : typeof token === 'string' ? token.trim() : (defaults.apiKey ?? ''),
     instructions: liveStyleInstructions(
       typeof context === 'string' && context.trim() ? context.trim() : (defaults.instructions ?? ''),
       voiceSettings.style,

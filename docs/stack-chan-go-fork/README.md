@@ -19,7 +19,7 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 | Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
 | Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
-| Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
+| Personal settings | Password-protected Wi-Fi Settings and Bluetooth. One AI connection selector, shared instructions and voice controls, with an experimental ChatGPT sign-in flow in R5. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
@@ -363,3 +363,37 @@ Realtime models stay connected during silence and use the backend model/effort
 for their `search_web` Responses call. Adding the full model does not establish
 better persona adherence.
 Repository cleanup does not rewrite saved preferences.
+
+
+### ChatGPT subscription in R5
+
+On the robot, open Settings and connect a phone or computer to
+`http://<robot-IP>/settings/`. Configure the WWW password before account sign-in.
+In **AI → AI connection**, choose **ChatGPT subscription**, then **Continue with
+ChatGPT**. Open the displayed OpenAI sign-in link, enter the displayed code and
+approve the account on OpenAI's page. Return to the robot's Settings page to see
+the account status. Cancel a pending attempt or retry after expiry; reload the
+page to recover the robot's current sign-in status. **Sign out** clears the
+robot's grant and ends its active subscription call. If LIVE shows **SIGN IN**,
+return to this Wi-Fi page to authorize again.
+
+The same **System prompt** remains editable under AI. The same **OpenAI** section
+contains voice, Pitch, Style, interruption and auto disconnect for subscription
+operation. API-only conversation mode, backend model, reasoning effort and API
+key controls are hidden while subscription is selected. Their saved values remain
+available when returning to **OpenAI (API key)**. Save settings, leave Settings
+and manually start LIVE. Switching the saved choice does not restart a call.
+Neither connection automatically falls back to the other, including for search.
+
+This initial R5 implementation keeps subscription grants only in RAM; restarting
+the robot requires sign-in again. No grant is stored in ordinary preferences,
+returned to the browser, or embedded in a distributed image. The browser is used
+for sign-in; it does not run the voice or reasoning connection.
+
+The subscription path uses the private Codex Live contract and a single
+subscription Responses backend, `gpt-6.1-terra`, with hosted web search. It requires
+account access to those services. It does not make every API model available.
+Answers are bounded and search is reported as verified only after completed tool
+execution with HTTP(S) citation URLs. Service errors end or fail the selected
+operation; they do not use a saved API key. Protected persistent storage and real
+account/device qualification remain prerequisites for completing this feature.

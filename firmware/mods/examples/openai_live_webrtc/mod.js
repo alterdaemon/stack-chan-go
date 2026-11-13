@@ -16,8 +16,15 @@ const messages = {
   connected: 'GPT-Live connected',
   closing: 'Stopping GPT-Live',
   configuration: 'Set AI token in Preferences',
+  'sign-in': 'Sign in to ChatGPT in Wi-Fi Settings',
 }
-const notices = { idle: 'STOPPED', connected: 'STARTED', configuration: 'SET KEY', error: 'ERROR' }
+const notices = {
+  idle: 'STOPPED',
+  connected: 'STARTED',
+  configuration: 'SET KEY',
+  'sign-in': 'SIGN IN',
+  error: 'ERROR',
+}
 
 function createLiveButton(toggle) {
   const { Behavior, Container, Label, Skin } = Modules.importNow('piu/MC')
@@ -152,7 +159,7 @@ export function onContextCreated(robot) {
           // A display failure must not affect the conversation.
         }
       },
-      state === 'error' || state === 'configuration' ? 5000 : 1200,
+      state === 'error' || state === 'configuration' || state === 'sign-in' ? 5000 : 1200,
     )
   }
   function updateMouth(value) {

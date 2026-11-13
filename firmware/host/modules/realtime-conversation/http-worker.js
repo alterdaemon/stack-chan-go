@@ -3,14 +3,21 @@
 
 import { createClosingClient, guardSocketCallbacks, requestHttps } from 'realtimeConversation/http-core'
 import { createHttpQueue } from 'realtimeConversation/http-queue'
+import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
 import { summarizeWebSearchResponse } from 'realtimeConversation/web-search'
 import tlsCache from 'ssl/cache'
 import TextDecoder from 'text/decoder'
 import Time from 'time'
 import Timer from 'timer'
 
+const decoder = new TextDecoder('utf-8', { fatal: true })
 const CheckedTCP = guardSocketCallbacks(device.network.https.client.socket.TCP.io)
 const platform = {
+  createSubscriptionStream: () =>
+    createSubscriptionStream(
+      (bytes) => decoder.decode(bytes),
+      (text) => ArrayBuffer.fromString(text),
+    ),
   createClient: ({ certificate, ...options }) =>
     createClosingClient(device.network.https.client.io, {
       ...device.network.https.client,

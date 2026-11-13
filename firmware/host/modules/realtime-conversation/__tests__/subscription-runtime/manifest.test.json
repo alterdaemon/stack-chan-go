@@ -1,0 +1,21 @@
+{
+  "include": [
+    "$(MODDABLE)/examples/manifest_base.json",
+    "../../../testing/manifest.json",
+    "$(MODULES)/data/base64/manifest.json",
+    "$(MODULES)/data/text/decoder/manifest.json",
+    "../../portable/manifest.json"
+  ],
+  "modules": {
+    "main": "./runtime.test",
+    "realtimeConversation/subscription": "../../subscription",
+    "realtimeConversation/http": "./http",
+    "rng": "./rng",
+    "realtimeConversation/http-core": "../../http-core"
+  },
+  "defines": {
+    "main": {
+      "async": 1
+    }
+  }
+}

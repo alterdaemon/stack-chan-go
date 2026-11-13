@@ -36,6 +36,22 @@ class UpdateTests(unittest.TestCase):
         self.bootloader[0] = 0xE9
         struct.pack_into('<H', self.bootloader, 12, self.layout['chip_id'])
 
+    def test_account_credentials_are_rejected_without_printing_their_values(self):
+        for key in ('access_token', 'refreshToken', 'id_token', 'apiKey', 'device_auth_id', 'code_verifier', 'session_cookie', 'webSessionToken'):
+            with self.subTest(key=key):
+                with self.assertRaises(ValueError) as result:
+                    package.require_credential_free({'nested': [{'subscription': {key: 'synthetic-secret'}}]})
+                self.assertNotIn('synthetic-secret', str(result.exception))
+        package.require_credential_free({'openaiLive': {'apiKey': '', 'auth': 'api-key'}, 'voice': 'marin'})
+
+    def test_compiled_images_reject_recognizable_provisioned_tokens(self):
+        for token in (b'sk-' + b'synthetic' * 4,
+                      b'.'.join((b'eyJhbGciOiJub25lIn0', b'eyJzdWIiOiJzeW50aGV0aWMifQ', b'c3ludGhldGlj'))):
+            with self.assertRaises(ValueError) as result:
+                package.require_credential_free_image(b'compiled asset\0' + token + b'\0')
+            self.assertNotIn(token.decode(), str(result.exception))
+        package.require_credential_free_image(b'access_token\0refresh_token\0public client metadata')
+
     def test_full_image_contains_the_same_app_and_boot_files_and_erases_all_remaining_bytes(self):
         full = package.build_full_image(self.bootloader, self.table, self.app, self.layout)
         factory = next(p for p in self.layout['partitions'] if p['type'] == 0)
