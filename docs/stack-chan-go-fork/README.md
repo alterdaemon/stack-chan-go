@@ -266,6 +266,17 @@ competing FIFO writers. XS debug builds retain debugger ownership. Diagnostic co
 binary Android USB dock owns the port; do not send console commands into that
 stream. Initial supported target: M5StackChan CoreS3.
 
+Diagnostic parameter profiles `diag live voice`, `diag live prompt` and
+`diag live pitch` restore saved voice, then prompt, then pitch cumulatively.
+`diag live start` restores the full configured session. Standard/voice keep
+instructions empty when comparing local Interruption Off and On.
+
+The reusable USB qualification tool is `firmware/scripts/mod/qualify-live.py` (prefix `codebase/` from the workspace root). Run with `--port`, the validated ELF `--expected-sha`, a new private `--output` directory, and `--suite voices|parameters|backend|audio|cycles|soak`. It uses one `capture-debug.py` child, sequential applied acknowledgements, running identity/loss checks and final Off. Voice candidates come from pinned Codex V3 source; availability is established by actual readiness, not call HTTP201. Parameter trials cover all pitch steps, styles, volume/standby bounds, synthetic standard/long prompts and both interruption policies. `diag set pitch|volume|standby|style|prompt <value>|saved` affects only USB starts through a separate MOD preference overlay, never saved settings. The tool does not flash, provision, authenticate, read tokens or change preferences. Connection/soak results do not establish audible quality or a mixed conversational workload.
+
+On an active subscription call, `diag set probe reasoning|search` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.
+
+USB backend parameter trials use `diag set model gpt-6.1-terra|gpt-6-luna|saved` and `diag set effort none|low|medium|high|xhigh|max|saved` while LIVE is stopped. They override only the independent subscription backend fields in RAM. `--suite backend` tests each fixed model/effort through actual reasoning requests and a cited search per model with both interruption settings. Capture `backend.start` model/effort and terminal validated results; a request being sent is not a passing result.
+
 ## Conversation lights and head movement
 
 On CoreS3, Live, Realtime standard and Realtime mini use all 12 head LEDs:
@@ -524,20 +535,9 @@ succeeded. Ordinary session Stop retains sign-in. Cloud grant revocation is not
 performed by local sign-out.
 
 The subscription path uses the private Codex Live contract and a single
-subscription Responses backend, `gpt-6.1-terra`, with hosted web search. It requires
+explicitly selected subscription Responses backend (default `gpt-6.1-terra`), with hosted web search. It requires
 account access to those services. It does not make every API model available.
 Answers are bounded and search is reported as verified only after completed tool
 execution with HTTP(S) citation URLs. Service errors end or fail the selected
 operation; they do not use a saved API key. Real account/device qualification,
 including actual protected-key availability and power-loss tests, remains required.
-
-Diagnostic parameter profiles `diag live voice`, `diag live prompt` and
-`diag live pitch` restore saved voice, then prompt, then pitch cumulatively.
-`diag live start` restores the full configured session. Standard/voice keep
-instructions empty when comparing local Interruption Off and On.
-
-The reusable USB qualification tool is `firmware/scripts/mod/qualify-live.py` (prefix `codebase/` from the workspace root). Run with `--port`, the validated ELF `--expected-sha`, a new private `--output` directory, and `--suite voices|parameters|backend|audio|cycles|soak`. It uses one `capture-debug.py` child, sequential applied acknowledgements, running identity/loss checks and final Off. Voice candidates come from pinned Codex V3 source; availability is established by actual readiness, not call HTTP201. Parameter trials cover all pitch steps, styles, volume/standby bounds, synthetic standard/long prompts and both interruption policies. `diag set pitch|volume|standby|style|prompt <value>|saved` affects only USB starts through a separate MOD preference overlay, never saved settings. The tool does not flash, provision, authenticate, read tokens or change preferences. Connection/soak results do not establish audible quality or a mixed conversational workload.
-
-On an active subscription call, `diag set probe reasoning|search` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.
-
-USB backend parameter trials use `diag set model gpt-6.1-terra|gpt-6-luna|saved` and `diag set effort none|low|medium|high|xhigh|max|saved` while LIVE is stopped. They override only the independent subscription backend fields in RAM. `--suite backend` tests each fixed model/effort through actual reasoning requests and a cited search per model with both interruption settings. Capture `backend.start` model/effort and terminal validated results; a request being sent is not a passing result.
