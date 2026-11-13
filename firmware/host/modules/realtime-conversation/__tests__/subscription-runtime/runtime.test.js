@@ -55,7 +55,7 @@ const ordering = new SubscriptionLive({
   uuid: () => 'id',
   fetch: async () => ({
     ok: true,
-    headers: { 'openai-session-id': 'rtc_ordering' },
+    headers: { location: '/v1/live/rtc_ordering' },
     text: async () => 'v=0 answer',
   }),
   openControl: async () => {

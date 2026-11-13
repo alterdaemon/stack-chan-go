@@ -24,7 +24,7 @@ const auth = new SubscriptionAuth({
 })
 
 // ECMA-419 WSS control only: no media, extra Worker, or idle polling loop.
-export function openSubscriptionControl(callId, headers, onMessage) {
+export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
     const network = device.network.wss
     const Client = network?.io ?? device.network.ws?.io
@@ -101,7 +101,7 @@ export function openSubscriptionControl(callId, headers, onMessage) {
         } catch {}
       },
     }
-    const deadline = Timer.set(() => fail(true), 15000)
+    const deadline = Timer.set(() => fail(true), timeoutMs)
     try {
       socket = new Client({
         ...network,
@@ -169,6 +169,7 @@ export function createSubscription(options) {
     auth,
     fetch,
     openControl: openSubscriptionControl,
+    wait: (delay) => new Promise((resolve) => Timer.set(resolve, delay)),
     uuid: () => {
       const bytes = new Uint8Array(RNG.get(16))
       bytes[6] = (bytes[6] & 15) | 64

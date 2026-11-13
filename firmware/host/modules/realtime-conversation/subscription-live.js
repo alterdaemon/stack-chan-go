@@ -21,9 +21,9 @@ export function parseSubscriptionCall(response, sdp) {
     callId = location
       .split('?')[0]
       .split('/')
+      .reverse()
       .find((part) => /^(?:rtc_[A-Za-z0-9_-]+|[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/i.test(part))
   }
-  callId ??= headers['openai-session-id']
   if (!id(callId) || !/^(?:rtc_|[a-f0-9]{8}-)/i.test(callId))
     throw Object.assign(new Error('Missing subscription call identity'), { code: 'subscription_invalid_call' })
   if (typeof sdp !== 'string' || !sdp.startsWith('v=0') || sdp.length > 65536)
@@ -71,8 +71,8 @@ export class SubscriptionLive {
   #cleared = false
   #context = []
 
-  constructor({ auth, fetch, openControl, uuid, onLogout }) {
-    Object.assign(this, { auth, fetch, openControl, uuid })
+  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now }) {
+    Object.assign(this, { auth, fetch, openControl, uuid, wait, now })
     this.#unsubscribe = auth.onLogout(() => {
       this.dispose()
       onLogout?.()
@@ -140,7 +140,28 @@ export class SubscriptionLive {
       if (!this.#closed && current()) onAnswer?.(bootstrap)
       // Even a late create must acquire a bounded control connection to close the remote call.
       stage = 'control'
-      this.#channel = await this.openControl(bootstrap.callId, headers, (message) => this.#receive(message))
+      const deadline = this.now() + 15000
+      const activationDelays = [100, 300, 800]
+      for (let attempt = 0; ; attempt++) {
+        const remaining = deadline - this.now()
+        if (remaining <= 0)
+          throw Object.assign(new Error('Subscription control timed out'), { code: 'subscription_control_timeout' })
+        try {
+          this.#channel = await this.openControl(
+            bootstrap.callId,
+            headers,
+            (message) => this.#receive(message),
+            remaining,
+          )
+          break
+        } catch (error) {
+          // A newly created call may briefly be unavailable until ICE activates.
+          // Retry this same call only; never create another call or change auth.
+          if (error?.status !== 404 || attempt >= activationDelays.length || this.#closed || !current()) throw error
+          await this.wait(Math.min(activationDelays[attempt], Math.max(0, deadline - this.now())))
+          if (this.#closed || !current()) throw new Error('Subscription start cancelled')
+        }
+      }
       if (this.#closed || !current()) {
         this.#channel.send({ type: 'session.close' })
         this.#channel.close()

@@ -425,6 +425,23 @@ test('private call identity is distinct from session ID, and UTF-8 appends stay 
     /origin/,
   )
   assert.throws(() => parseSubscriptionCall({ ok: true, headers: {} }, 'v=0'), /identity/)
+  assert.throws(
+    () => parseSubscriptionCall({ ok: true, headers: { 'openai-session-id': 'rtc_session' } }, 'v=0'),
+    /identity/,
+  )
+  assert.equal(
+    parseSubscriptionCall(
+      {
+        ok: true,
+        headers: {
+          location: '/v1/live/rtc_parent/calls/rtc_actual',
+          'openai-session-id': 'rtc_session',
+        },
+      },
+      'v=0',
+    ).callId,
+    'rtc_actual',
+  )
   const text = 'Zażółć🌍'.repeat(120),
     events = subscriptionAppends(text, 'd1')
   assert.equal(events.map((x) => x.content[0].text).join(''), text)
@@ -454,7 +471,7 @@ function liveFixture() {
       if (url.includes('/realtime/calls'))
         return Promise.resolve({
           ok: true,
-          headers: { 'openai-session-id': 'rtc_call' },
+          headers: { location: '/v1/live/rtc_call' },
           text: async () => 'v=0\r\nanswer',
         })
       const request = new Promise((resolve) => {
@@ -479,6 +496,88 @@ function liveFixture() {
     },
   }
 }
+
+test('a transient activation 404 retries the same call within one deadline', async () => {
+  const f = liveFixture(),
+    joins = [],
+    waits = []
+  let now = 0
+  f.live.now = () => now
+  f.live.wait = async (delay) => {
+    waits.push(delay)
+    now += delay
+  }
+  f.live.openControl = async (id, _headers, _receive, timeout) => {
+    joins.push([id, timeout])
+    now += 50
+    if (joins.length < 3) throw Object.assign(new Error('fixture'), { status: 404 })
+    return { send() {}, close() {} }
+  }
+  await f.live.create(
+    'v=0 offer',
+    {},
+    () => {},
+    () => true,
+  )
+  assert.deepEqual(joins, [
+    ['rtc_call', 15000],
+    ['rtc_call', 14850],
+    ['rtc_call', 14500],
+  ])
+  assert.deepEqual(waits, [100, 300])
+  assert.equal(f.requests.length, 1)
+  f.live.dispose()
+})
+
+test('control retries are bounded, never retry denial and stop after cancellation or the deadline', async () => {
+  for (const status of [401, 403, 404, 410, 500]) {
+    const f = liveFixture()
+    let joins = 0
+    f.live.openControl = async () => {
+      joins++
+      throw Object.assign(new Error('fixture'), { status, code: 'subscription_control_failed' })
+    }
+    await assert.rejects(
+      f.live.create(
+        'v=0 offer',
+        {},
+        () => {},
+        () => true,
+      ),
+      (error) => error.status === status,
+    )
+    assert.equal(joins, status === 404 ? 4 : 1)
+    assert.equal(f.requests.length, 1)
+    f.live.dispose()
+  }
+  for (const cancel of [false, true]) {
+    const f = liveFixture()
+    let now = 0,
+      joins = 0
+    f.live.now = () => now
+    f.live.openControl = async () => {
+      joins++
+      now = 14950
+      throw Object.assign(new Error('fixture'), { status: 404 })
+    }
+    f.live.wait = async (delay) => {
+      now += delay
+      if (cancel) f.live.dispose()
+    }
+    await assert.rejects(
+      f.live.create(
+        'v=0 offer',
+        {},
+        () => {},
+        () => true,
+      ),
+      (error) =>
+        cancel ? error.message === 'Subscription start cancelled' : error.code === 'subscription_control_timeout',
+    )
+    assert.equal(joins, 1)
+    f.live.dispose()
+  }
+})
 test('subscription uses its own bootstrap and backend, deduplicates jobs, drops cancelled answers', async () => {
   const f = liveFixture()
   const boot = await f.live.create(
@@ -565,7 +664,7 @@ test('the SDP answer is delivered before joining the control socket', async () =
     uuid: () => 'id',
     fetch: async () => ({
       ok: true,
-      headers: { 'openai-session-id': 'rtc_fixture' },
+      headers: { location: '/v1/live/rtc_fixture' },
       text: async () => 'v=0 answer',
     }),
     openControl: async () => {
@@ -681,7 +780,7 @@ test('malformed SDP with a known call ID gets bounded orphan cleanup', async () 
       onLogout: () => () => {},
     },
     uuid: () => 'id',
-    fetch: async () => ({ ok: true, headers: { 'openai-session-id': 'rtc_orphan' }, text: async () => 'invalid SDP' }),
+    fetch: async () => ({ ok: true, headers: { location: '/v1/live/rtc_orphan' }, text: async () => 'invalid SDP' }),
     openControl: async (id) => {
       assert.equal(id, 'rtc_orphan')
       return { send: (event) => sent.push(event), close: () => closed++ }
@@ -708,7 +807,7 @@ test('startup diagnostics identify bootstrap, call metadata and control failures
   }
   const validResponse = () => ({
     ok: true,
-    headers: { 'openai-session-id': 'rtc_fixture' },
+    headers: { location: '/v1/live/rtc_fixture' },
     text: async () => 'v=0 answer',
   })
   for (const [overrides, code] of [
