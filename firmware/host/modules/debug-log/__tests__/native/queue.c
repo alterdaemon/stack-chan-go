@@ -21,8 +21,11 @@ int main(void) {
     }
     testEnable = false;
     xs_device_debug_enable(NULL);
-    assert(count == 0 && dropped == 0);
+    assert(count == 0 && dropped == 40000 - DEBUG_NATIVE_COUNT);
     stackchanDebugNative(DEBUG_INTERRUPT, 1, 0, 0);
     assert(count == 0 && sequence == 40000);
+    testEnable = true;
+    xs_device_debug_enable(NULL);
+    assert(count == 0 && dropped == 0);
     return 0;
 }

@@ -15,7 +15,7 @@ enum {
 };
 extern int stackchanDebugIsEnabled(void) __attribute__((weak));
 enum { DEBUG_TUNE_RESET, DEBUG_TUNE_SPEAKER, DEBUG_TUNE_CAPTURE, DEBUG_TUNE_NLP,
-       DEBUG_TUNE_TCP, DEBUG_TUNE_DTLS };
+       DEBUG_TUNE_TCP, DEBUG_TUNE_DTLS, DEBUG_TUNE_STUN };
 extern int stackchanAudioDebugSet(unsigned parameter, unsigned value) __attribute__((weak));
 extern unsigned stackchanAudioDebugGet(unsigned parameter) __attribute__((weak));
 extern int stackchanLiveDebugSet(unsigned parameter, unsigned value) __attribute__((weak));

@@ -79,6 +79,7 @@ export default function start() {
       else if (parameter === 'nlp') tune(3, value)
       else if (parameter === 'tcp') tune(4, value)
       else if (parameter === 'dtls') tune(5, value === 'actpass' ? 1 : 0)
+      else if (parameter === 'stun') tune(6, value)
       else await Debug.tune(parameter, value)
     },
     snapshot,

@@ -183,7 +183,7 @@ Subscription calls negotiate audio alone and use their existing sideband for con
 API-key calls retain their data channel. Decode both enums against the matching build's SDK headers. For
 `esp_peer` 1.5.5, peer states 3/4/5/6/7/8 mean gathering/pairing/paired/connecting/
 connected/failed. A failure before pairing does not establish a DTLS failure.
-During diagnostic ICE pairing, `ice.datagram` records at most 20 UDP observations
+During diagnostic ICE pairing, `ice.datagram` records at most 8 UDP observations
 per transport: `request` is 1 for send or 0 for receive; `value` is the STUN binding
 type (1 request, 257 success, 273 error), or 0 for a socket error. `result` is the
 datagram byte count, a numeric STUN error when present, or negative socket errno.
@@ -206,7 +206,7 @@ counts; no addresses or additional credentials are retained.
 `ice.poll` reports the first select and at most three failures: `value` is its
 highest descriptor (negative means no valid descriptor), `result` is select's
 result or negative errno. A negative descriptor has no socket errno guarantee.
-`ice.tcp` is capped at 20 scalar observations: `request` 0/1/2 means socket
+`ice.tcp` is capped at 10 scalar observations: `request` 0/1/2 means socket
 allocation/connect/completion (`value` is port); 3/4 means send/receive (`value`
 is requested bytes); 5 means an asynchronous connect-select error; 6 means
 receive select (`value` is highest descriptor, `result` readiness or negative errno). `result` is 0 for
@@ -222,6 +222,15 @@ available, local suffix matches the offer, and local offer digest was available.
 lengths leave the device; borrowed ICE credentials and RAM-only SHA-256 digests
 are never logged or persisted. This startup crypto check is outside the
 allocation-free socket observers.
+While LIVE is stopped, `diag set stun 1` enables next-start public-address
+collection for subscription mode using only the SDK STUN client and
+`stun.cloudflare.com:3478` ([provider documentation](https://developers.cloudflare.com/realtime/turn/)).
+It sends no account credential or media to that endpoint and introduces no TURN
+relay or additional runtime. STUN0 is the default; API-key mode is unchanged.
+Off/reset/reboot discard the trial. Gathering uses the same bounded UDP counters
+and observations. The host capture reports maximum dropped/nativeDropped values
+and fails if either is nonzero. Off/status retain the completed capture loss
+count until the next enable or reboot, so Off cannot hide a late native loss.
 SDP logs contain capability numbers only: no addresses, ICE passwords,
 fingerprints, session descriptions or speech content. Dropped records or an
 unexpected diagnostic Off invalidate a trial. Consult matching primary SDK and

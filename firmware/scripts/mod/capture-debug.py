@@ -31,10 +31,28 @@ def main():
     fd = None
     old = None
     records = 0
+    max_dropped = 0
+    max_native_dropped = 0
     acknowledged = False
     requested_off = False
     last_control = None
     pending = bytearray()
+
+    def retain(event):
+        nonlocal records, max_dropped, max_native_dropped
+        if not isinstance(event, dict):
+            return False
+        records += 1
+        dropped = event.get('dropped', 0)
+        native_dropped = event.get('nativeDropped', 0)
+        if type(dropped) is int:
+            max_dropped = max(max_dropped, dropped)
+        if type(native_dropped) is int:
+            max_native_dropped = max(max_native_dropped, native_dropped)
+        if output:
+            output.write(json.dumps({'hostUtc': datetime.now(timezone.utc).isoformat(), 'device': event}) + '\n')
+        return True
+
     try:
         fd = os.open(args.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         old = termios.tcgetattr(fd)
@@ -93,9 +111,8 @@ def main():
                     event = json.loads(line[marker + 6:])
                 except (ValueError, UnicodeError):
                     continue
-                records += 1
-                if output:
-                    output.write(json.dumps({'hostUtc': datetime.now(timezone.utc).isoformat(), 'device': event}) + '\n')
+                if not retain(event):
+                    continue
                 if event.get('component') == 'debug' and event.get('event') == 'control':
                     action = event.get('action')
                     last_control = time.monotonic()
@@ -122,12 +139,25 @@ def main():
                     os.write(fd, b'diag off\n')
                     # Read acknowledgement without extending the capture indefinitely.
                     limit = time.monotonic() + 1
-                    while time.monotonic() < limit:
+                    off_acknowledged = False
+                    while time.monotonic() < limit and not off_acknowledged:
                         if not select.select([fd], [], [], 0.1)[0]:
                             continue
-                        if b'"action":"off"' in os.read(fd, 4096):
-                            print('Diagnostics disabled', flush=True)
-                            break
+                        pending.extend(os.read(fd, 4096))
+                        while b'\n' in pending:
+                            line, _, pending = pending.partition(b'\n')
+                            marker = line.find(b'@diag ')
+                            if marker < 0:
+                                continue
+                            try:
+                                event = json.loads(line[marker + 6:])
+                            except (ValueError, UnicodeError):
+                                continue
+                            if retain(event) and event.get('component') == 'debug' and event.get('action') == 'off':
+                                off_acknowledged = True
+                                print('Diagnostics disabled', flush=True)
+                        if len(pending) > 4096:
+                            pending.clear()
                 except OSError:
                     pass  # The firmware lease expires even after cable/process loss.
             if old is not None:
@@ -138,7 +168,10 @@ def main():
             os.close(fd)
         if output:
             output.close()
-        print(json.dumps({'records': records, 'acknowledged': acknowledged}), flush=True)
+        print(json.dumps({'records': records, 'acknowledged': acknowledged,
+                          'dropped': max_dropped, 'nativeDropped': max_native_dropped}), flush=True)
+        if args.command == 'capture' and (max_dropped or max_native_dropped) and sys.exc_info()[0] is None:
+            raise RuntimeError('Diagnostic records were dropped; trial is incomplete')
 
 
 if __name__ == '__main__':

@@ -36,7 +36,7 @@ typedef struct {
 	atomic_bool stopping, done, muted, flushPending;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
-	bool started, errorRead, captureOnly, bargeIn, realtime, subscription, tcp, dtlsActpass;
+	bool started, errorRead, captureOnly, bargeIn, realtime, subscription, tcp, dtlsActpass, stun;
     int pitch;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
@@ -74,7 +74,7 @@ int stackchanLiveDebugSet(unsigned parameter, unsigned value)
 {
 	if (parameter == DEBUG_TUNE_RESET) { atomic_store(&gLiveTrials, 0); return 0; }
 	if (value > 1 || atomic_load(&gOwner)) return -1;
-	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : 0;
+	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : parameter == DEBUG_TUNE_STUN ? 4 : 0;
 	if (!bit) return -1;
 	if (value) atomic_fetch_or(&gLiveTrials, bit);
 	else atomic_fetch_and(&gLiveTrials, ~bit);
@@ -82,7 +82,7 @@ int stackchanLiveDebugSet(unsigned parameter, unsigned value)
 }
 unsigned stackchanLiveDebugGet(unsigned parameter)
 {
-	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : 0;
+	unsigned bit = parameter == DEBUG_TUNE_TCP ? 1 : parameter == DEBUG_TUNE_DTLS ? 2 : parameter == DEBUG_TUNE_STUN ? 4 : 0;
 	return !!(atomic_load(&gLiveTrials) & bit);
 }
 /* Espressif exposes fine-grained ICE/DTLS states on the peer callback, while
@@ -161,12 +161,14 @@ void stackchanLiveDebugHmac(const char *input, size_t size, const char *key, siz
 }
 
 /* Called by generated SDK UDP observers. No allocation, logging of payloads or
- * changes to socket results/errno; dormant outside diagnostic ICE pairing. */
+ * changes to socket results/errno; observe gathering only for the STUN trial. */
 void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int result, int error)
 {
 	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
 	LiveTransport *t = atomic_load(&gOwner);
-	if (!t || atomic_load(&t->peerPhase) != ESP_PEER_STATE_PAIRING) return;
+	if (!t) return;
+	unsigned phase = atomic_load(&t->peerPhase);
+	if (phase != ESP_PEER_STATE_PAIRING && !(t->stun && phase == ESP_PEER_STATE_CANDIDATE_GATHERING)) return;
 	if (outgoing == 2) {
 		unsigned poll = atomic_fetch_add(&t->icePolls, 1), errors = 0;
 		if (result > 0) atomic_fetch_add(&t->iceReady, 1);
@@ -184,7 +186,7 @@ void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int
 		if (kind == 0x111) atomic_fetch_add(&t->iceRejected, 1);
 	}
 	unsigned record = atomic_fetch_add(&t->iceRecords, 1);
-	if (record < 20) {
+	if (record < 8) {
 		stackchanDebugTransition(DEBUG_ICE_DATAGRAM, !!outgoing, kind, result < 0 ? -error : code ? (int)code : result);
 		if (kind) {
 			unsigned usernameLength;
@@ -217,7 +219,7 @@ void stackchanLiveDebugTcp(unsigned stage, int value, int result)
 		if (result > 0) atomic_fetch_add(&t->iceTcpReady, 1);
 		if (result >= 0) return;
 	}
-	if (atomic_fetch_add(&t->iceTcpRecords, 1) < 20)
+	if (atomic_fetch_add(&t->iceTcpRecords, 1) < 10)
 		stackchanDebugTransition(DEBUG_ICE_TCP, stage, value, result);
 }
 
@@ -253,6 +255,9 @@ static int signalStart(esp_peer_signaling_cfg_t *cfg, esp_peer_signaling_handle_
 	t->signal = *cfg;
 	*handle = t;
 	esp_peer_signaling_ice_info_t ice = {.is_initiator = true};
+	/* Optional next-start diagnostic, using the SDK's existing STUN client.
+	 * No TURN/media relay, saved settings, credentials or API-key changes. */
+	if (t->stun) ice.server_info.stun_url = "stun:stun.cloudflare.com:3478";
 	int err = cfg->on_ice_info(&ice, cfg->ctx);
 	return err ? err : cfg->on_connected(cfg->ctx);
 }
@@ -485,6 +490,7 @@ void xs_live_transport_start(xsMachine *the)
 	unsigned trials = atomic_load(&gLiveTrials);
 	t->tcp = !!(trials & 1);
 	t->dtlsActpass = !!(trials & 2);
+	t->stun = t->subscription && !!(trials & 4);
     if (xsmcArgc > 2) {
         double pitch = xsmcToNumber(xsArg(2));
         if (!(pitch >= -6 && pitch <= 6) || pitch != (int)pitch) xsRangeError("Invalid pitch");
@@ -622,6 +628,7 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("queueEvents", uxQueueMessagesWaiting(t->events));
 	STAT("queueCommands", uxQueueMessagesWaiting(t->commands));
 	STAT("tcp", t->tcp);
+	STAT("stun", t->stun);
 	STAT("iceSent", atomic_load(&t->iceSent));
 	STAT("iceReceived", atomic_load(&t->iceReceived));
 	STAT("iceRejected", atomic_load(&t->iceRejected));

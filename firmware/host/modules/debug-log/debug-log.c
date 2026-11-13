@@ -44,7 +44,7 @@ void stackchanDebugNative(unsigned event, unsigned request, int value, int resul
 void xs_device_debug_tune(xsMachine *the) {
     unsigned parameter = xsmcToInteger(xsArg(0)), value = xsmcToInteger(xsArg(1));
     if (!atomic_load(&enabled)) xsUnknownError("Diagnostics are disabled");
-    if (parameter == DEBUG_TUNE_TCP || parameter == DEBUG_TUNE_DTLS) {
+    if (parameter == DEBUG_TUNE_TCP || parameter == DEBUG_TUNE_DTLS || parameter == DEBUG_TUNE_STUN) {
         if (value > 1 || !stackchanLiveDebugSet || stackchanLiveDebugSet(parameter, value)) xsUnknownError("Invalid transport trial");
     } else {
         if (!stackchanAudioDebugSet || stackchanAudioDebugSet(parameter, value)) xsUnknownError("Invalid audio trial");
@@ -55,7 +55,10 @@ void xs_device_debug_enable(xsMachine *the) {
     bool value = xsmcToBoolean(xsArg(0));
     portENTER_CRITICAL(&debugLock);
     atomic_store(&enabled, value);
-    head = count = dropped = 0;
+    head = count = 0;
+    /* Keep the completed capture's loss visible in Off/status. Only a new
+     * capture resets it; buffered records and all trials still clear on Off. */
+    if (value) dropped = 0;
     portEXIT_CRITICAL(&debugLock);
     if (!value && stackchanAudioDebugSet) stackchanAudioDebugSet(DEBUG_TUNE_RESET, 0);
     if (!value && stackchanLiveDebugSet) stackchanLiveDebugSet(DEBUG_TUNE_RESET, 0);
@@ -98,6 +101,7 @@ void xs_device_debug_info(xsMachine *the) {
     NUMBER("largestInternalBlock", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     NUMBER("freePsram", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     NUMBER("tcp", stackchanLiveDebugGet ? stackchanLiveDebugGet(DEBUG_TUNE_TCP) : 0);
+    NUMBER("stun", stackchanLiveDebugGet ? stackchanLiveDebugGet(DEBUG_TUNE_STUN) : 0);
     xsmcSetString(xsVar(0), stackchanLiveDebugGet && stackchanLiveDebugGet(DEBUG_TUNE_DTLS) ? "actpass" : "active");
     xsmcSet(xsResult, xsID("dtlsRole"), xsVar(0));
     NUMBER("resetReason", esp_reset_reason());

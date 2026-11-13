@@ -53,6 +53,7 @@ const NUMBER_FIELDS = new Set([
   'queueEvents',
   'queueCommands',
   'tcp',
+  'stun',
   'iceSent',
   'iceReceived',
   'iceRejected',
@@ -264,7 +265,7 @@ export class DebugRecorder {
             (parameter === 'speaker' && Number.isFinite(value) && value >= 0 && value <= 1) ||
             (parameter === 'capture' && Number.isFinite(value) && value >= -27 && value <= 0) ||
             (parameter === 'nlp' && [0, 1, 2].includes(value)) ||
-            (parameter === 'tcp' && [0, 1].includes(value)) ||
+            (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')
