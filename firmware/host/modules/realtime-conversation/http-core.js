@@ -77,8 +77,8 @@ export function requestHttps(request, platform, setCancel = () => {}) {
             if (typeof header === 'string' && header.length <= 4096) responseHeaders[name] = header
           }
           if (request.responseFormat === 'subscription-response' && code >= 200 && code < 300) {
-            if (!/^text\/event-stream(?:;|$)/i.test(responseHeaders['content-type'] ?? ''))
-              return finish(new Error('Expected subscription event stream'))
+            // Codex consumes the SSE body without requiring a Content-Type
+            // header. Completion and answer validation remain authoritative.
             stream = platform.createSubscriptionStream()
           }
           if (Number(incomingHeaders.get('content-length')) > (stream ? 2097152 : 131072))

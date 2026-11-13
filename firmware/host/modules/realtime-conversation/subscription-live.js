@@ -442,7 +442,11 @@ export class SubscriptionLive {
       const credentials = await this.auth.credentials()
       if (this.#job !== job || this.#closed) return
       if (credentials.accountId !== this.accountId) throw new Error('Subscription account changed')
-      const headers = { ...this.headers, Authorization: `Bearer ${credentials.accessToken}` }
+      const headers = {
+        ...this.headers,
+        Authorization: `Bearer ${credentials.accessToken}`,
+        Accept: 'text/event-stream',
+      }
       job.request = this.fetch(BACKEND, {
         method: 'POST',
         headers,

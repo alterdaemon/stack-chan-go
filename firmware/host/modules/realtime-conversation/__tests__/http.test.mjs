@@ -589,3 +589,37 @@ test('HTTP stream failures preserve safe categories and progress across the work
     assert.ok(!JSON.stringify(diagnostics).includes('private-secret'))
   }
 })
+
+test('Codex SSE completion is validated even when the response media type is absent', async () => {
+  for (const mediaType of [undefined, 'application/octet-stream', 'text/event-stream']) {
+    let callbacks
+    const request = requestHttps(post({ responseFormat: 'subscription-response' }), {
+      createClient: () => ({
+        request: (value) => {
+          callbacks = value
+        },
+        close() {},
+      }),
+      createSubscriptionStream: () => createSubscriptionStream(decode, encode),
+      schedule: (callback, ms) => (ms ? 1 : queueMicrotask(callback)),
+      cancel() {},
+    })
+    callbacks.onHeaders(200, new Map(mediaType ? [['content-type', mediaType]] : []))
+    const bytes = new Uint8Array(
+      encode(
+        'data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"323"}]}]}}\n\n',
+      ),
+    )
+    callbacks.onReadable.call(
+      {
+        read(view) {
+          view.set(bytes)
+          return bytes.length
+        },
+      },
+      bytes.length,
+    )
+    callbacks.onDone()
+    assert.equal(JSON.parse(decode((await request).body)).answer, '323')
+  }
+})

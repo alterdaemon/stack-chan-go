@@ -1043,6 +1043,7 @@ test('subscription requests honor selected model and each effort without public 
       assert.deepEqual(body.reasoning, { effort })
       assert.equal(body.store, false)
       assert.equal(body.stream, true)
+      assert.equal(f.requests.at(-1).options.headers.Accept, 'text/event-stream')
       assert.deepEqual(body.tools, [{ type: 'web_search' }])
       f.finish({ answer: 'An answer', searched: false })
       await tick()

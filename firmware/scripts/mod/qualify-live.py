@@ -158,6 +158,7 @@ def main():
         if first.get('app_sha256') != args.expected_sha:
             raise RuntimeError('Running image identity differs from the validated candidate')
         (args.output / 'identity.json').write_text(json.dumps(first, indent=2) + '\n')
+        capture.command('diag live stop', 'live', setting='stop', phase='applied')
         if args.suite == 'backend':
             for mode in ('off', 'on'):
                 if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):

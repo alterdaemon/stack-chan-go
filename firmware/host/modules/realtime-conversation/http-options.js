@@ -10,7 +10,6 @@ const failureCodes = Object.freeze({
   'HTTPS request failed': 'https_transport',
   'HTTPS response exceeds limit': 'https_limit',
   'HTTPS short read': 'https_short_read',
-  'Expected subscription event stream': 'subscription_content_type',
   'Subscription stream continued after completion': 'subscription_after_completion',
   'Invalid subscription completion': 'subscription_completion',
   'Subscription search incomplete': 'subscription_search_incomplete',
