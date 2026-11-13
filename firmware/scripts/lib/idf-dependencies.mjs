@@ -102,7 +102,7 @@ export function prepareCoreS3IdfDependencies({
   return manifestPath
 }
 
-// Honor the peer implementation and observe UDP results in generated output
+// Honor the peer implementation and observe socket results in generated output
 // only. Preserve installed SDK sources/licenses and reject unsupported shapes.
 function preparePeerImplementation(source, destination, name) {
   const relative = name === 'esp_webrtc' ? 'src/esp_webrtc.c' : 'src/transport/udp.c'
@@ -131,12 +131,61 @@ static void stackchanObserveUdp(unsigned outgoing, const uint8_t *buf, int len, 
           ],
           ['measure_stop("sendto");', 'measure_stop("sendto");\n    stackchanObserveUdp(1, buf, len, ret);'],
           [receive, `${receive}\n        stackchanObserveUdp(0, buf, ret, ret);`],
+          [
+            'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);',
+            'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);\n    stackchanObserveUdp(2, NULL, max_fd, ret);',
+          ],
+          [
+            'if (max_fd < 0) {\n        return -1;',
+            'if (max_fd < 0) {\n        stackchanObserveUdp(2, NULL, max_fd, -1);\n        return -1;',
+          ],
         ]
-  let generated = original
-  for (const [from, to] of patches) {
-    if (generated.split(from).length !== 2 || generated.includes(to))
-      throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
-    generated = generated.replace(from, to)
+  const updates = [[relative, patchPeerSource(original, patches, source)]]
+  if (name === 'esp_peer') {
+    const tcp = 'src/transport/tcp.c'
+    const originalTcp = readFileSync(path.join(source, tcp), 'utf8')
+    const tcpPatches = [
+      [
+        '#define TAG "TCP"',
+        `extern void stackchanLiveDebugTcp(unsigned, int, int) __attribute__((weak));
+static void stackchanObserveTcp(unsigned stage, int value, int result)
+{
+    int saved_errno = errno;
+    if (stackchanLiveDebugTcp) stackchanLiveDebugTcp(stage, value, result);
+    errno = saved_errno;
+}
+#define TAG "TCP"`,
+      ],
+      [
+        'int fd = socket(addr->family == AF_INET6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0);',
+        'int fd = socket(addr->family == AF_INET6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0);\n    stackchanObserveTcp(0, addr->port, fd < 0 ? -errno : 0);',
+      ],
+      [
+        'int ret = connect(fd, (struct sockaddr *)&storage, addr_len);',
+        'int ret = connect(fd, (struct sockaddr *)&storage, addr_len);\n    stackchanObserveTcp(1, addr->port, ret < 0 ? -errno : 0);',
+      ],
+      [
+        'int ret = select(conn->fd + 1, NULL, &write_set, NULL, &tv);',
+        'int ret = select(conn->fd + 1, NULL, &write_set, NULL, &tv);\n        stackchanObserveTcp(5, conn->addr.port, ret < 0 ? -errno : ret);',
+      ],
+      [
+        'ESP_LOGW(TAG, "Async TCP connect failed: %s", strerror(err ? err : errno));',
+        'stackchanObserveTcp(2, conn->addr.port, -(err ? err : errno));\n            ESP_LOGW(TAG, "Async TCP connect failed: %s", strerror(err ? err : errno));',
+      ],
+      [
+        'conn->connecting = false;\n            conn->connected = true;',
+        'conn->connecting = false;\n            conn->connected = true;\n            stackchanObserveTcp(2, conn->addr.port, 0);',
+      ],
+      [
+        'int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);',
+        'int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);\n        stackchanObserveTcp(3, item->len, sret < 0 ? -errno : sret);',
+      ],
+      [
+        'ret = recv(conn->fd, data + received, len - received, 0);',
+        'ret = recv(conn->fd, data + received, len - received, 0);\n        stackchanObserveTcp(4, len - received, ret < 0 ? -errno : ret);',
+      ],
+    ]
+    updates.push([tcp, patchPeerSource(originalTcp, tcpPatches, source)])
   }
   const marker = '.stackchan-peer-implementation'
   const current = lstatSync(destination, { throwIfNoEntry: false })
@@ -148,8 +197,18 @@ static void stackchanObserveUdp(unsigned outgoing, const uint8_t *buf, int len, 
   )
     throw new Error(`Refusing to replace component directory: ${destination}`)
   cpSync(source, destination, { recursive: true, preserveTimestamps: true })
-  writeFileSync(path.join(destination, relative), generated)
+  for (const [file, generated] of updates) writeFileSync(path.join(destination, file), generated)
   writeFileSync(path.join(destination, marker), `${source}\n`)
+}
+
+function patchPeerSource(original, patches, source) {
+  let generated = original
+  for (const [from, to] of patches) {
+    if (generated.split(from).length !== 2 || generated.includes(to))
+      throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
+    generated = generated.replace(from, to)
+  }
+  return generated
 }
 
 function linkComponent(source, destination) {

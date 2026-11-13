@@ -31,6 +31,8 @@ const nativeEvents = [
   'ice.datagram',
   'ice.checks',
   'ice.crypto',
+  'ice.poll',
+  'ice.tcp',
 ]
 let serial,
   recorder,

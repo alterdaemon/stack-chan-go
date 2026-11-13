@@ -636,7 +636,27 @@ function writePeerFixture(directory) {
     mkdirSync(path.join(directory, 'src/transport'), { recursive: true })
     writeFileSync(
       path.join(directory, 'src/transport/udp.c'),
-      '#define TAG "UDP"\nvoid f() { measure_stop("sendto");\nret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len); }\n',
+      `#define TAG "UDP"
+void f() { measure_stop("sendto");
+ret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len);
+if (max_fd < 0) {
+        return -1;
+}
+int ret = select(max_fd + 1, &read_set, NULL, NULL, tv); }
+`,
+    )
+    writeFileSync(
+      path.join(directory, 'src/transport/tcp.c'),
+      `#define TAG "TCP"
+int fd = socket(addr->family == AF_INET6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0);
+int ret = connect(fd, (struct sockaddr *)&storage, addr_len);
+int ret = select(conn->fd + 1, NULL, &write_set, NULL, &tv);
+ESP_LOGW(TAG, "Async TCP connect failed: %s", strerror(err ? err : errno));
+conn->connecting = false;
+            conn->connected = true;
+int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);
+ret = recv(conn->fd, data + received, len - received, 0);
+`,
     )
     return
   }

@@ -161,7 +161,27 @@ test('discovers local WebRTC components without editing their sources and isolat
       mkdirSync(path.join(component, 'src/transport'), { recursive: true })
       writeFileSync(
         path.join(component, 'src/transport/udp.c'),
-        '#define TAG "UDP"\nvoid f() { measure_stop("sendto");\nret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len); }\n',
+        `#define TAG "UDP"
+void f() { measure_stop("sendto");
+ret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len);
+if (max_fd < 0) {
+        return -1;
+}
+int ret = select(max_fd + 1, &read_set, NULL, NULL, tv); }
+`,
+      )
+      writeFileSync(
+        path.join(component, 'src/transport/tcp.c'),
+        `#define TAG "TCP"
+int fd = socket(addr->family == AF_INET6 ? AF_INET6 : AF_INET, SOCK_STREAM, 0);
+int ret = connect(fd, (struct sockaddr *)&storage, addr_len);
+int ret = select(conn->fd + 1, NULL, &write_set, NULL, &tv);
+ESP_LOGW(TAG, "Async TCP connect failed: %s", strerror(err ? err : errno));
+conn->connecting = false;
+            conn->connected = true;
+int sret = tcp_connection_send(conn, item->data, item->len, tcp->cfg.send_timeout_ms);
+ret = recv(conn->fd, data + received, len - received, 0);
+`,
       )
     }
   }
@@ -200,10 +220,23 @@ test('discovers local WebRTC components without editing their sources and isolat
     const udp = readFileSync(path.join(components, 'esp_peer/src/transport/udp.c'), 'utf8')
     assert.ok(udp.includes('stackchanObserveUdp(1, buf, len, ret);'))
     assert.ok(udp.includes('stackchanObserveUdp(0, buf, ret, ret);'))
+    assert.ok(udp.includes('stackchanObserveUdp(2, NULL, max_fd, ret);'))
     assert.ok(udp.includes('errno = saved_errno;'))
     assert.ok(
       !readFileSync(path.join(solutionDirectory, 'components/esp_peer/src/transport/udp.c'), 'utf8').includes(
         'stackchanObserveUdp',
+      ),
+    )
+    const tcp = readFileSync(path.join(components, 'esp_peer/src/transport/tcp.c'), 'utf8')
+    assert.ok(tcp.includes('stackchanObserveTcp(1, addr->port, ret < 0 ? -errno : 0);'))
+    assert.ok(tcp.includes('stackchanObserveTcp(2, conn->addr.port, 0);'))
+    assert.ok(tcp.includes('stackchanObserveTcp(3, item->len, sret < 0 ? -errno : sret);'))
+    assert.ok(tcp.includes('stackchanObserveTcp(4, len - received, ret < 0 ? -errno : ret);'))
+    assert.ok(tcp.includes('stackchanObserveTcp(5, conn->addr.port, ret < 0 ? -errno : ret);'))
+    assert.ok(tcp.includes('errno = saved_errno;'))
+    assert.ok(
+      !readFileSync(path.join(solutionDirectory, 'components/esp_peer/src/transport/tcp.c'), 'utf8').includes(
+        'stackchanObserveTcp',
       ),
     )
     writeFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), 'unsupported SDK source\n')

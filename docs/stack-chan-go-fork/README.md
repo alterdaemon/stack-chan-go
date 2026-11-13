@@ -202,6 +202,17 @@ the message. One `ice.crypto` value 1 confirms the actual SDK HMAC-SHA1 primitiv
 passes RFC 2202 case 1 using public synthetic data; value 0 means failure.
 Candidate metadata includes only numeric port ranges, RFC 1918 and zero-address
 counts; no addresses or additional credentials are retained.
+`icePolls`/`iceReady`/`icePollErrors` count UDP select calls, readiness and errors.
+`ice.poll` reports the first select and at most three failures: `value` is its
+highest descriptor (negative means no valid descriptor), `result` is select's
+result or negative errno. A negative descriptor has no socket errno guarantee.
+`ice.tcp` is capped at 20 scalar observations: `request` 0/1/2 means socket
+allocation/connect/completion (`value` is port); 3/4 means send/receive (`value`
+is requested bytes); 5 means an asynchronous select error. `result` is 0 for
+connection success, an I/O byte count, or negative errno. EINPROGRESS at stage1
+is pending, not failure. Counters `iceTcpStarted`/`iceTcpConnected`/`iceTcpErrors`,
+`iceTcpSent`/`iceTcpReceived` and `iceTcpPolls`/`iceTcpReady` cover these operations
+beyond the record cap. Polling stays visible without recording every poll.
 SDP logs contain capability numbers only: no addresses, ICE passwords,
 fingerprints, session descriptions or speech content. Dropped records or an
 unexpected diagnostic Off invalidate a trial. Consult matching primary SDK and

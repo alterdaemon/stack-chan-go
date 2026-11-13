@@ -20,6 +20,7 @@
 #include "poll-watchdog.h"
 #include "ice-diagnostics.h"
 #include <stdatomic.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -41,6 +42,9 @@ typedef struct {
 	atomic_uint workerStackMinimum;
 	atomic_uint peerPhase, iceRecords, iceSent, iceReceived, iceRejected, iceErrors;
 	atomic_uint iceUdpSent, iceUdpReceived;
+	atomic_uint icePolls, iceReady, icePollErrors;
+	atomic_uint iceTcpRecords, iceTcpStarted, iceTcpConnected, iceTcpErrors, iceTcpSent, iceTcpReceived;
+	atomic_uint iceTcpPolls, iceTcpReady;
 	const char *failureStage;
 	esp_webrtc_handle_t rtc;
 	esp_peer_signaling_cfg_t signal;
@@ -112,6 +116,14 @@ void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int
 	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
 	LiveTransport *t = atomic_load(&gOwner);
 	if (!t || atomic_load(&t->peerPhase) != ESP_PEER_STATE_PAIRING) return;
+	if (outgoing == 2) {
+		unsigned poll = atomic_fetch_add(&t->icePolls, 1), errors = 0;
+		if (result > 0) atomic_fetch_add(&t->iceReady, 1);
+		if (result < 0) errors = atomic_fetch_add(&t->icePollErrors, 1) + 1;
+		if (!poll || (errors && errors <= 3))
+			stackchanDebugTransition(DEBUG_ICE_POLL, 0, size, result < 0 ? -error : result);
+		return;
+	}
 	unsigned kind = 0, code = 0;
 	if (result < 0) atomic_fetch_add(&t->iceErrors, 1);
 	else {
@@ -129,6 +141,26 @@ void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int
 			stackchanDebugTransition(DEBUG_ICE_CHECKS, !!outgoing, checks, usernameLength);
 		}
 	}
+}
+
+/* Scalar-only observations from the existing asynchronous TCP manager. */
+void stackchanLiveDebugTcp(unsigned stage, int value, int result)
+{
+	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
+	LiveTransport *t = atomic_load(&gOwner);
+	if (!t || atomic_load(&t->peerPhase) != ESP_PEER_STATE_PAIRING) return;
+	if (stage == 1) atomic_fetch_add(&t->iceTcpStarted, 1);
+	if ((stage == 1 || stage == 2) && !result) atomic_fetch_add(&t->iceTcpConnected, 1);
+	if (result < 0 && !(stage == 1 && result == -EINPROGRESS)) atomic_fetch_add(&t->iceTcpErrors, 1);
+	if (stage == 3 && result > 0) atomic_fetch_add(&t->iceTcpSent, 1);
+	if (stage == 4 && result > 0) atomic_fetch_add(&t->iceTcpReceived, 1);
+	if (stage == 5) {
+		atomic_fetch_add(&t->iceTcpPolls, 1);
+		if (result > 0) atomic_fetch_add(&t->iceTcpReady, 1);
+		if (result >= 0) return;
+	}
+	if (atomic_fetch_add(&t->iceTcpRecords, 1) < 20)
+		stackchanDebugTransition(DEBUG_ICE_TCP, stage, value, result);
 }
 
 static void fail(LiveTransport *t, int code)
@@ -530,6 +562,16 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("iceErrors", atomic_load(&t->iceErrors));
 	STAT("iceUdpSent", atomic_load(&t->iceUdpSent));
 	STAT("iceUdpReceived", atomic_load(&t->iceUdpReceived));
+	STAT("icePolls", atomic_load(&t->icePolls));
+	STAT("iceReady", atomic_load(&t->iceReady));
+	STAT("icePollErrors", atomic_load(&t->icePollErrors));
+	STAT("iceTcpStarted", atomic_load(&t->iceTcpStarted));
+	STAT("iceTcpConnected", atomic_load(&t->iceTcpConnected));
+	STAT("iceTcpErrors", atomic_load(&t->iceTcpErrors));
+	STAT("iceTcpSent", atomic_load(&t->iceTcpSent));
+	STAT("iceTcpReceived", atomic_load(&t->iceTcpReceived));
+	STAT("iceTcpPolls", atomic_load(&t->iceTcpPolls));
+	STAT("iceTcpReady", atomic_load(&t->iceTcpReady));
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
     STAT("interruptions", stats.interruptions);
