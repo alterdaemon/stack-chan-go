@@ -15,6 +15,20 @@ export function requestHttps(request, platform, setCancel = () => {}) {
       phase = 'connect',
       finished = false
     let body = request.body
+    function transportFailure(message, cause) {
+      const error = new Error(message)
+      // SDK exceptions have no stable class hierarchy. Export only recognized
+      // local reasons and numeric transport codes, never their raw message.
+      if (
+        ['bad response', 'bad state', 'invalid protocol', 'date validation failed', 'too large'].includes(
+          cause?.message,
+        )
+      )
+        error.reason = cause.message.replace(/ /g, '_')
+      const code = typeof cause === 'number' ? cause : cause?.code
+      if (Number.isInteger(code) && Math.abs(code) <= 2147483647) error.code = code
+      return error
+    }
     function finish(error) {
       if (finished) return
       finished = true
@@ -57,8 +71,8 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         host: request.host,
         port: request.port,
         certificate: request.certificate,
-        onError() {
-          finish(new Error('HTTPS connection failed'))
+        onError(error) {
+          finish(transportFailure('HTTPS connection failed', error))
         },
       })
       client.request({
@@ -128,7 +142,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
           }
         },
         onDone(error) {
-          finish(error || !Number.isInteger(status) ? new Error('HTTPS request failed') : undefined)
+          finish(error || !Number.isInteger(status) ? transportFailure('HTTPS request failed', error) : undefined)
         },
       })
     } catch (error) {

@@ -483,6 +483,8 @@ export class SubscriptionLive {
         errorCode: error?.errorCode,
         phase: error?.phase,
         received: error?.received,
+        reason: error?.reason,
+        code: typeof error?.code === 'number' ? error.code : undefined,
         providerCode: error?.providerCode,
         param: error?.param,
       }))

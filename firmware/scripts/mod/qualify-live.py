@@ -153,6 +153,10 @@ def main():
     parser.add_argument('--output', required=True, type=Path, help='New private evidence directory')
     parser.add_argument('--voices', nargs='+', choices=VOICES, help='Specific documented candidates to retest')
     parser.add_argument('--interruption', choices=('off', 'on', 'both'), default='both')
+    parser.add_argument('--models', nargs='+', choices=('gpt-6.1-terra', 'gpt-6-luna'),
+                        help='Target backend models; explicit filters skip the standard baseline')
+    parser.add_argument('--efforts', nargs='+', choices=('medium', 'none', 'low', 'high', 'xhigh', 'max'),
+                        help='Target backend efforts; explicit filters skip the standard baseline')
     parser.add_argument('--suite', choices=('voices', 'parameters', 'backend', 'audio', 'cycles', 'soak'), required=True)
     parser.add_argument('--duration', type=int, default=7200, help='USB lease-renewing capture bound, seconds')
     parser.add_argument('--cycles', type=int, default=100)
@@ -178,18 +182,30 @@ def main():
             time.sleep(0.5)
         if args.suite == 'backend':
             modes = ('off', 'on') if args.interruption == 'both' else (args.interruption,)
+            failures = 0
+            if not args.models and not args.efforts:
+                for mode in modes:
+                    if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):
+                        raise RuntimeError('Standard backend qualification failed')
             for mode in modes:
-                if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):
-                    raise RuntimeError('Standard backend qualification failed')
-            for mode in modes:
-                for model in ('gpt-6.1-terra', 'gpt-6-luna'):
-                    for effort in ('medium', 'none', 'low', 'high', 'xhigh', 'max'):
-                        if not capture.trial(f'{model}-{effort}', interruption=mode,
-                                             settings={'model': model, 'effort': effort}, probes=('reasoning',)):
-                            raise RuntimeError('Backend parameter qualification failed')
-                    if not capture.trial(f'{model}-search', interruption=mode,
-                                         settings={'model': model, 'effort': 'medium'}, probes=('search',)):
-                        raise RuntimeError('Search qualification failed')
+                for model in args.models or ('gpt-6.1-terra', 'gpt-6-luna'):
+                    for effort in args.efforts or ('medium', 'none', 'low', 'high', 'xhigh', 'max'):
+                        try:
+                            passed = capture.trial(f'{model}-{effort}', interruption=mode,
+                                                   settings={'model': model, 'effort': effort},
+                                                   probes=('reasoning', 'search'))
+                        except RuntimeError:
+                            if capture.child.poll() is not None:
+                                raise
+                            passed = False
+                        failures += not passed
+                        if any(d.get('event') in ('abort', 'backtrace') for d in capture.rows):
+                            raise RuntimeError('Native failure invalidated qualification')
+                        if any(d.get('providerCode') in ('rate_limit_exceeded', 'insufficient_quota', 'usage_limit_reached')
+                               for d in capture.rows):
+                            raise RuntimeError('Account limit stopped qualification; remaining cases untested')
+            if failures:
+                raise RuntimeError(f'{failures} backend cases failed; see retained evidence')
         elif args.suite == 'voices':
             voices = args.voices or ['cove'] + [v for v in VOICES if v != 'cove']
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):

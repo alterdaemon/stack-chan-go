@@ -242,7 +242,7 @@ test('caller deadlines include Worker delivery/queue time; late replies cannot s
     a = f.post({ timeoutMs: 1000 })
   assert.equal(f.sent[0].started, 10)
   f.timers[0].callback()
-  await assert.rejects(a, /timed out/)
+  await assert.rejects(a, (error) => error.errorCode === 'https_timeout' && /timed out/.test(error.message))
   const b = f.post()
   f.worker.onmessage({ id: f.sent[0].id, status: 200, body: encode('late') })
   f.worker.onmessage({ id: f.sent.at(-1).id, error: 'socket failed' })
@@ -621,5 +621,18 @@ test('Codex SSE completion is validated even when the response media type is abs
     )
     callbacks.onDone()
     assert.equal(JSON.parse(decode((await request).body)).answer, '323')
+  }
+})
+
+test('SDK transport failures retain only recognized reasons and numeric codes', async () => {
+  for (const cause of [new Error('bad response'), Object.assign(new Error('synthetic-private'), { code: -42 }), -23]) {
+    const f = fixture()
+    f.cb.onDone(cause)
+    await assert.rejects(f.promise, (error) => {
+      assert.ok(!error.message.includes('synthetic-private'))
+      assert.equal(error.reason, cause?.message === 'bad response' ? 'bad_response' : undefined)
+      assert.equal(error.code, typeof cause === 'number' ? cause : cause.code)
+      return true
+    })
   }
 })

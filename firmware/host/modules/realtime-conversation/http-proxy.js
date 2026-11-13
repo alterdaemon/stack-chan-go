@@ -40,6 +40,8 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
         errorCode: message.errorCode,
         phase: message.phase,
         received: message.received,
+        reason: message.reason,
+        code: message.code,
       }
       diagnose?.(message.error ? 'job.failed' : 'job.response', () => ({ request: message.id, ...metadata }))
       pending.delete(message.id)
@@ -84,7 +86,11 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
             activeWorker.postMessage({ id, cancel: true })
           } catch {}
         }
-        reject(new Error(message))
+        reject(
+          Object.assign(new Error(message), {
+            errorCode: message === 'HTTPS request timed out' ? 'https_timeout' : 'https_cancelled',
+          }),
+        )
         diagnose?.('job.cancelled', () => ({
           request: id,
           kind,

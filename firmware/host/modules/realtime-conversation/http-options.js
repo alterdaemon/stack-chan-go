@@ -30,6 +30,9 @@ export function httpFailureMetadata(error) {
   if (Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599) metadata.status = error.status
   if (Number.isInteger(error?.received) && error.received >= 0 && error.received <= 2097152)
     metadata.received = error.received
+  if (['bad_response', 'bad_state', 'invalid_protocol', 'date_validation_failed', 'too_large'].includes(error?.reason))
+    metadata.reason = error.reason
+  if (Number.isInteger(error?.code) && Math.abs(error.code) <= 2147483647) metadata.code = error.code
   return metadata
 }
 
