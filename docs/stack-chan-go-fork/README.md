@@ -177,7 +177,10 @@ build provenance. Startup evidence is grouped by component:
 | `device` / final audio snapshot | Free/minimum heap, largest internal block, PSRAM, queue occupancy and native worker stack minimum. |
 
 `peer.state` uses the bundled Espressif peer enum; `peer.event` uses the distinct
-WebRTC event enum. Decode them against the matching build's SDK headers. For
+WebRTC wrapper enum. The build corrects the SDK wrapper's ignored `peer_impl`
+in generated output so the state observer runs; it does not edit the installed SDK.
+Subscription calls negotiate audio alone and use their existing sideband for control.
+API-key calls retain their data channel. Decode both enums against the matching build's SDK headers. For
 `esp_peer` 1.5.5, peer states 3/4/5/6/7/8 mean gathering/pairing/paired/connecting/
 connected/failed. A failure before pairing does not establish a DTLS failure.
 SDP logs contain capability numbers only: no addresses, ICE passwords,

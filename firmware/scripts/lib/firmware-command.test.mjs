@@ -67,6 +67,7 @@ test('default CoreS3 build includes GPT-Live and prepares native dependencies wi
       const component = path.join(solution, 'components', name)
       mkdirSync(component, { recursive: true })
       writeFileSync(path.join(component, 'CMakeLists.txt'), '# test component\n')
+      if (name === 'esp_webrtc') writePeerFixture(component)
     }
     const env = {
       ...process.env,
@@ -113,11 +114,12 @@ appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wi
       fixture.firmware,
       'dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host/xsProj-esp32s3',
     )
-    for (const name of names)
-      assert.equal(
-        realpathSync(path.join(project, 'components', name)),
-        realpathSync(path.join(solution, 'components', name)),
-      )
+    for (const name of names) {
+      const component = path.join(project, 'components', name)
+      if (name === 'esp_webrtc')
+        assert.ok(readFileSync(path.join(component, 'src/esp_webrtc.c'), 'utf8').includes('rtc->rtc_cfg.peer_impl'))
+      else assert.equal(realpathSync(component), realpathSync(path.join(solution, 'components', name)))
+    }
   } finally {
     rmSync(fixture.root, { recursive: true, force: true })
   }
@@ -384,7 +386,8 @@ const actual = new Set([...idf.matchAll(/^  (espressif\\/[^:]+):/gm)].map(match 
 assert.deepEqual(actual, expected, 'stale IDF dependencies')
 for (const name of ${JSON.stringify(webRtcComponents)}) {
   const link = path.join(project, 'components', name)
-  if (realtime) assert.equal(realpathSync(link), realpathSync(path.join(process.env.ESP_WEBRTC_SOLUTION, 'components', name)))
+  if (realtime && name === 'esp_webrtc') assert.ok(readFileSync(path.join(link, 'src/esp_webrtc.c'), 'utf8').includes('rtc->rtc_cfg.peer_impl'))
+  else if (realtime) assert.equal(realpathSync(link), realpathSync(path.join(process.env.ESP_WEBRTC_SOLUTION, 'components', name)))
   else assert.equal(lstatSync(link, { throwIfNoEntry: false }), undefined, 'stale component link')
 }
 
@@ -464,6 +467,7 @@ function createFirmwareWrapperFixture(deviceName = 'm5stackchan_cores3', mode = 
     const directory = path.join(solutionDirectory, 'components', component)
     mkdirSync(directory, { recursive: true })
     writeFileSync(path.join(directory, 'CMakeLists.txt'), '# local test component\n')
+    if (component === 'esp_webrtc') writePeerFixture(directory)
   }
   mkdirSync(fixtureWebEditor, { recursive: true })
   cpSync(
@@ -622,4 +626,12 @@ function assertMainCommand(invocation, command, manifestPath) {
 
 function count(source, value) {
   return source.split(value).length - 1
+}
+
+function writePeerFixture(directory) {
+  mkdirSync(path.join(directory, 'src'), { recursive: true })
+  writeFileSync(
+    path.join(directory, 'src/esp_webrtc.c'),
+    'int f() { return esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc); }\n',
+  )
 }

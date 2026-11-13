@@ -42,6 +42,7 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
         options?.bargeIn === true,
         options?.pitch ?? 0,
         options?.realtime === true,
+        options?.subscription === true,
       )
     }
     acceptAnswer(sdp) {

@@ -1,4 +1,5 @@
 import {
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -79,7 +80,9 @@ export function prepareCoreS3IdfDependencies({
     for (const name of webRtcComponents) {
       const source = path.resolve(solutionDirectory, 'components', name)
       if (!existsSync(path.join(source, 'CMakeLists.txt'))) throw new Error(`Missing WebRTC component: ${name}`)
-      linkComponent(source, path.join(componentDirectory, name))
+      const destination = path.join(componentDirectory, name)
+      if (name === 'esp_webrtc') preparePeerImplementation(source, destination)
+      else linkComponent(source, destination)
     }
     // Use ESP-IDF's project component discovery; never patch the SDK CMake project.
     const conversation = JSON.parse(
@@ -97,6 +100,34 @@ export function prepareCoreS3IdfDependencies({
   prepareModdableMain({ moddableDirectory, mainDirectory, realtime })
   console.log(`[stack-chan] prepared IDF dependencies: ${manifestPath}`)
   return manifestPath
+}
+
+// esp_webrtc validates peer_impl but the pinned SDK ignores it when opening the
+// peer. Honor the supplied implementation in generated output only, preserving
+// the SDK and its licenses. This enables the existing bounded state observer.
+function preparePeerImplementation(source, destination) {
+  const relative = 'src/esp_webrtc.c'
+  const original = readFileSync(path.join(source, relative), 'utf8')
+  const before = 'esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc)'
+  const after = 'esp_peer_open(&peer_cfg, rtc->rtc_cfg.peer_impl, &rtc->pc)'
+  if (original.split(after).length === 2 && !original.includes(before)) {
+    linkComponent(source, destination)
+    return
+  }
+  if (original.split(before).length !== 2 || original.includes(after))
+    throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
+  const marker = '.stackchan-peer-implementation'
+  const current = lstatSync(destination, { throwIfNoEntry: false })
+  if (current?.isSymbolicLink()) unlinkSync(destination)
+  else if (
+    current &&
+    (!existsSync(path.join(destination, marker)) ||
+      readFileSync(path.join(destination, marker), 'utf8') !== `${source}\n`)
+  )
+    throw new Error(`Refusing to replace component directory: ${destination}`)
+  cpSync(source, destination, { recursive: true, preserveTimestamps: true })
+  writeFileSync(path.join(destination, relative), original.replace(before, after))
+  writeFileSync(path.join(destination, marker), `${source}\n`)
 }
 
 function linkComponent(source, destination) {

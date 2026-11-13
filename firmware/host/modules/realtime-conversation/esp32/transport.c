@@ -33,7 +33,7 @@ typedef struct {
 	atomic_bool stopping, done, muted, flushPending;
 	atomic_int failure;
 	atomic_uint queuedBytes, volume, lastPollTick;
-	bool started, errorRead, captureOnly, bargeIn, realtime, tcp, dtlsActpass;
+	bool started, errorRead, captureOnly, bargeIn, realtime, subscription, tcp, dtlsActpass;
     int pitch;
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
@@ -226,7 +226,9 @@ static void worker(void *ctx)
 	esp_webrtc_cfg_t cfg = {
 		.peer_cfg = {.audio_info = {.codec = ESP_PEER_AUDIO_CODEC_OPUS, .sample_rate = 16000, .channel = 1},
 			.audio_dir = ESP_PEER_MEDIA_DIR_SEND_RECV, .video_dir = ESP_PEER_MEDIA_DIR_NONE,
-			.enable_data_channel = true, .manual_ch_create = true, .no_auto_reconnect = true,
+			/* Subscription control already has one WebSocket owner. Audio needs
+			 * no SCTP/data channel; retain it for the existing API modes. */
+			.enable_data_channel = !t->subscription, .manual_ch_create = true, .no_auto_reconnect = true,
 			.on_custom_data = onData, .ctx = t, .extra_cfg = &peer, .extra_size = sizeof(peer)},
 		.signaling_cfg = {.extra_cfg = &t, .extra_size = sizeof(t)},
 		.peer_impl = &t->observedPeer, .signaling_impl = &signaling
@@ -341,6 +343,7 @@ void xs_live_transport_start(xsMachine *the)
 	t->captureOnly = xsmcArgc && xsmcToBoolean(xsArg(0));
 	t->bargeIn = xsmcArgc > 1 && xsmcToBoolean(xsArg(1));
     t->realtime = xsmcArgc > 3 && xsmcToBoolean(xsArg(3));
+    t->subscription = xsmcArgc > 4 && xsmcToBoolean(xsArg(4));
 	unsigned trials = atomic_load(&gLiveTrials);
 	t->tcp = !!(trials & 1);
 	t->dtlsActpass = !!(trials & 2);

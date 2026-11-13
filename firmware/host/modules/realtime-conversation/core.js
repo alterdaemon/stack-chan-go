@@ -317,6 +317,7 @@ export default class Conversation {
         bargeIn: this.#options.bargeIn,
         pitch: this.#options.pitch,
         ...(this.#realtime ? { realtime: true } : {}),
+        ...(this.#subscription ? { subscription: true } : {}),
       })
     } catch (error) {
       this.#fail(error)

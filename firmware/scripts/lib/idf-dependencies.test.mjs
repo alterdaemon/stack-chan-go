@@ -150,6 +150,13 @@ test('discovers local WebRTC components without editing their sources and isolat
     const component = path.join(solutionDirectory, 'components', name)
     mkdirSync(component, { recursive: true })
     writeFileSync(path.join(component, 'CMakeLists.txt'), 'idf_component_register()\n')
+    if (name === 'esp_webrtc') {
+      mkdirSync(path.join(component, 'src'))
+      writeFileSync(
+        path.join(component, 'src/esp_webrtc.c'),
+        '/* SDK license */\nint f() { return esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc); }\n',
+      )
+    }
   }
   const options = {
     outputDirectory,
@@ -164,15 +171,32 @@ test('discovers local WebRTC components without editing their sources and isolat
     const manifestPath = prepareCoreS3IdfDependencies(options)
     const components = path.resolve(path.dirname(manifestPath), '../components')
     for (const name of names) {
-      assert.equal(
-        realpathSync(path.join(components, name)),
-        realpathSync(path.join(solutionDirectory, 'components', name)),
-      )
+      if (name !== 'esp_webrtc')
+        assert.equal(
+          realpathSync(path.join(components, name)),
+          realpathSync(path.join(solutionDirectory, 'components', name)),
+        )
       assert.equal(readFileSync(path.join(components, name, 'CMakeLists.txt'), 'utf8'), 'idf_component_register()\n')
     }
     const first = readFileSync(manifestPath, 'utf8')
     prepareCoreS3IdfDependencies(options)
     assert.equal(readFileSync(manifestPath, 'utf8'), first)
+    const relative = 'src/esp_webrtc.c'
+    const original = readFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), 'utf8')
+    const generated = readFileSync(path.join(components, 'esp_webrtc', relative), 'utf8')
+    assert.equal(
+      generated,
+      original.replace('esp_peer_get_default_impl()', 'rtc->rtc_cfg.peer_impl'),
+      'only the generated call uses the supplied implementation and retains the SDK license',
+    )
+    assert.ok(original.includes('esp_peer_get_default_impl()'), 'external SDK remains unchanged')
+    writeFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), 'unsupported SDK source\n')
+    assert.throws(() => prepareCoreS3IdfDependencies(options), /Unsupported WebRTC peer entry point/)
+    assert.equal(readFileSync(path.join(components, 'esp_webrtc', relative), 'utf8'), generated)
+    writeFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), original)
+    const { unlinkSync } = await import('node:fs')
+    unlinkSync(path.join(components, 'esp_webrtc/.stackchan-peer-implementation'))
+    assert.throws(() => prepareCoreS3IdfDependencies(options), /Refusing to replace component directory/)
     assert.equal(count(first, 'espressif/esp_capture:'), 1)
     assert.equal(count(first, 'espressif/esp_sysview:'), 0)
   } finally {

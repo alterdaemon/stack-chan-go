@@ -169,6 +169,7 @@ await test('subscription startup keeps safe stage codes without exposing raw loc
       dispose() {},
     }))
     const connecting = h.c.connect()
+    equal(h.starts, [{ bargeIn: false, pitch: 0, subscription: true }])
     const failure = rejected(connecting, code)
     await h.signal()
     await failure
