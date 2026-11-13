@@ -36,9 +36,14 @@ export function openSubscriptionControl(callId, headers, onMessage) {
       incoming = [],
       incomingSize = 0
     const queue = []
-    const fail = () => {
+    const fail = (timedOut = false) => {
       channel.close()
-      if (!opened) reject(new Error('Subscription control connection failed'))
+      if (!opened)
+        reject(
+          Object.assign(new Error('Subscription control connection failed'), {
+            code: timedOut === true ? 'subscription_control_timeout' : 'subscription_control_failed',
+          }),
+        )
       else onMessage({ type: 'error', error: { code: 'subscription_control_lost' } })
     }
     const flush = () => {
@@ -73,7 +78,7 @@ export function openSubscriptionControl(callId, headers, onMessage) {
         } catch {}
       },
     }
-    const deadline = Timer.set(fail, 15000)
+    const deadline = Timer.set(() => fail(true), 15000)
     try {
       socket = new Client({
         ...network,

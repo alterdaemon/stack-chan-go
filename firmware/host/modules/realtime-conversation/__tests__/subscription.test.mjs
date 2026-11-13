@@ -666,3 +666,42 @@ test('malformed SDP with a known call ID gets bounded orphan cleanup', async () 
   assert.equal(closed, 1)
   live.dispose()
 })
+
+test('startup diagnostics identify bootstrap, call metadata and control failures without error bodies', async () => {
+  const secret = 'synthetic-sensitive-error-body'
+  const fail = () => {
+    throw new Error(secret)
+  }
+  const validResponse = () => ({
+    ok: true,
+    headers: { 'openai-session-id': 'rtc_fixture' },
+    text: async () => 'v=0 answer',
+  })
+  for (const [overrides, code] of [
+    [{ uuid: fail }, 'subscription_bootstrap_failed'],
+    [{ fetch: fail }, 'subscription_bootstrap_failed'],
+    [{ fetch: async () => ({ ...validResponse(), headers: {} }) }, 'subscription_invalid_call'],
+    [{ openControl: fail }, 'subscription_control_failed'],
+  ]) {
+    const live = new SubscriptionLive({
+      auth: {
+        credentials: async () => ({ accessToken: 'subscription-only', accountId: 'fixture' }),
+        onLogout: () => () => {},
+      },
+      uuid: () => 'id',
+      fetch: async () => validResponse(),
+      openControl: async () => ({ send() {}, close() {} }),
+      ...overrides,
+    })
+    await assert.rejects(
+      live.create(
+        'v=0 offer',
+        {},
+        () => {},
+        () => true,
+      ),
+      (error) => error.code === code && !error.message.includes(secret),
+    )
+    live.dispose()
+  }
+})

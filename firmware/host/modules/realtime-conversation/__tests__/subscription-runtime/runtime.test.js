@@ -105,7 +105,9 @@ const cancelled = openSubscriptionControl('rtc_cancelled', {}, () => {})
 socket.options.onError()
 try {
   await cancelled
-} catch {}
+} catch (error) {
+  equal(error.code, 'subscription_control_failed')
+}
 lateDNS.onResolved('api.openai.com', '192.0.2.1')
 equal(connected, 0, 'late DNS after cancellation cannot open a socket')
 // Actual XS/Timer authorization, persisted identity, independent reboot renewal and deletion.

@@ -970,6 +970,21 @@ export default class Conversation {
         error = new ConversationError('Sign in to ChatGPT in Wi-Fi Settings', error.code, 'auth')
       else if (this.#subscription && error?.code === 'subscription_http_error')
         error = new ConversationError('Subscription request rejected', error.code, 'signaling', error.status)
+      else if (
+        this.#subscription &&
+        [
+          'subscription_bootstrap_failed',
+          'subscription_control_failed',
+          'subscription_control_timeout',
+          'subscription_invalid_call',
+          'subscription_invalid_sdp',
+        ].includes(error?.code)
+      )
+        error = new ConversationError(
+          'ChatGPT connection failed',
+          error.code,
+          error.code.startsWith('subscription_control_') ? 'control' : 'signaling',
+        )
       else error = new ConversationError(error?.message ?? 'Conversation failed', 'operation_failed', 'transport')
     }
     this.#connection?.reject(error)

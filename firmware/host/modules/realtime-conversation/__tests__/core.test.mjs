@@ -152,6 +152,30 @@ async function test(name, run) {
   count++
   console.log(`PASS ${name}`)
 }
+await test('subscription startup keeps safe stage codes without exposing raw local errors', async () => {
+  for (const code of [
+    'subscription_bootstrap_failed',
+    'subscription_control_failed',
+    'subscription_control_timeout',
+    'subscription_invalid_call',
+    'subscription_invalid_sdp',
+  ]) {
+    const h = harness({ auth: 'chatgpt', apiKey: undefined, delegation: undefined }, () => ({
+      create: async () => {
+        throw Object.assign(new Error('synthetic-sensitive-error-body'), { code })
+      },
+      cancelJob() {},
+      dispose() {},
+    }))
+    const connecting = h.c.connect()
+    const failure = rejected(connecting, code)
+    await h.signal()
+    await failure
+    equal(h.errors[0].stage, code.startsWith('subscription_control_') ? 'control' : 'signaling')
+    equal(h.errors[0].message, 'ChatGPT connection failed')
+    equal(h.requests.length, 0)
+  }
+})
 await test('unclassified local speech cannot force-stop a full-duplex answer', async () => {
   for (const bargeIn of [false, true]) {
     const h = harness({ bargeIn })

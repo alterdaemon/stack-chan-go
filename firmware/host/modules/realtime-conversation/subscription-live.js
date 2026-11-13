@@ -17,16 +17,17 @@ export function parseSubscriptionCall(response, sdp) {
   let callId
   if (typeof location === 'string') {
     if (!/^(?:https:\/\/(?:api\.openai\.com|chatgpt\.com))?\/(?!\/)/.test(location))
-      throw new Error('Invalid subscription call origin')
+      throw Object.assign(new Error('Invalid subscription call origin'), { code: 'subscription_invalid_call' })
     callId = location
       .split('?')[0]
       .split('/')
       .find((part) => /^(?:rtc_[A-Za-z0-9_-]+|[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/i.test(part))
   }
   callId ??= headers['openai-session-id']
-  if (!id(callId) || !/^(?:rtc_|[a-f0-9]{8}-)/i.test(callId)) throw new Error('Missing subscription call identity')
+  if (!id(callId) || !/^(?:rtc_|[a-f0-9]{8}-)/i.test(callId))
+    throw Object.assign(new Error('Missing subscription call identity'), { code: 'subscription_invalid_call' })
   if (typeof sdp !== 'string' || !sdp.startsWith('v=0') || sdp.length > 65536)
-    throw Object.assign(new Error('Invalid subscription SDP'), { callId })
+    throw Object.assign(new Error('Invalid subscription SDP'), { code: 'subscription_invalid_sdp', callId })
   return { callId, sdp }
 }
 
@@ -82,64 +83,73 @@ export class SubscriptionLive {
     this.#onMessage = onMessage
     const credentials = await this.auth.credentials()
     if (this.#closed || !current()) throw new Error('Subscription start cancelled')
-    const headers = {
-      Authorization: `Bearer ${credentials.accessToken}`,
-      'ChatGPT-Account-ID': credentials.accountId,
-      'OpenAI-Alpha': 'quicksilver=v2',
-      'session-id': this.uuid(),
-      'thread-id': this.uuid(),
-      'x-session-id': this.uuid(),
-      'User-Agent': 'stack-chan-go/2.1.0-R5',
-      'Content-Type': 'application/json',
-    }
-    this.options = options
-    for (const item of options.input ?? []) {
-      const text = (item.content ?? []).map((part) => part.text ?? '').join('')
-      this.#remember(item.role, text)
-    }
-    this.headers = headers
-    this.accountId = credentials.accountId
-    this.#request = this.fetch(CALL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        sdp,
-        session: {
-          model: SUBSCRIPTION_MODEL,
-          instructions: options.instructions,
-          audio: { output: { voice: options.voice } },
-          delegation: { type: 'client' },
-          ...(options.input ? { initial_items: options.input } : {}),
-        },
-      }),
-    })
-    const response = await this.#request
-    if (response.status === 401) this.auth.logout()
-    let bootstrap
+    let stage = 'bootstrap'
     try {
-      bootstrap = parseSubscriptionCall(response, await response.text())
-    } catch (error) {
-      if (error.callId) {
-        try {
-          const orphan = await this.openControl(error.callId, headers, () => {})
-          try {
-            orphan.send({ type: 'session.close' })
-          } finally {
-            orphan.close()
-          }
-        } catch {}
+      const headers = {
+        Authorization: `Bearer ${credentials.accessToken}`,
+        'ChatGPT-Account-ID': credentials.accountId,
+        'OpenAI-Alpha': 'quicksilver=v2',
+        'session-id': this.uuid(),
+        'thread-id': this.uuid(),
+        'x-session-id': this.uuid(),
+        'User-Agent': 'stack-chan-go/2.1.0-R5',
+        'Content-Type': 'application/json',
       }
-      throw error
+      this.options = options
+      for (const item of options.input ?? []) {
+        const text = (item.content ?? []).map((part) => part.text ?? '').join('')
+        this.#remember(item.role, text)
+      }
+      this.headers = headers
+      this.accountId = credentials.accountId
+      this.#request = this.fetch(CALL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          sdp,
+          session: {
+            model: SUBSCRIPTION_MODEL,
+            instructions: options.instructions,
+            audio: { output: { voice: options.voice } },
+            delegation: { type: 'client' },
+            ...(options.input ? { initial_items: options.input } : {}),
+          },
+        }),
+      })
+      const response = await this.#request
+      if (response.status === 401) this.auth.logout()
+      let bootstrap
+      try {
+        bootstrap = parseSubscriptionCall(response, await response.text())
+      } catch (error) {
+        if (error.callId) {
+          try {
+            const orphan = await this.openControl(error.callId, headers, () => {})
+            try {
+              orphan.send({ type: 'session.close' })
+            } finally {
+              orphan.close()
+            }
+          } catch {}
+        }
+        throw error
+      }
+      this.#request = undefined
+      // Even a late create must acquire a bounded control connection to close the remote call.
+      stage = 'control'
+      this.#channel = await this.openControl(bootstrap.callId, headers, (message) => this.#receive(message))
+      if (this.#closed || !current()) {
+        this.#channel.send({ type: 'session.close' })
+        this.#channel.close()
+        throw new Error('Subscription start cancelled')
+      }
+      return bootstrap
+    } catch (error) {
+      if (error?.code || error?.message === 'Subscription start cancelled') throw error
+      throw Object.assign(new Error('Subscription startup failed'), {
+        code: stage === 'control' ? 'subscription_control_failed' : 'subscription_bootstrap_failed',
+      })
     }
-    this.#request = undefined
-    // Even a late create must acquire a bounded control connection to close the remote call.
-    this.#channel = await this.openControl(bootstrap.callId, headers, (message) => this.#receive(message))
-    if (this.#closed || !current()) {
-      this.#channel.send({ type: 'session.close' })
-      this.#channel.close()
-      throw new Error('Subscription start cancelled')
-    }
-    return bootstrap
   }
 
   activate() {
