@@ -1,5 +1,6 @@
 {
   "include": [
+    "$(MODDABLE)/modules/base/debug/manifest.json",
     "$(MODDABLE)/modules/base/modules/manifest.json",
     "../../../../../host/modules/testing/manifest.json",
     "../../../../../host/app/manifest_openai_live_settings.json",

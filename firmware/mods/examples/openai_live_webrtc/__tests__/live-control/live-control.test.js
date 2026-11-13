@@ -1,6 +1,7 @@
 import { createAppControllerApplication } from 'app-controller'
 import { SimpleFace } from 'behaviors/face'
 import { ChatStatusBar } from 'chat-status-bar'
+import RuntimeDebug from 'debug'
 import Debug from 'device-debug'
 import { onClose, onContextCreated } from 'openai-live-integrated'
 import { Container } from 'piu/MC'
@@ -70,9 +71,16 @@ async function run() {
   const point = () => [control.x + control.width / 2, control.y + control.height / 2]
   const edgePoint = () => [1, app.height - 1]
   function assertTranslucent() {
-    const skin = control.first.skin
-    const fill = skin.fill
-    const opacity = (fill[0] & 0xff) / 255
+    // PiuColorsSerialize holds a movable Skin chunk pointer while allocating
+    // its result array. Keep GC outside this SDK getter in the simulator test.
+    RuntimeDebug.gc()
+    RuntimeDebug.gc(false)
+    let opacity
+    try {
+      opacity = (control.first.skin.fill[0] & 0xff) / 255
+    } finally {
+      RuntimeDebug.gc(true)
+    }
     assert(Math.abs(opacity - 0.25) < 0.005, `LIVE background opacity ${opacity} in ${label()} must stay 0.25`)
   }
   assertTranslucent()
