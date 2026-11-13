@@ -12,6 +12,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
       location,
       responseHeaders,
       stream,
+      phase = 'connect',
       finished = false
     let body = request.body
     function finish(error) {
@@ -21,6 +22,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
       const connection = client
       client = undefined
       body = undefined
+      const failure = (cause) => Object.assign(cause, { phase, status, received })
       // Leave the SDK callback before closing its current TLS/socket state.
       platform.schedule(() => {
         try {
@@ -28,7 +30,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         } catch {}
         if (error) {
           buffer = undefined
-          reject(error)
+          reject(failure(error))
         } else {
           try {
             resolve({
@@ -37,8 +39,9 @@ export function requestHttps(request, platform, setCancel = () => {}) {
               headers: responseHeaders,
               body: stream ? stream.finish() : buffer ? buffer.buffer.slice(0, received) : new ArrayBuffer(),
             })
-          } catch {
-            reject(new Error('Invalid subscription response stream'))
+          } catch (error) {
+            phase = 'finish'
+            reject(failure(error))
           }
         }
       }, 0)
@@ -64,6 +67,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         headers,
         onHeaders(code, incomingHeaders) {
           if (finished) return
+          phase = 'headers'
           status = code
           const value = incomingHeaders.get('location')
           if (typeof value === 'string' && value.length <= 4096) location = value
@@ -82,6 +86,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         },
         onWritable(count) {
           if (finished || !count) return
+          phase = 'write'
           try {
             count = Math.min(count, body.byteLength - offset)
             if (count) {
@@ -94,31 +99,32 @@ export function requestHttps(request, platform, setCancel = () => {}) {
         },
         onReadable(count) {
           if (finished || !count) return
+          phase = 'read'
           try {
             const end = received + count
             if (stream) {
-              if (end > 2097152) throw new Error()
+              if (end > 2097152) throw new Error('HTTPS response exceeds limit')
               const chunk = new Uint8Array(Math.min(count, 1024))
               while (count) {
                 const view = chunk.subarray(0, Math.min(count, chunk.length))
-                if (this.read(view) !== view.length) throw new Error()
+                if (this.read(view) !== view.length) throw new Error('HTTPS short read')
+                received += view.length
                 stream.write(view)
                 count -= view.length
               }
-              received = end
               return
             }
-            if (end > 131072) throw new Error()
+            if (end > 131072) throw new Error('HTTPS response exceeds limit')
             if (!buffer || end > buffer.length) {
               const next = new Uint8Array(Math.min(131072, Math.max(end, (buffer?.length ?? 512) * 2)))
               if (buffer) next.set(buffer.subarray(0, received))
               buffer = next
             }
             const read = this.read(buffer.subarray(received, end))
-            if (read !== count) throw new Error()
+            if (read !== count) throw new Error('HTTPS short read')
             received = end
-          } catch {
-            finish(new Error('HTTPS response exceeds limit or read failed'))
+          } catch (error) {
+            finish(error)
           }
         },
         onDone(error) {

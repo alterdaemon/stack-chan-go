@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Shinya Ishikawa
 // SPDX-License-Identifier: Apache-2.0
+import { httpFailureMetadata } from './http-options.js'
 
 export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
   let tail = Promise.resolve(),
@@ -80,7 +81,7 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
             })),
           }
         } catch (error) {
-          message = { id, error: String(error) }
+          message = { id, error: String(error), ...httpFailureMetadata(error) }
         }
         await reply(message, remaining)
       } finally {

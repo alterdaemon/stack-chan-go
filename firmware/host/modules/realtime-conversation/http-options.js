@@ -1,6 +1,39 @@
 // Copyright (c) 2026 Shinya Ishikawa
 // SPDX-License-Identifier: Apache-2.0
 // Keep the OpenAI-compatible HTTPS POST contract independent of the backend.
+// Only fixed local categories cross the diagnostic boundary, never exception text.
+const failureCodes = Object.freeze({
+  'HTTPS request cancelled': 'https_cancelled',
+  'HTTPS request timed out': 'https_timeout',
+  'HTTPS connection failed': 'https_connection',
+  'HTTPS write failed': 'https_write',
+  'HTTPS request failed': 'https_transport',
+  'HTTPS response exceeds limit': 'https_limit',
+  'HTTPS short read': 'https_short_read',
+  'Expected subscription event stream': 'subscription_content_type',
+  'Subscription stream continued after completion': 'subscription_after_completion',
+  'Invalid subscription completion': 'subscription_completion',
+  'Subscription search incomplete': 'subscription_search_incomplete',
+  'Invalid subscription UTF-8': 'subscription_utf8',
+  'Subscription event exceeds limit': 'subscription_event_limit',
+  'Subscription stream ended before completion': 'subscription_stream_incomplete',
+})
+
+export function httpFailureMetadata(error) {
+  const metadata = {
+    errorCode: Object.hasOwn(failureCodes, error?.message)
+      ? failureCodes[error.message]
+      : error instanceof SyntaxError
+        ? 'subscription_event_json'
+        : 'https_local',
+  }
+  if (['connect', 'write', 'headers', 'read', 'finish'].includes(error?.phase)) metadata.phase = error.phase
+  if (Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599) metadata.status = error.status
+  if (Number.isInteger(error?.received) && error.received >= 0 && error.received <= 2097152)
+    metadata.received = error.received
+  return metadata
+}
+
 export function normalizeRequest(url, options, encode, decodeCertificate) {
   const endpoint = /^https:\/\/([a-zA-Z0-9.-]+)(?::([0-9]{1,5}))?(\/[^\s#]*)$/.exec(url)
   if (!endpoint || options?.method !== 'POST' || (endpoint[2] && (+endpoint[2] < 1 || +endpoint[2] > 65535)))

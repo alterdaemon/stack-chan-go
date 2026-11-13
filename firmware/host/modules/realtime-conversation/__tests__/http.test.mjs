@@ -510,3 +510,82 @@ test('HTTP worker reduces incremental SSE and returns only bounded answer plus c
   await assert.rejects(cancelled, /cancelled/)
   assert.equal(closes, 3)
 })
+
+test('HTTP stream failures preserve safe categories and progress across the worker boundary', async () => {
+  for (const [text, expected, done] of [
+    ['data: private-secret-not-json\n\n', 'subscription_event_json', false],
+    ['data: {"type":"response.created"}\n\n', 'subscription_stream_incomplete', true],
+    ['data: ' + 'x'.repeat(32769), 'subscription_event_limit', false],
+  ]) {
+    let callbacks, reply
+    const diagnostics = [],
+      timers = new Set()
+    const worker = {}
+    const queue = createHttpQueue({
+      execute: (request) =>
+        requestHttps(request, {
+          createClient: () => ({
+            request: (value) => {
+              callbacks = value
+            },
+            close() {},
+          }),
+          createSubscriptionStream: () => createSubscriptionStream(decode, encode),
+          schedule: (callback, ms) => (ms ? 1 : queueMicrotask(callback)),
+          cancel() {},
+        }),
+      post: (message) => {
+        reply = message
+        worker.onmessage(message)
+      },
+      schedule: () => assert.fail('IPC retry not expected'),
+      elapsed: () => 0,
+    })
+    worker.postMessage = (message) => {
+      void queue(message)
+    }
+    const fetch = createHttpProxy({
+      createWorker: () => worker,
+      normalize,
+      decode,
+      now: () => 0,
+      schedule: (callback) => {
+        timers.add(callback)
+        return callback
+      },
+      cancel: (callback) => timers.delete(callback),
+      diagnose: (event, data) => diagnostics.push({ event, ...data?.() }),
+    })
+    const request = fetch('https://chatgpt.com/backend-api/codex/responses', {
+      method: 'POST',
+      responseFormat: 'subscription-response',
+    })
+    const rejected = assert.rejects(request, (error) => {
+      assert.equal(error.errorCode, expected)
+      assert.equal(error.status, 200)
+      assert.equal(error.phase, done ? 'finish' : 'read')
+      assert.equal(error.received, encode(text).byteLength)
+      return true
+    })
+    await new Promise(setImmediate)
+    callbacks.onHeaders(200, new Map([['content-type', 'text/event-stream']]))
+    let offset = 0
+    const bytes = new Uint8Array(encode(text))
+    callbacks.onReadable.call(
+      {
+        read(view) {
+          view.set(bytes.subarray(offset, offset + view.length))
+          offset += view.length
+          return view.length
+        },
+      },
+      bytes.length,
+    )
+    if (done) callbacks.onDone()
+    await rejected
+    assert.equal(reply.errorCode, expected)
+    assert.equal(timers.size, 0)
+    assert.equal(diagnostics.find((d) => d.event === 'job.failed').errorCode, expected)
+    assert.ok(!JSON.stringify(diagnostics).includes('private-secret'))
+  }
+})

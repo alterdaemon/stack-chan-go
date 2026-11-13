@@ -18,6 +18,7 @@ const NUMBER_FIELDS = new Set([
   'threshold',
   'strength',
   'request',
+  'received',
   'result',
   'value',
   'audio_start_ms',

@@ -35,10 +35,16 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
       }
       const job = pending.get(message.id)
       if (!job) return
-      diagnose?.(message.error ? 'job.failed' : 'job.response', () => ({ request: message.id, status: message.status }))
+      const metadata = {
+        status: message.status,
+        errorCode: message.errorCode,
+        phase: message.phase,
+        received: message.received,
+      }
+      diagnose?.(message.error ? 'job.failed' : 'job.response', () => ({ request: message.id, ...metadata }))
       pending.delete(message.id)
       cancel(job.timer)
-      if (message.error) job.reject(new Error(message.error))
+      if (message.error) job.reject(Object.assign(new Error(message.error), metadata))
       else
         job.resolve({
           status: message.status,

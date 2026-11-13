@@ -484,6 +484,9 @@ export class SubscriptionLive {
     } catch (error) {
       this.diagnose?.('backend.failed', () => ({
         status: error?.status,
+        errorCode: error?.errorCode,
+        phase: error?.phase,
+        received: error?.received,
         providerCode: error?.providerCode,
         param: error?.param,
       }))

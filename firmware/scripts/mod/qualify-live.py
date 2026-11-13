@@ -39,9 +39,10 @@ class Capture:
                 if not line.endswith('\n'):
                     self.reader.seek(at)
                     break
-                self.rows.append(json.loads(line)['device'])
-        if any(d.get('dropped', 0) or d.get('nativeDropped', 0) for d in self.rows):
-            raise RuntimeError('Lost diagnostic records; qualification is invalid')
+                device = json.loads(line)['device']
+                self.rows.append(device)
+                if device.get('dropped', 0) or device.get('nativeDropped', 0):
+                    raise RuntimeError('Lost diagnostic records; qualification is invalid')
 
     def wait(self, predicate, after=0, seconds=35):
         deadline = time.monotonic() + seconds
@@ -64,7 +65,7 @@ class Capture:
                            all((d.get(k) in ('applied', 'failed') if k == 'phase' and v == 'applied'
                                 else d.get(k) == v) for k, v in fields.items()), after, seconds=timeout)
         if result.get('phase') == 'failed':
-            raise RuntimeError(f'USB control failed: {action}/{fields.get("parameter", "")}: {result.get("code", "failed")}')
+            raise RuntimeError(f'USB control failed: {action}/{fields.get("parameter", "")}: {result.get("errorCode", "failed")}')
         return result
 
     def set(self, parameter, value):
@@ -87,17 +88,22 @@ class Capture:
         end = self.wait(lambda d: d.get('action') == 'live' and d.get('setting') == profile and
                         d.get('phase') in ('applied', 'failed'), after)
         elapsed = round(time.monotonic() - started, 3)
-        if end['phase'] == 'applied':
-            for probe in probes:
-                self.set('probe', probe)
-        until = time.monotonic() + hold if end['phase'] == 'applied' else 0
-        while time.monotonic() < until:
-            self.pump()
-            time.sleep(0.1)
-        self.command('diag live stop', 'live', setting='stop', phase='applied')
+        probe_error = None
+        try:
+            if end['phase'] == 'applied':
+                for probe in probes:
+                    self.set('probe', probe)
+            until = time.monotonic() + hold if end['phase'] == 'applied' else 0
+            while time.monotonic() < until:
+                self.pump()
+                time.sleep(0.1)
+        except RuntimeError as error:
+            probe_error = error
+        finally:
+            self.command('diag live stop', 'live', setting='stop', phase='applied')
         details = self.rows[after:]
         result = dict(name=name, profile=profile, interruption=interruption, settings=settings or {},
-                      phase=end['phase'], seconds=elapsed,
+                      phase='probe_failed' if probe_error else end['phase'], seconds=elapsed,
                       session=next((d for d in details if d.get('event') == 'call.session'), None),
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
                       failures=[d for d in details if d.get('event') == 'failure'],
@@ -106,6 +112,8 @@ class Capture:
         self.results.append(result)
         (self.args.output / 'results.json').write_text(json.dumps(self.results, indent=2) + '\n')
         print(json.dumps({k: result[k] for k in ('name', 'interruption', 'phase', 'seconds')}), flush=True)
+        if probe_error:
+            raise probe_error
         return result['phase'] == 'applied' and not result['failures']
 
     def close(self):
@@ -183,9 +191,17 @@ def main():
                     for value in values:
                         capture.trial(f'{parameter}-{value}', interruption=mode, settings={parameter: value})
         elif args.suite == 'cycles':
+            failures = consecutive = 0
             for index in range(args.cycles):
-                if not capture.trial(f'cycle-{index + 1}', interruption='on' if index % 2 else 'off'):
-                    raise RuntimeError('Start/stop cycle failed')
+                if capture.trial(f'cycle-{index + 1}', interruption='on' if index % 2 else 'off'):
+                    consecutive = 0
+                else:
+                    failures += 1
+                    consecutive += 1
+                    if consecutive >= 2:
+                        raise RuntimeError('Repeated start failures; stop before consuming more account quota')
+            if failures:
+                raise RuntimeError(f'{failures}/{args.cycles} start/stop cycles failed; see retained evidence')
         else:
             if not capture.trial('soak', interruption='on', settings={'standby': 3600}, hold=args.hold):
                 raise RuntimeError('Soak failed')
