@@ -2,6 +2,10 @@
 
 [![Firmware build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml?query=branch%3Amain%20event%3Aworkflow_dispatch)
 
+<table>
+<tr>
+<td width="65%" valign="top">
+
 A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.
 
@@ -14,6 +18,15 @@ The current 2.1.0 series also incorporates upstream 2.1.0.
 Current source firmware: **2.1.0-R4**, for **M5StackChan CoreS3**.
 The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
 Preconfigured application-only and full BINs are available in that release.
+
+</td>
+<td width="35%" valign="top">
+
+https://github.com/user-attachments/assets/54cdc5e6-88c7-489d-bf10-56f2416e06ab
+
+</td>
+</tr>
+</table>
 
 ## What this fork adds
 
