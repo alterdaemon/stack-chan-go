@@ -12,6 +12,9 @@ const NUMBER_FIELDS = new Set([
   'attempt',
   'maxAttempts',
   'pitch',
+  'trialPitch',
+  'trialVolume',
+  'trialStandby',
   'threshold',
   'strength',
   'request',
@@ -128,6 +131,11 @@ const STRING_FIELDS = new Set([
   'dtlsRole',
   'interruptionTrial',
   'voiceTrial',
+  'trialPitch',
+  'trialVolume',
+  'trialStandby',
+  'trialStyle',
+  'trialPrompt',
   'voice',
   'param',
 ])
@@ -262,7 +270,10 @@ export class DebugRecorder {
       const parts = line.split(' ')
       const parameter = line === 'diag reset' ? 'reset' : parts[2]
       const raw = parts[3]
-      const value = ['noise', 'dtls', 'interruption', 'voice'].includes(parameter) ? raw : Number(raw)
+      const value =
+        ['noise', 'dtls', 'interruption', 'voice', 'style', 'prompt'].includes(parameter) || raw === 'saved'
+          ? raw
+          : Number(raw)
       const valid =
         parameter === 'reset' ||
         (parts.length === 4 &&
@@ -276,6 +287,12 @@ export class DebugRecorder {
             (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
             (parameter === 'interruption' && ['on', 'off', 'saved'].includes(value)) ||
             (parameter === 'voice' && /^[a-z]{3,12}$/.test(value)) ||
+            (['pitch', 'volume', 'standby', 'style', 'prompt'].includes(parameter) && value === 'saved') ||
+            (parameter === 'pitch' && Number.isInteger(value) && value >= -6 && value <= 6) ||
+            (parameter === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) ||
+            (parameter === 'standby' && Number.isInteger(value) && value >= 1 && value <= 3600) ||
+            (parameter === 'style' && ['default', 'calm', 'expressive'].includes(value)) ||
+            (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

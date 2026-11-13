@@ -16,6 +16,7 @@ export const PREFERENCE_KEYS = [
   'ai.context',
   'openailive.mode',
   'openailive.auth',
+  'openailive.codexVoice',
   'openailive.realtimeVoice',
   'openailive.backendModel',
   'openailive.reasoningEffort',
@@ -50,6 +51,7 @@ export const DEFAULT_PREFERENCES: PreferenceValues = {
   // Populated by the device, including its firmware defaults.
   'openailive.mode': 'live',
   'openailive.auth': 'api-key',
+  'openailive.codexVoice': 'cove',
   'openailive.realtimeVoice': 'marin',
   'openailive.backendModel': '',
   'openailive.reasoningEffort': '',
@@ -68,6 +70,7 @@ export const isPreferenceKey = (value: string): value is PreferenceKey =>
   (PREFERENCE_KEYS as readonly string[]).includes(value)
 export {
   OPENAI_LIVE_VOICES,
+  OPENAI_CODEX_VOICES,
   OPENAI_REALTIME_VOICES,
   OPENAI_LIVE_STYLES,
   OPENAI_LIVE_PITCH_MIN,

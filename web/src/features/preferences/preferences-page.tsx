@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   OPENAI_REASONING_EFFORTS,
   OPENAI_LIVE_VOICES,
+  OPENAI_CODEX_VOICES,
   OPENAI_REALTIME_VOICES,
   OPENAI_LIVE_PITCH_MIN,
   OPENAI_LIVE_PITCH_MAX,
@@ -53,6 +54,7 @@ export function PreferencesPage() {
     (name === 'openailive.realtimeVoice' && !preferences.realtimeVoiceAvailable) ||
     (name === 'openailive.bargeIn' && !preferences.bargeInAvailable) ||
     (name === 'openailive.voice' && !preferences.voiceAvailable) ||
+    (name === 'openailive.codexVoice' && !preferences.codexVoiceAvailable) ||
     (name === 'openailive.pitch' && !preferences.pitchAvailable) ||
     (name === 'openailive.style' && !preferences.styleAvailable) ||
     (name === 'openailive.standbySeconds' && !preferences.standbyAvailable) ||
@@ -331,13 +333,15 @@ export function PreferencesPage() {
                   OPENAI_REASONING_EFFORTS.map((value) => ({ value, label: value, translate: false }))
                 )}
               {selectField(
-                realtime ? 'openailive.realtimeVoice' : 'openailive.voice',
+                subscription ? 'openailive.codexVoice' : realtime ? 'openailive.realtimeVoice' : 'openailive.voice',
                 '声',
-                (realtime ? OPENAI_REALTIME_VOICES : OPENAI_LIVE_VOICES).map((value) => ({
-                  value,
-                  label: value,
-                  translate: false,
-                }))
+                (subscription ? OPENAI_CODEX_VOICES : realtime ? OPENAI_REALTIME_VOICES : OPENAI_LIVE_VOICES).map(
+                  (value) => ({
+                    value,
+                    label: value,
+                    translate: false,
+                  })
+                )
               )}
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-3">

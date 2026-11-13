@@ -49,6 +49,7 @@ export default function loadPreferences(category: PreferenceDomain): ConfigRecor
     // Match GPT-Live's whole-block MOD override and expose only its editable fields.
     const live = loadModConfig().openaiLive ?? config.openaiLive ?? {}
     preference.auth = 'api-key'
+    preference.codexVoice = 'cove'
     preference.mode = 'live'
     preference.realtimeVoice = 'marin'
     preference.backendModel = live.backendModel

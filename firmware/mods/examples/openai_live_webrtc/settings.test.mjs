@@ -222,7 +222,7 @@ test('subscription selection never reads the API key and preserves shared prompt
   }
   const read = () =>
     readLiveSettings({ apiKey: 'unselected-paid-key' }, (domain, key) => {
-      assert.notEqual(`${domain}.${key}`, 'ai.token')
+      assert.ok(!['ai.token', 'openailive.voice', 'openailive.realtimeVoice'].includes(`${domain}.${key}`))
       return saved[`${domain}.${key}`]
     })
   const settings = read()
@@ -231,8 +231,10 @@ test('subscription selection never reads the API key and preserves shared prompt
   assert.equal(settings.model, 'gpt-live-1.1-codex')
   assert.equal(settings.mode, 'live')
   assert.equal(settings.instructions, 'Speak Polish.')
-  assert.equal(settings.voice, 'cedar')
+  assert.equal(settings.voice, 'cove')
   assert.equal(settings.pitch, 3)
   saved['openailive.voice'] = 'unsupported'
+  assert.equal(read().voice, 'cove')
+  saved['openailive.codexVoice'] = 'unsupported'
   assert.throws(read, /Unsupported subscription voice/)
 })

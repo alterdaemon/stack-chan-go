@@ -78,6 +78,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     // A new device must advertise these fields before they become editable.
     for (const key of [
       'openailive.auth',
+      'openailive.codexVoice',
       'openailive.mode',
       'openailive.realtimeVoice',
       'openailive.backendModel',
@@ -95,6 +96,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     setValues((current) => ({
       ...current,
       'openailive.auth': 'api-key',
+      'openailive.codexVoice': 'cove',
       'openailive.mode': 'live',
       'openailive.realtimeVoice': 'marin',
       'openailive.backendModel': '',
@@ -141,6 +143,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
       readOnlyRef.current.has(key) ||
       ([
         'openailive.auth',
+        'openailive.codexVoice',
         'openailive.mode',
         'openailive.realtimeVoice',
         'openailive.bargeIn',
@@ -223,11 +226,12 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
         'ai.token',
         'openailive.mode',
         'openailive.realtimeVoice',
+        'openailive.voice',
         'openailive.backendModel',
         'openailive.reasoningEffort',
       ] as const)
         delete payload[key]
-    }
+    } else delete payload['openailive.codexVoice']
     return savePayload(payload, '設定を送信しました。')
   }, [savePayload, values])
 
@@ -249,6 +253,7 @@ export function usePreferences(clientFactory: ClientFactory = defaultClientFacto
     readOnly,
     openaiAvailable: currentValues.current['openailive.backendModel'] !== undefined,
     subscriptionAvailable: currentValues.current['openailive.auth'] !== undefined,
+    codexVoiceAvailable: currentValues.current['openailive.codexVoice'] !== undefined,
     modeAvailable: currentValues.current['openailive.mode'] !== undefined,
     realtimeVoiceAvailable: currentValues.current['openailive.realtimeVoice'] !== undefined,
     bargeInAvailable: currentValues.current['openailive.bargeIn'] !== undefined,

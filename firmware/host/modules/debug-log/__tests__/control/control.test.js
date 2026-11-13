@@ -73,20 +73,33 @@ async function verifyLiveAPI() {
     observed
   Debug.registerLive(owner, {
     isActive: () => active,
-    start: async (interruption, standard, voice) => {
+    start: async (interruption, standard, voice, parameters) => {
       active = true
-      observed = { interruption, standard, voice }
+      observed = { interruption, standard, voice, parameters }
       return true
     },
     stop: async () => {
       active = false
     },
   })
+  Debug.setLiveTrial('pitch', -6)
+  Debug.setLiveTrial('style', 'expressive')
+  Debug.setLiveTrial('volume', 0)
+  Debug.setLiveTrial('prompt', 'long')
+  Debug.setLiveTrial('standby', 1)
   Debug.setVoiceTrial('juniper')
   Debug.setInterruptionTrial('off')
   await Debug.controlLive('start')
   if (observed.interruption !== false || observed.standard !== 4) throw new Error('Off override lost')
-  if (observed.voice !== 'juniper') throw new Error('Voice trial lost')
+  if (
+    observed.voice !== 'juniper' ||
+    observed.parameters.pitch !== -6 ||
+    observed.parameters.volume !== 0 ||
+    observed.parameters.style !== 'expressive' ||
+    observed.parameters.prompt !== 'long' ||
+    observed.parameters.standby !== 1
+  )
+    throw new Error('Parameter trial lost')
   try {
     Debug.setVoiceTrial('cove')
     throw new Error('Active voice accepted')
@@ -110,11 +123,27 @@ async function verifyLiveAPI() {
   await Debug.controlLive('standard')
   if (observed.interruption !== true || observed.standard !== 0) throw new Error('Standard trial lost')
   await Debug.controlLive('stop')
+  for (const [name, value] of [
+    ['pitch', 7],
+    ['volume', -1],
+    ['style', 'arbitrary'],
+    ['prompt', 'private text'],
+    ['standby', 0],
+    ['apiKey', 'secret'],
+  ]) {
+    try {
+      Debug.setLiveTrial(name, value)
+      throw new Error('Invalid parameter accepted')
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error
+    }
+  }
   await Debug.resetTuning()
   if (Debug.tuningSnapshot().interruptionTrial !== 'saved' || Debug.tuningSnapshot().voiceTrial !== 'saved')
     throw new Error('Trial reset lost')
   await Debug.controlLive('standard')
-  if (observed.interruption !== false || observed.standard !== 0) throw new Error('Baseline defaults lost')
+  if (observed.interruption !== false || observed.standard !== 0 || observed.parameters !== undefined)
+    throw new Error('Baseline defaults lost')
   await Debug.controlLive('stop')
   Debug.unregisterLive(owner)
 }

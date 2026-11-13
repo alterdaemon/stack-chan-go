@@ -19,6 +19,7 @@ describe('PreferencesPage', () => {
       busy: false,
       openaiAvailable: true,
       subscriptionAvailable: false,
+      codexVoiceAvailable: true,
       modeAvailable: true,
       realtimeVoiceAvailable: true,
       bargeInAvailable: true,
@@ -66,7 +67,7 @@ describe('PreferencesPage', () => {
     expect(screen.getByRole('combobox', { name: 'AI connection' })).toBeVisible()
     expect(await screen.findByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible()
     expect(screen.getByLabelText('システムロール')).toHaveValue('Speak Polish.')
-    expect(screen.getByRole('combobox', { name: '声' })).toBeVisible()
+    expect(screen.getByRole('combobox', { name: '声' })).toHaveTextContent('cove')
     expect(screen.getByRole('slider', { name: 'ピッチ' })).toBeVisible()
     expect(screen.getByRole('spinbutton', { name: '自動切断までの秒数' })).toBeVisible()
     expect(screen.queryByLabelText('OpenAI API key')).toBeNull()

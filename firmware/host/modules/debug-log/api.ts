@@ -10,12 +10,21 @@ let recorder: Recorder | undefined
 type Tuner = { set(name: string, value: number | string): Promise<void>; reset(): Promise<void>; snapshot(): Fields }
 let tuner: { owner: object; value: Tuner } | undefined
 type LiveControl = {
-  start(interruption?: boolean, stage?: number, voice?: string): Promise<boolean> | undefined
+  start(interruption?: boolean, stage?: number, voice?: string, parameters?: Fields): Promise<boolean> | undefined
   stop(): Promise<unknown>
   warmup?(): Promise<void>
   isActive?(): boolean
 }
-let live: { owner: object; value: LiveControl; controlled: boolean; interruption?: boolean; voice?: string } | undefined
+let live:
+  | {
+      owner: object
+      value: LiveControl
+      controlled: boolean
+      interruption?: boolean
+      voice?: string
+      parameters?: Fields
+    }
+  | undefined
 // Codex V3 builtin candidates; USB trials are separate from qualified Settings voices.
 // openai/codex 69231e11, codex-rs/protocol/src/protocol.rs, RealtimeVoicesList::builtin.
 const voiceTrials =
@@ -59,6 +68,7 @@ export default {
         stage < 4 ? (owner.interruption ?? false) : owner.interruption,
         stage,
         owner.voice,
+        owner.parameters,
       )
       if (!started) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
       owner.controlled = true
@@ -84,6 +94,7 @@ export default {
     if (live) {
       live.interruption = undefined
       live.voice = undefined
+      live.parameters = undefined
     }
     return tuner?.value.reset() ?? Promise.resolve()
   },
@@ -99,10 +110,30 @@ export default {
     if (value !== 'saved' && !voiceTrials.includes(value)) throw new RangeError('Invalid voice trial')
     live.voice = value === 'saved' ? undefined : value
   },
+  setLiveTrial(name: string, value: number | string): void {
+    if (!recorder?.enabled || !live || live.value.isActive?.() !== false)
+      throw Object.assign(new Error('LIVE must be stopped'), { code: 'live_active' })
+    const valid =
+      (name === 'pitch' && Number.isInteger(value) && Number(value) >= -6 && Number(value) <= 6) ||
+      (name === 'volume' && typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) ||
+      (name === 'standby' && Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 3600) ||
+      (name === 'style' && ['default', 'calm', 'expressive'].includes(String(value))) ||
+      (name === 'prompt' && ['standard', 'long'].includes(String(value)))
+    if (!['pitch', 'volume', 'standby', 'style', 'prompt'].includes(name) || (value !== 'saved' && !valid))
+      throw new RangeError('Invalid LIVE trial')
+    live.parameters ??= {}
+    if (value === 'saved') delete live.parameters[name]
+    else live.parameters[name] = value
+  },
   tuningSnapshot(): Fields {
     return {
       interruptionTrial: live?.interruption === undefined ? 'saved' : live.interruption ? 'on' : 'off',
       voiceTrial: live?.voice ?? 'saved',
+      trialPitch: live?.parameters?.pitch ?? 'saved',
+      trialVolume: live?.parameters?.volume ?? 'saved',
+      trialStandby: live?.parameters?.standby ?? 'saved',
+      trialStyle: live?.parameters?.style ?? 'saved',
+      trialPrompt: live?.parameters?.prompt ?? 'saved',
       ...tuner?.value.snapshot(),
     }
   },

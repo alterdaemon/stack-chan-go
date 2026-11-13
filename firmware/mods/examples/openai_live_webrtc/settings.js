@@ -26,7 +26,7 @@ export function readLiveSettings(defaults, getPreference) {
   const bargeIn = getPreference('openailive', 'bargeIn')
   const savedMode = getPreference('openailive', 'mode')
   const mode = !subscription && ['realtime', 'realtime-full'].includes(savedMode) ? 'realtime' : 'live'
-  const realtimeVoice = getPreference('openailive', 'realtimeVoice')
+  const realtimeVoice = subscription ? undefined : getPreference('openailive', 'realtimeVoice')
   const savedVolume = getPreference('tts', 'volume')
   const volume = savedVolume === undefined || savedVolume === '' ? NaN : Number(savedVolume)
   const voiceSettings = {}
@@ -36,10 +36,14 @@ export function readLiveSettings(defaults, getPreference) {
     ['style', 'default'],
     ['standbySeconds', 60],
   ]) {
+    if (subscription && key === 'voice') {
+      const voice = getPreference('openailive', 'codexVoice') ?? 'cove'
+      if (!isLiveVoicePreference('openailive.codexVoice', voice)) throw new Error('Unsupported subscription voice')
+      voiceSettings.voice = voice
+      continue
+    }
     const prop = `openailive.${key}`
     const saved = getPreference('openailive', key)
-    if (subscription && key === 'voice' && !isLiveVoicePreference(prop, saved ?? defaults[key] ?? fallback))
-      throw new Error('Unsupported subscription voice')
     const value = isLiveVoicePreference(prop, saved)
       ? saved
       : isLiveVoicePreference(prop, defaults[key])

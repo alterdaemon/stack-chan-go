@@ -190,6 +190,11 @@ test('USB trials require enable, validate bounds and settle only after the reque
     'diag set stun 2',
     'diag set interruption maybe',
     'diag set voice ../secret',
+    'diag set pitch -7',
+    'diag set volume 2',
+    'diag set style arbitrary',
+    'diag set prompt token',
+    'diag set standby 0',
     'diag set dtls passive',
     'diag set speaker ',
   ])
@@ -211,6 +216,12 @@ test('USB trials require enable, validate bounds and settle only after the reque
     'diag set interruption saved',
     'diag set voice cove',
     'diag set voice saved',
+    'diag set pitch -6',
+    'diag set pitch saved',
+    'diag set volume 0',
+    'diag set standby 1',
+    'diag set style expressive',
+    'diag set prompt long',
     'diag set dtls actpass',
     'diag set dtls active',
     'diag reset',
@@ -219,7 +230,7 @@ test('USB trials require enable, validate bounds and settle only after the reque
     for (let i = 0; i < 10; i++) await Promise.resolve()
     assert.equal(f.lines.at(-1).phase, 'applied')
   }
-  assert.equal(applied.length, 18)
+  assert.equal(applied.length, 24)
 })
 
 test('a trial cannot run after its USB session ends or report success in a later capture', async () => {

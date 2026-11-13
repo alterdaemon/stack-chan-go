@@ -12,6 +12,7 @@
     "openai-live-session": "../../session",
     "openai-live-feedback": "../../feedback",
     "openai-live-settings": "../../settings",
+    "openai-live-debug-trials": "../../debug-trials",
     "openai-live-options": "../../../../../host/modules/preferences/openai-live-options",
     "realtimeConversation": "../../../../../host/modules/realtime-conversation/realtimeConversation",
     "realtimeConversation/core": "../../../../../host/modules/realtime-conversation/core",
