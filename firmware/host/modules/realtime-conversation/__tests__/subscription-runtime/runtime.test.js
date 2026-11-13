@@ -253,6 +253,30 @@ const event = ArrayBuffer.fromString(
 )
 for (let index = 0; index < event.byteLength; index++) stream.write(new Uint8Array(event.slice(index, index + 1)))
 equal(JSON.parse(decoder.decode(stream.finish())).answer, 'Żółw 🌍')
+const codexStream = createSubscriptionStream(
+  (bytes) => decoder.decode(bytes),
+  (text) => ArrayBuffer.fromString(text),
+)
+const codexEvents = [
+  {
+    type: 'response.output_item.done',
+    output_index: 0,
+    item: {
+      id: 'msg_fixture',
+      type: 'message',
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text: 'Żółw 🌍' }],
+    },
+  },
+  { type: 'response.completed', response: { id: 'resp_fixture', status: 'completed', output: [] } },
+]
+for (const value of codexEvents) {
+  const bytes = ArrayBuffer.fromString(`data: ${JSON.stringify(value)}\n\n`)
+  for (let index = 0; index < bytes.byteLength; index++)
+    codexStream.write(new Uint8Array(bytes.slice(index, index + 1)))
+}
+equal(JSON.parse(decoder.decode(codexStream.finish())).answer, 'Żółw 🌍')
 await new Promise((resolve) => Timer.set(resolve, 1))
 let lateDNS,
   connected = 0

@@ -56,7 +56,7 @@ class Capture:
             time.sleep(0.03)
         raise RuntimeError('USB control acknowledgement timed out')
 
-    def command(self, text, action, timeout=7, **fields):
+    def command(self, text, action, timeout=7, allow_unavailable=False, **fields):
         self.pump()
         after = len(self.rows)
         self.child.stdin.write(text + '\n')
@@ -65,6 +65,8 @@ class Capture:
                            all((d.get(k) in ('applied', 'failed') if k == 'phase' and v == 'applied'
                                 else d.get(k) == v) for k, v in fields.items()), after, seconds=timeout)
         if result.get('phase') == 'failed':
+            if allow_unavailable and result.get('errorCode') == 'live_unavailable':
+                return result
             raise RuntimeError(f'USB control failed: {action}/{fields.get("parameter", "")}: {result.get("errorCode", "failed")}')
         return result
 
@@ -97,10 +99,13 @@ class Capture:
             while time.monotonic() < until:
                 self.pump()
                 time.sleep(0.1)
-        except RuntimeError as error:
+        except (RuntimeError, OSError) as error:
             probe_error = error
         finally:
-            self.command('diag live stop', 'live', setting='stop', phase='applied')
+            try:
+                self.command('diag live stop', 'live', setting='stop', phase='applied')
+            except (RuntimeError, OSError) as error:
+                probe_error = probe_error or error
         details = self.rows[after:]
         result = dict(name=name, profile=profile, interruption=interruption, settings=settings or {},
                       phase='probe_failed' if probe_error else end['phase'], seconds=elapsed,
@@ -108,6 +113,7 @@ class Capture:
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
                       failures=[d for d in details if d.get('event') == 'failure'],
                       backend=[d for d in details if d.get('event', '').startswith('backend.')],
+                      nativeFailures=[d for d in details if d.get('component') == 'native'],
                       probeOutputs=[d for d in details if d.get('event') == 'probe.output'])
         self.results.append(result)
         (self.args.output / 'results.json').write_text(json.dumps(self.results, indent=2) + '\n')
@@ -126,6 +132,10 @@ class Capture:
                 self.child.send_signal(signal.SIGINT)
                 self.child.wait(timeout=6)
         self.pump()
+        try:
+            self.child.stdin.close()
+        except OSError:
+            pass
         if self.reader:
             self.reader.close()
         self.log.close()
@@ -158,12 +168,20 @@ def main():
         if first.get('app_sha256') != args.expected_sha:
             raise RuntimeError('Running image identity differs from the validated candidate')
         (args.output / 'identity.json').write_text(json.dumps(first, indent=2) + '\n')
-        capture.command('diag live stop', 'live', setting='stop', phase='applied')
+        ready_deadline = time.monotonic() + 35
+        while True:
+            stopped = capture.command('diag live stop', 'live', setting='stop', phase='applied', allow_unavailable=True)
+            if stopped['phase'] == 'applied':
+                break
+            if time.monotonic() >= ready_deadline:
+                raise RuntimeError('LIVE controls unavailable after startup; check the active MOD')
+            time.sleep(0.5)
         if args.suite == 'backend':
-            for mode in ('off', 'on'):
+            modes = ('off', 'on') if args.interruption == 'both' else (args.interruption,)
+            for mode in modes:
                 if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):
                     raise RuntimeError('Standard backend qualification failed')
-            for mode in ('off', 'on'):
+            for mode in modes:
                 for model in ('gpt-6.1-terra', 'gpt-6-luna'):
                     for effort in ('medium', 'none', 'low', 'high', 'xhigh', 'max'):
                         if not capture.trial(f'{model}-{effort}', interruption=mode,

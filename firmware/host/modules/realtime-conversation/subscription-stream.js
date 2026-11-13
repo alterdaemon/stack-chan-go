@@ -1,9 +1,85 @@
+export function subscriptionErrorMetadata(text) {
+  if (typeof text !== 'string' || text.length > 4096) return {}
+  try {
+    const source = JSON.parse(text)?.error
+    const result = {}
+    const code = source?.code ?? source?.type
+    if (typeof code === 'string' && /^[a-z][a-z0-9_]{0,63}$/i.test(code) && !/sk_|bearer|password|secret/i.test(code))
+      result.providerCode = code
+    if (
+      typeof source?.param === 'string' &&
+      /^(?:session|delegation|model|audio|tools|reasoning|input|instructions|store|stream|tool_choice)(?:[.[\]a-z0-9_]){0,96}$/i.test(
+        source.param,
+      )
+    )
+      result.param = source.param
+    return result
+  } catch {
+    return {}
+  }
+}
+
 // Subscription Responses SSE is reduced in the existing HTTP worker before IPC.
 export function createSubscriptionStream(decode, encode) {
   let pending = '',
     carry = new Uint8Array(),
     result,
-    terminal = false
+    terminal = false,
+    answer = '',
+    answerBytes = 0,
+    searched = false
+  const sources = [],
+    items = new Set()
+  function acceptOnce(item, index) {
+    if (!item || typeof item !== 'object') throw new Error('Invalid subscription completion')
+    const key = typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(item.id) ? item.id : index
+    if (typeof key !== 'string' && (!Number.isInteger(key) || key < 0 || key >= 128))
+      throw new Error('Invalid subscription completion')
+    if (items.has(key)) return
+    if (items.size >= 32) throw new Error('Subscription event exceeds limit')
+    items.add(key)
+    acceptItem(item)
+  }
+  function acceptItem(item) {
+    if (item.type === 'web_search_call') {
+      if (item.status !== 'completed') throw new Error('Subscription search incomplete')
+      searched = true
+    }
+    if (item.type !== 'message' || item.phase === 'commentary') return
+    if (item.role !== undefined && item.role !== 'assistant') throw new Error('Invalid subscription completion')
+    if (item.status !== undefined && item.status !== 'completed') throw new Error('Invalid subscription completion')
+    for (const part of item.content ?? []) {
+      if (part.type !== 'output_text') continue
+      if (typeof part.text === 'string') {
+        for (const character of part.text) {
+          const point = character.codePointAt(0)
+          const size = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
+          if (answerBytes + size > 3000) break
+          answer += character
+          answerBytes += size
+        }
+      }
+      for (const citation of part.annotations ?? []) {
+        if (sources.length >= 6) break
+        if (
+          citation.type !== 'url_citation' ||
+          typeof citation.url !== 'string' ||
+          !/^https?:\/\/[A-Za-z0-9][^\s]*$/.test(citation.url) ||
+          citation.url.length > 512 ||
+          sources.some((source) => source.url === citation.url)
+        )
+          continue
+        let url
+        try {
+          url = encodeURI(citation.url)
+        } catch {
+          continue
+        }
+        if (url.length > 512) continue
+        sources.push({ url, title: String(citation.title ?? '').slice(0, 100) })
+      }
+    }
+  }
   function event(text) {
     const data = text
       .split('\n')
@@ -15,54 +91,26 @@ export function createSubscriptionStream(decode, encode) {
     if (terminal) throw new Error('Subscription stream continued after completion')
     if (['response.failed', 'response.incomplete', 'error'].includes(value.type)) {
       terminal = true
-      result = { error: 'subscription_incomplete' }
+      result = {
+        error: 'subscription_incomplete',
+        ...subscriptionErrorMetadata(JSON.stringify({ error: value.error ?? value.response?.error ?? value })),
+      }
+    } else if (value.type === 'response.output_item.done') {
+      acceptOnce(value.item, value.output_index)
     } else if (value.type === 'response.completed') {
       terminal = true
       const response = value.response
-      if (response?.status !== 'completed' || !Array.isArray(response.output))
+      if (
+        !response ||
+        typeof response !== 'object' ||
+        Array.isArray(response) ||
+        (response.status !== undefined && response.status !== 'completed')
+      )
         throw new Error('Invalid subscription completion')
-      let answer = '',
-        answerBytes = 0,
-        searched = false
-      const sources = []
-      for (const item of response.output) {
-        if (item.type === 'web_search_call') {
-          if (item.status !== 'completed') throw new Error('Subscription search incomplete')
-          searched = true
-        }
-        if (item.type !== 'message') continue
-        for (const part of item.content ?? []) {
-          if (part.type !== 'output_text') continue
-          if (typeof part.text === 'string') {
-            for (const character of part.text) {
-              const point = character.codePointAt(0)
-              const size = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
-              if (answerBytes + size > 3000) break
-              answer += character
-              answerBytes += size
-            }
-          }
-          for (const citation of part.annotations ?? []) {
-            if (sources.length >= 6) break
-            if (
-              citation.type !== 'url_citation' ||
-              typeof citation.url !== 'string' ||
-              !/^https?:\/\/[A-Za-z0-9][^\s]*$/.test(citation.url) ||
-              citation.url.length > 512 ||
-              sources.some((source) => source.url === citation.url)
-            )
-              continue
-            let url
-            try {
-              url = encodeURI(citation.url)
-            } catch {
-              continue
-            }
-            if (url.length > 512) continue
-            sources.push({ url, title: String(citation.title ?? '').slice(0, 100) })
-          }
-        }
-      }
+      if (Array.isArray(response.output))
+        for (let index = 0; index < response.output.length; index++) acceptOnce(response.output[index], index)
+      else if (!items.size) throw new Error('Invalid subscription completion')
+
       result =
         !searched && sources.length
           ? { error: 'search_missing_tool' }

@@ -4,11 +4,24 @@ import argparse
 from datetime import datetime, timezone
 import json
 import os
+import re
 from pathlib import Path
 import select
 import termios
 import time
 import sys
+
+
+def native_failure(line):
+    """Retain code addresses only; never raw console text, registers or stack data."""
+    match = re.fullmatch(rb'Backtrace:((?: 0x[0-9a-fA-F]{8}:0x[0-9a-fA-F]{8}){1,32})\s*', line)
+    if match:
+        return dict(component='native', event='backtrace',
+                    frames=[pair.split(b':')[0].decode('ascii') for pair in match[1].split()])
+    match = re.fullmatch(rb'abort\(\) was called at PC (0x[0-9a-fA-F]{8}) on core ([01])\s*', line)
+    if match:
+        return dict(component='native', event='abort', pc=match[1].decode('ascii'), core=int(match[2]))
+    return None
 
 
 def main():
@@ -106,6 +119,9 @@ def main():
                 # Console output can precede a record. Parse only the diagnostic envelope.
                 marker = line.find(b'@diag ')
                 if marker < 0:
+                    event = native_failure(line)
+                    if event:
+                        retain(event)
                     continue
                 try:
                     event = json.loads(line[marker + 6:])

@@ -1,3 +1,7 @@
+import { subscriptionErrorMetadata } from './subscription-stream.js'
+
+export { subscriptionErrorMetadata } from './subscription-stream.js'
+
 // Candidate private Codex Live contract. Native WebRTC remains owned by Conversation.
 // Protocol evidence: openai/codex 16e27626 and malhashemi/opencode-gpt-live c23101cf.
 const CALL = 'https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&architecture=avas'
@@ -5,28 +9,6 @@ const BACKEND = 'https://chatgpt.com/backend-api/codex/responses'
 export const SUBSCRIPTION_MODEL = 'gpt-live-1.1-codex'
 export const SUBSCRIPTION_BACKEND = 'gpt-6.1-terra'
 const id = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value)
-
-export function subscriptionErrorMetadata(text) {
-  if (typeof text !== 'string' || text.length > 4096) return {}
-  try {
-    const source = JSON.parse(text)?.error
-    const result = {}
-    if (
-      typeof source?.code === 'string' &&
-      /^[a-z][a-z0-9_]{0,63}$/i.test(source.code) &&
-      !/sk_|bearer|password|secret/i.test(source.code)
-    )
-      result.providerCode = source.code
-    if (
-      typeof source?.param === 'string' &&
-      /^(?:session|delegation|model|audio|tools|reasoning)(?:[.[\]a-z0-9_]){0,96}$/i.test(source.param)
-    )
-      result.param = source.param
-    return result
-  } catch {
-    return {}
-  }
-}
 
 // Only an already-readable, bounded HTTP rejection tail; no extra request or
 // wait, and no raw headers/body leave the adapter. HTTP framing follows RFC9112.
@@ -477,9 +459,19 @@ export class SubscriptionLive {
           ...subscriptionErrorMetadata(await response.text()),
         })
       const result = JSON.parse(await response.text())
-      this.diagnose?.('backend.result', () => ({ accepted: !result.error, searched: result.searched === true }))
+      this.diagnose?.('backend.result', () => ({
+        accepted: !result.error,
+        searched: result.searched === true,
+        errorCode: result.error,
+        providerCode: result.providerCode,
+        param: result.param,
+      }))
       if (result.error || typeof result.answer !== 'string' || result.answer.length > 3000)
-        throw new Error('Subscription answer incomplete')
+        throw Object.assign(new Error('Subscription answer incomplete'), {
+          errorCode: result.error,
+          providerCode: result.providerCode,
+          param: result.param,
+        })
       if (this.#job !== job || this.#closed) return
       const answer =
         result.answer + (result.searched ? '\nSources: ' + result.sources.map((source) => source.url).join(' ') : '')
@@ -497,6 +489,7 @@ export class SubscriptionLive {
       if (!probe && this.#job === job && !this.#closed)
         for (const event of subscriptionAppends('I could not complete that request. Please try again.', delegationId))
           this.#channel.send(event)
+      if (probe) throw Object.assign(error, { code: 'subscription_backend_error' })
     } finally {
       if (this.#job === job) {
         this.#job = undefined

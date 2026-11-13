@@ -55,3 +55,25 @@ print('passed 5 PTY captures')
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test('native crash retention exports only code addresses and rejects raw console or stack data', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import importlib.util, sys
+spec=importlib.util.spec_from_file_location('capture_debug',sys.argv[1])
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+assert module.native_failure(b'Backtrace: 0x40381234:0x3fc12345 0x42001234:0x3fc23456\r')==dict(component='native',event='backtrace',frames=['0x40381234','0x42001234'])
+assert module.native_failure(b'abort() was called at PC 0x42001234 on core 1\r')==dict(component='native',event='abort',pc='0x42001234',core=1)
+for text in [b'private-secret',b'Stack memory: 0x12345678',b'Backtrace: 0x40381234:0x3fc12345 private-secret',b'abort() private-secret']:
+    assert module.native_failure(text) is None
+print('passed')
+`,
+      fileURLToPath(new URL('../mod/capture-debug.py', import.meta.url)),
+    ],
+    { encoding: 'utf8' },
+  )
+  assert.match(result, /passed/)
+})

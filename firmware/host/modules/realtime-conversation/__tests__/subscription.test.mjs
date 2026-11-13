@@ -1070,9 +1070,82 @@ test('backend resource rejection preserves the grant and never substitutes crede
     requests.push(url)
     return reply({ error: { code: 'invalid_token' } }, 401)
   }
-  await assert.rejects(f.live.probe('probe', 'reasoning'), /probe failed/)
+  await assert.rejects(
+    f.live.probe('probe', 'reasoning'),
+    (error) =>
+      error.code === 'subscription_backend_error' && error.status === 401 && error.providerCode === 'invalid_token',
+  )
   assert.equal(logouts, 0)
   assert.equal(requests.length, 1)
   assert.ok(requests[0].startsWith('https://chatgpt.com/backend-api/codex/'))
   f.live.dispose()
+})
+
+test('Codex item completion is bounded, deduplicated and gated by terminal completion', () => {
+  const encode = (s) => new TextEncoder().encode(s).buffer
+  const decode = (b) => new TextDecoder('utf-8', { fatal: true }).decode(b)
+  const tool = { id: 'tool_1', type: 'web_search_call', status: 'completed' }
+  const message = {
+    id: 'msg_1',
+    type: 'message',
+    role: 'assistant',
+    status: 'completed',
+    content: [
+      { type: 'output_text', text: 'Żółw 🌍', annotations: [{ type: 'url_citation', url: 'https://example.test/' }] },
+    ],
+  }
+  const done = (item, output_index) => ({ type: 'response.output_item.done', item, output_index })
+  const terminal = (output) => ({
+    type: 'response.completed',
+    response: { id: 'resp_fixture', ...(output ? { output } : {}) },
+  })
+  const write = (stream, events) => {
+    const bytes = new Uint8Array(encode(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')))
+    for (let at = 0; at < bytes.length; at++) stream.write(bytes.subarray(at, at + 1))
+  }
+  for (const output of [undefined, [], [tool, message]]) {
+    const stream = createSubscriptionStream(decode, encode)
+    write(stream, [done(tool, 0), done(message, 1), done(message, 1)])
+    assert.throws(() => stream.finish(), /before completion/)
+    write(stream, [terminal(output)])
+    const result = JSON.parse(decode(stream.finish()))
+    assert.equal(result.answer, 'Żółw 🌍')
+    assert.equal(result.searched, true)
+    assert.equal(result.sources.length, 1)
+  }
+  const mixed = createSubscriptionStream(decode, encode)
+  write(mixed, [done(tool, 0), terminal([tool, message])])
+  assert.equal(JSON.parse(decode(mixed.finish())).answer, 'Żółw 🌍')
+  const failed = createSubscriptionStream(decode, encode)
+  write(failed, [
+    done(message, 0),
+    {
+      type: 'response.failed',
+      response: {
+        error: { code: 'unsupported_value', param: 'tools[0].type', message: 'synthetic-private-response' },
+      },
+    },
+  ])
+  assert.deepEqual(JSON.parse(decode(failed.finish())), {
+    error: 'subscription_incomplete',
+    providerCode: 'unsupported_value',
+    param: 'tools[0].type',
+  })
+  const excessive = createSubscriptionStream(decode, encode)
+  assert.throws(
+    () =>
+      write(
+        excessive,
+        Array.from({ length: 33 }, (_, index) =>
+          done(
+            {
+              id: `item_${index}`,
+              type: 'reasoning',
+            },
+            index,
+          ),
+        ),
+      ),
+    /exceeds limit/,
+  )
 })
