@@ -70,7 +70,9 @@ async function run() {
   const point = () => [control.x + control.width / 2, control.y + control.height / 2]
   const edgePoint = () => [1, app.height - 1]
   function assertTranslucent() {
-    const opacity = (control.first.skin.fill[0] & 0xff) / 255
+    const skin = control.first.skin
+    const fill = skin.fill
+    const opacity = (fill[0] & 0xff) / 255
     assert(Math.abs(opacity - 0.25) < 0.005, `LIVE background opacity ${opacity} in ${label()} must stay 0.25`)
   }
   assertTranslucent()
