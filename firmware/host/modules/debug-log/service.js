@@ -3,6 +3,7 @@
 
 import Debug from 'device-debug'
 import { DebugRecorder } from 'device-debug/core'
+import config from 'mc/config'
 import USBSerial from 'stackchan-usb-serial'
 import { isUSBSerialOutputFullError } from 'stackchan-usb-serial-types'
 import Timer from 'timer'
@@ -31,7 +32,7 @@ let serial,
   nextSnapshot = 0
 
 function snapshot() {
-  recorder.emit('device', 'snapshot', { firmware: '2.1.0-R3', ...info(), ...Debug.snapshot() })
+  recorder.emit('device', 'snapshot', { firmware: config.firmwareVersion, ...info(), ...Debug.snapshot() })
 }
 function poll() {
   recorder.tick(serial.connected)
@@ -58,7 +59,7 @@ export default function start() {
   recorder = new DebugRecorder({
     now,
     stamp,
-    info: () => ({ firmware: '2.1.0-R3', ...info(), ...Debug.tuningSnapshot() }),
+    info: () => ({ firmware: config.firmwareVersion, ...info(), ...Debug.tuningSnapshot() }),
     async tune(parameter, value) {
       if (parameter === 'reset') {
         tune(0, 0)

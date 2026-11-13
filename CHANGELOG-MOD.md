@@ -22,6 +22,7 @@ Release impact: minor.
 
 - Show GO and the complete fork firmware version on the welcome screen, keeping MODs and Settings in their existing bottom positions.
 - Show the firmware version at the bottom right of the robot's startup Settings menu, beside its Wi-Fi address; keep the version visible while offline.
+- Report the running build's firmware version in USB diagnostics instead of a fixed R3 label.
 
 ### 2.1.0-R4
 
