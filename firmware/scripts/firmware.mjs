@@ -9,6 +9,7 @@ import {
   buildOutputDirectory,
   ensureBuildOutputDirectory,
   hostApplicationName,
+  invalidateCoreS3Image,
   moddableOutputArguments,
 } from './lib/build-output.mjs'
 import { prepareBuildProfile } from './lib/build-profile.mjs'
@@ -172,6 +173,8 @@ if (integratedLive) run(process.execPath, ['scripts/mod/build-wifi-settings.mjs'
 
 switch (command) {
   case 'build':
+    if (!dryRun && ['m5stack_cores3', 'm5stackchan_cores3'].includes(deviceName))
+      invalidateCoreS3Image({ platformName: deviceName, mode: buildMode })
     run('mcconfig', [
       ...buildModeArgs,
       '-m',

@@ -8,6 +8,7 @@ import {
   buildOutputDirectory,
   ensureBuildOutputDirectory,
   hostApplicationName,
+  invalidateCoreS3Image,
   moddableOutputArguments,
 } from './lib/build-output.mjs'
 import { prepareBuildProfile } from './lib/build-profile.mjs'
@@ -40,6 +41,8 @@ try {
   if (manifest && isCoreS3) {
     const modeArgs = args.filter((arg) => ['-d', '-dn', '-dl', '-dx', '-i'].includes(arg))
     const mode = modeArgs.some((arg) => arg !== '-i') ? 'debug' : modeArgs.includes('-i') ? 'instrument' : 'release'
+    const taskIndex = args.indexOf('-t')
+    if (taskIndex >= 0 && args[taskIndex + 1] === 'build') invalidateCoreS3Image({ platformName, mode })
     commitBuildProfile = prepareBuildProfile({
       outputDirectory: buildOutputDirectory,
       platformName,

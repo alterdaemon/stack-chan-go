@@ -46,3 +46,16 @@ export function assertNoCustomBuildOutput(args) {
 export function moddableOutputArguments() {
   return ['-o', buildOutputDirectory]
 }
+
+/** Prevent an ignored IDF failure from reusing a previous CoreS3 linked image. */
+export function invalidateCoreS3Image({ platformName, mode, outputDirectory = buildOutputDirectory }) {
+  if (!['m5stack_cores3', 'm5stackchan_cores3'].includes(platformName)) throw new Error('Unsupported CoreS3 platform')
+  if (!['debug', 'instrument', 'release'].includes(mode)) throw new Error('Unsupported build mode')
+  const target = join('esp32', platformName, mode, hostApplicationName)
+  const build = join(outputDirectory, 'tmp', target, 'xsProj-esp32s3', 'build')
+  const bin = join(outputDirectory, 'bin', target)
+  // Moddable's build target ignores idf.py failure but its ELF objdump is fatal.
+  // Removing the old ELF makes that check fail; no stale BIN may survive either.
+  for (const directory of [build, bin])
+    for (const suffix of ['elf', 'bin']) rmSync(join(directory, `xs_esp32.${suffix}`), { force: true })
+}
