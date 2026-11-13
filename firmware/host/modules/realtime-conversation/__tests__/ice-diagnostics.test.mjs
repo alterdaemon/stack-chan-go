@@ -58,11 +58,23 @@ int main(void) {
             data[0] = 1; data[1] = 0x11;
             for (unsigned declared = 0; declared < 256; declared++) {
                 data[3] = declared;
-                liveIceMetadata(data, length, &type, &code);
+                if (liveIceMetadata(data, length, &type, &code)) {
+                    unsigned usernameLength;
+                    liveIceChecks(data, &usernameLength);
+                }
             }
         } else assert(!liveIceMetadata(data, length, &type, &code));
         free(data);
     }
+    /* RFC 5769 section 2.1 sample request (public synthetic values). */
+    uint8_t sample[] = {${[...Buffer.from('000100582112a442b7e7a701bc34d686fa87dfae802200105354554e207465737420636c69656e74002400046e0001ff80290008932ff9b151263b36000600096576746a3a68367659202020000800149aeaa70cbfd8cb56781ef2b5b2d3f249c1b571a280280004e57a3bcf', 'hex')].join(',')}};
+    assert(liveIceMetadata(sample, sizeof(sample), &type, &code));
+    unsigned usernameLength;
+    assert(liveIceChecks(sample, &usernameLength) == (1|8|16|32|64|256) && usernameLength == 9);
+    sample[sizeof(sample)-1] ^= 1;
+    assert(liveIceChecks(sample, &usernameLength) == (1|8|16|32|256));
+    memset(sample + sizeof(sample)-28, 0, 20);
+    assert(liveIceChecks(sample, &usernameLength) == (1|8|16|32|128|256));
     return 0;
 }
 `,

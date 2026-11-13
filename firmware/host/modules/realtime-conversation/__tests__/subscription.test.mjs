@@ -511,6 +511,12 @@ test('SDP diagnostics retain capability numbers and roles without private SDP fi
     iceMediaAttributes: 2,
     ipv4Candidates: 2,
     ipv6Candidates: 1,
+    privateCandidates: 0,
+    zeroAddressCandidates: 0,
+    udpMinPort: 5000,
+    udpMaxPort: 5000,
+    tcpMinPort: 443,
+    tcpMaxPort: 443,
   })
   const serialized = JSON.stringify(subscriptionSdpMetadata(sdp))
   for (const secret of ['synthetic', '192.0.2', 'fingerprint', 'ice-pwd', 'ice-ufrag', 'v=0'])
@@ -519,6 +525,22 @@ test('SDP diagnostics retain capability numbers and roles without private SDP fi
   assert.equal(absent.audioPort, undefined)
   assert.equal(absent.dtlsRole, undefined)
   assert.equal(absent.udpCandidates, 0)
+  const classified = subscriptionSdpMetadata(
+    [
+      'a=candidate:1 1 UDP 123 10.0.0.1 1234 typ host',
+      'a=candidate:2 1 UDP 123 172.16.0.1 9876 typ host',
+      'a=candidate:3 1 UDP 123 172.31.0.1 5000 typ host',
+      'a=candidate:4 1 TCP 123 192.168.0.1 443 typ host',
+      'a=candidate:5 1 TCP 123 0.0.0.0 0 typ host',
+      'a=candidate:6 1 UDP 123 172.32.0.1 70000 typ host',
+    ].join('\n'),
+  )
+  assert.equal(classified.privateCandidates, 4)
+  assert.equal(classified.zeroAddressCandidates, 1)
+  assert.equal(classified.udpMinPort, 1234)
+  assert.equal(classified.udpMaxPort, 9876)
+  assert.equal(classified.tcpMinPort, 0)
+  assert.equal(classified.tcpMaxPort, 443)
 })
 function liveFixture() {
   const requests = [],

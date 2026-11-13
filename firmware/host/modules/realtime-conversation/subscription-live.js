@@ -16,10 +16,37 @@ export function subscriptionSdpMetadata(sdp) {
   const session = mediaStart < 0 ? sdp : sdp.slice(0, mediaStart)
   const media = mediaStart < 0 ? '' : sdp.slice(mediaStart)
   let ipv4Candidates = 0,
-    ipv6Candidates = 0
-  for (const candidate of sdp.matchAll(/^a=candidate:\S+ \d+ \S+ \d+ (\S+)/gm)) {
-    if (candidate[1].includes(':')) ipv6Candidates++
-    else if (/^\d+\.\d+\.\d+\.\d+$/.test(candidate[1])) ipv4Candidates++
+    ipv6Candidates = 0,
+    privateCandidates = 0,
+    zeroAddressCandidates = 0,
+    udpMinPort,
+    udpMaxPort,
+    tcpMinPort,
+    tcpMaxPort
+  for (const candidate of sdp.matchAll(/^a=candidate:\S+ \d+ (\S+) \d+ (\S+) (\d+)/gm)) {
+    const [, protocol, address, rawPort] = candidate
+    if (address.includes(':')) ipv6Candidates++
+    else if (/^\d+\.\d+\.\d+\.\d+$/.test(address)) {
+      ipv4Candidates++
+      const octets = address.split('.').map(Number)
+      if (
+        octets[0] === 10 ||
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+        (octets[0] === 192 && octets[1] === 168)
+      )
+        privateCandidates++
+      if (octets.every((part) => part === 0)) zeroAddressCandidates++
+    }
+    const port = Number(rawPort)
+    if (port >= 0 && port <= 65535) {
+      if (protocol.toLowerCase() === 'udp') {
+        udpMinPort = Math.min(udpMinPort ?? port, port)
+        udpMaxPort = Math.max(udpMaxPort ?? port, port)
+      } else if (protocol.toLowerCase() === 'tcp') {
+        tcpMinPort = Math.min(tcpMinPort ?? port, port)
+        tcpMaxPort = Math.max(tcpMaxPort ?? port, port)
+      }
+    }
   }
   return {
     audioPort: audio ? Number(audio[1]) : undefined,
@@ -36,6 +63,12 @@ export function subscriptionSdpMetadata(sdp) {
     iceMediaAttributes: (media.match(/^a=ice-(?:ufrag|pwd):/gm) ?? []).length,
     ipv4Candidates,
     ipv6Candidates,
+    privateCandidates,
+    zeroAddressCandidates,
+    udpMinPort,
+    udpMaxPort,
+    tcpMinPort,
+    tcpMaxPort,
   }
 }
 

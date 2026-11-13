@@ -192,6 +192,16 @@ observations while pairing, beyond the record cap. These identify STUN-shaped
 traffic; the SDK still validates integrity and nomination. Sends without replies
 do not establish which network component failed. Generated SDK UDP observers
 preserve return values and errno; they retain no datagrams or addresses.
+`iceUdpSent`/`iceUdpReceived` count all successful UDP operations during pairing,
+including unrecognized messages. Each of the first 20 observations also emits
+`ice.checks`: `request` is direction, `result` is USERNAME length and `value` is a
+bit mask: 1 PRIORITY, 2 USE-CANDIDATE, 4 ICE-CONTROLLING, 8 ICE-CONTROLLED,
+16 MESSAGE-INTEGRITY present, 32 FINGERPRINT present, 64 FINGERPRINT CRC valid,
+128 all-zero MESSAGE-INTEGRITY, 256 USERNAME present. These do not authenticate
+the message. One `ice.crypto` value 1 confirms the actual SDK HMAC-SHA1 primitive
+passes RFC 2202 case 1 using public synthetic data; value 0 means failure.
+Candidate metadata includes only numeric port ranges, RFC 1918 and zero-address
+counts; no addresses or additional credentials are retained.
 SDP logs contain capability numbers only: no addresses, ICE passwords,
 fingerprints, session descriptions or speech content. Dropped records or an
 unexpected diagnostic Off invalidate a trial. Consult matching primary SDK and

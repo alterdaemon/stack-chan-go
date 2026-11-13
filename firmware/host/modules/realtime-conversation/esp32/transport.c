@@ -40,6 +40,7 @@ typedef struct {
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
 	atomic_uint workerStackMinimum;
 	atomic_uint peerPhase, iceRecords, iceSent, iceReceived, iceRejected, iceErrors;
+	atomic_uint iceUdpSent, iceUdpReceived;
 	const char *failureStage;
 	esp_webrtc_handle_t rtc;
 	esp_peer_signaling_cfg_t signal;
@@ -58,6 +59,7 @@ static atomic_uint gLiveTrials;
 static bool gAdapters;
 extern int stackchanRealtimeMediaInit(void);
 extern int stackchanRealtimeCodecInit(void);
+extern void utils_get_hmac_sha1(const char *, size_t, const char *, size_t, unsigned char *);
 
 /* Next-start RAM trials. A live owner keeps its immutable startup snapshot. */
 int stackchanLiveDebugSet(unsigned parameter, unsigned value)
@@ -82,6 +84,15 @@ static int observePeerState(esp_peer_state_t state, void *ctx)
 	LiveTransport *t = atomic_load(&gOwner);
 	if (t) atomic_store(&t->peerPhase, state);
 	stackchanDebugTransition(DEBUG_PEER_STATE, 0, state, 0);
+	if (state == ESP_PEER_STATE_PAIRING && stackchanDebugIsEnabled && stackchanDebugIsEnabled()) {
+		/* RFC 2202 HMAC-SHA1 case 1 exercises the actual SDK primitive with
+		 * public synthetic data, outside the datagram observer. */
+		static const uint8_t expected[20] = {0xb6,0x17,0x31,0x86,0x55,0x05,0x72,0x64,0xe2,0x8b,0xc0,0xb6,0xfb,0x37,0x8c,0x8e,0xf1,0x46,0xbe,0x00};
+		char key[20]; uint8_t digest[20] = {0};
+		memset(key, 0x0b, sizeof(key));
+		utils_get_hmac_sha1("Hi There", 8, key, sizeof(key), digest);
+		stackchanDebugTransition(DEBUG_ICE_CRYPTO, 0, !memcmp(digest, expected, sizeof(expected)), 0);
+	}
 	return t && t->peerState ? t->peerState(state, ctx) : 0;
 }
 static int observePeerOpen(esp_peer_cfg_t *cfg, esp_peer_handle_t *peer)
@@ -104,12 +115,20 @@ void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int
 	unsigned kind = 0, code = 0;
 	if (result < 0) atomic_fetch_add(&t->iceErrors, 1);
 	else {
+		atomic_fetch_add(outgoing ? &t->iceUdpSent : &t->iceUdpReceived, 1);
 		if (!liveIceMetadata(data, size, &kind, &code)) return;
 		atomic_fetch_add(outgoing ? &t->iceSent : &t->iceReceived, 1);
 		if (kind == 0x111) atomic_fetch_add(&t->iceRejected, 1);
 	}
-	if (atomic_fetch_add(&t->iceRecords, 1) < 20)
+	unsigned record = atomic_fetch_add(&t->iceRecords, 1);
+	if (record < 20) {
 		stackchanDebugTransition(DEBUG_ICE_DATAGRAM, !!outgoing, kind, result < 0 ? -error : code ? (int)code : result);
+		if (kind) {
+			unsigned usernameLength;
+			unsigned checks = liveIceChecks(data, &usernameLength);
+			stackchanDebugTransition(DEBUG_ICE_CHECKS, !!outgoing, checks, usernameLength);
+		}
+	}
 }
 
 static void fail(LiveTransport *t, int code)
@@ -509,6 +528,8 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("iceReceived", atomic_load(&t->iceReceived));
 	STAT("iceRejected", atomic_load(&t->iceRejected));
 	STAT("iceErrors", atomic_load(&t->iceErrors));
+	STAT("iceUdpSent", atomic_load(&t->iceUdpSent));
+	STAT("iceUdpReceived", atomic_load(&t->iceUdpReceived));
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
     STAT("interruptions", stats.interruptions);

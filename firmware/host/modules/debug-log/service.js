@@ -29,6 +29,8 @@ const nativeEvents = [
   'peer.state',
   'worker.done',
   'ice.datagram',
+  'ice.checks',
+  'ice.crypto',
 ]
 let serial,
   recorder,
