@@ -81,7 +81,7 @@ export function prepareCoreS3IdfDependencies({
       const source = path.resolve(solutionDirectory, 'components', name)
       if (!existsSync(path.join(source, 'CMakeLists.txt'))) throw new Error(`Missing WebRTC component: ${name}`)
       const destination = path.join(componentDirectory, name)
-      if (name === 'esp_webrtc') preparePeerImplementation(source, destination)
+      if (name === 'esp_webrtc' || name === 'esp_peer') preparePeerImplementation(source, destination, name)
       else linkComponent(source, destination)
     }
     // Use ESP-IDF's project component discovery; never patch the SDK CMake project.
@@ -102,20 +102,42 @@ export function prepareCoreS3IdfDependencies({
   return manifestPath
 }
 
-// esp_webrtc validates peer_impl but the pinned SDK ignores it when opening the
-// peer. Honor the supplied implementation in generated output only, preserving
-// the SDK and its licenses. This enables the existing bounded state observer.
-function preparePeerImplementation(source, destination) {
-  const relative = 'src/esp_webrtc.c'
+// Honor the peer implementation and observe UDP results in generated output
+// only. Preserve installed SDK sources/licenses and reject unsupported shapes.
+function preparePeerImplementation(source, destination, name) {
+  const relative = name === 'esp_webrtc' ? 'src/esp_webrtc.c' : 'src/transport/udp.c'
   const original = readFileSync(path.join(source, relative), 'utf8')
   const before = 'esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc)'
   const after = 'esp_peer_open(&peer_cfg, rtc->rtc_cfg.peer_impl, &rtc->pc)'
-  if (original.split(after).length === 2 && !original.includes(before)) {
+  if (name === 'esp_webrtc' && original.split(after).length === 2 && !original.includes(before)) {
     linkComponent(source, destination)
     return
   }
-  if (original.split(before).length !== 2 || original.includes(after))
-    throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
+  const receive = 'ret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len);'
+  const patches =
+    name === 'esp_webrtc'
+      ? [[before, after]]
+      : [
+          [
+            '#define TAG "UDP"',
+            `extern void stackchanLiveDebugIce(unsigned, const uint8_t *, int, int, int) __attribute__((weak));
+static void stackchanObserveUdp(unsigned outgoing, const uint8_t *buf, int len, int result)
+{
+    int saved_errno = errno;
+    if (stackchanLiveDebugIce) stackchanLiveDebugIce(outgoing, buf, len, result, result < 0 ? saved_errno : 0);
+    errno = saved_errno;
+}
+#define TAG "UDP"`,
+          ],
+          ['measure_stop("sendto");', 'measure_stop("sendto");\n    stackchanObserveUdp(1, buf, len, ret);'],
+          [receive, `${receive}\n        stackchanObserveUdp(0, buf, ret, ret);`],
+        ]
+  let generated = original
+  for (const [from, to] of patches) {
+    if (generated.split(from).length !== 2 || generated.includes(to))
+      throw new Error(`Unsupported WebRTC peer entry point: ${source}`)
+    generated = generated.replace(from, to)
+  }
   const marker = '.stackchan-peer-implementation'
   const current = lstatSync(destination, { throwIfNoEntry: false })
   if (current?.isSymbolicLink()) unlinkSync(destination)
@@ -126,7 +148,7 @@ function preparePeerImplementation(source, destination) {
   )
     throw new Error(`Refusing to replace component directory: ${destination}`)
   cpSync(source, destination, { recursive: true, preserveTimestamps: true })
-  writeFileSync(path.join(destination, relative), original.replace(before, after))
+  writeFileSync(path.join(destination, relative), generated)
   writeFileSync(path.join(destination, marker), `${source}\n`)
 }
 

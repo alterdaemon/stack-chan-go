@@ -53,6 +53,16 @@ const NUMBER_FIELDS = new Set([
   'queueEvents',
   'queueCommands',
   'tcp',
+  'iceSent',
+  'iceReceived',
+  'iceRejected',
+  'iceErrors',
+  'iceUfragLength',
+  'icePasswordLength',
+  'iceSessionAttributes',
+  'iceMediaAttributes',
+  'ipv4Candidates',
+  'ipv6Candidates',
 ])
 const STRING_FIELDS = new Set([
   'state',

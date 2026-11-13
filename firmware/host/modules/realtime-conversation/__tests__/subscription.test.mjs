@@ -492,18 +492,25 @@ test('SDP diagnostics retain capability numbers and roles without private SDP fi
     'a=fingerprint:sha-256 synthetic-fingerprint',
     'a=candidate:one 1 UDP 123 192.0.2.1 5000 typ host',
     'a=candidate:two 1 TCP 123 192.0.2.2 443 typ host tcptype passive',
+    'a=candidate:three 1 UDP 123 2001:db8::1 5000 typ host',
     'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
     '',
   ].join('\r\n')
   assert.deepEqual(subscriptionSdpMetadata(sdp), {
     audioPort: 9,
     applicationPort: 9,
-    udpCandidates: 1,
+    udpCandidates: 2,
     tcpCandidates: 1,
     dtlsRole: 'passive',
     iceLite: true,
     opusRate: 48000,
     opusChannels: 2,
+    iceUfragLength: 'synthetic-username'.length,
+    icePasswordLength: 'synthetic-password'.length,
+    iceSessionAttributes: 0,
+    iceMediaAttributes: 2,
+    ipv4Candidates: 2,
+    ipv6Candidates: 1,
   })
   const serialized = JSON.stringify(subscriptionSdpMetadata(sdp))
   for (const secret of ['synthetic', '192.0.2', 'fingerprint', 'ice-pwd', 'ice-ufrag', 'v=0'])

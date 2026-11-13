@@ -18,6 +18,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "poll-watchdog.h"
+#include "ice-diagnostics.h"
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,7 @@ typedef struct {
 	atomic_uint encodedFrames, encodedPts;
 	atomic_uint peerEvents, lastPeerEvent, dataMessages;
 	atomic_uint workerStackMinimum;
+	atomic_uint peerPhase, iceRecords, iceSent, iceReceived, iceRejected, iceErrors;
 	const char *failureStage;
 	esp_webrtc_handle_t rtc;
 	esp_peer_signaling_cfg_t signal;
@@ -78,6 +80,7 @@ unsigned stackchanLiveDebugGet(unsigned parameter)
 static int observePeerState(esp_peer_state_t state, void *ctx)
 {
 	LiveTransport *t = atomic_load(&gOwner);
+	if (t) atomic_store(&t->peerPhase, state);
 	stackchanDebugTransition(DEBUG_PEER_STATE, 0, state, 0);
 	return t && t->peerState ? t->peerState(state, ctx) : 0;
 }
@@ -89,6 +92,24 @@ static int observePeerOpen(esp_peer_cfg_t *cfg, esp_peer_handle_t *peer)
 	esp_peer_cfg_t observed = *cfg;
 	observed.on_state = observePeerState;
 	return t->basePeer->open(&observed, peer);
+}
+
+/* Called by generated SDK UDP observers. No allocation, logging of payloads or
+ * changes to socket results/errno; dormant outside diagnostic ICE pairing. */
+void stackchanLiveDebugIce(unsigned outgoing, const uint8_t *data, int size, int result, int error)
+{
+	if (!stackchanDebugIsEnabled || !stackchanDebugIsEnabled()) return;
+	LiveTransport *t = atomic_load(&gOwner);
+	if (!t || atomic_load(&t->peerPhase) != ESP_PEER_STATE_PAIRING) return;
+	unsigned kind = 0, code = 0;
+	if (result < 0) atomic_fetch_add(&t->iceErrors, 1);
+	else {
+		if (!liveIceMetadata(data, size, &kind, &code)) return;
+		atomic_fetch_add(outgoing ? &t->iceSent : &t->iceReceived, 1);
+		if (kind == 0x111) atomic_fetch_add(&t->iceRejected, 1);
+	}
+	if (atomic_fetch_add(&t->iceRecords, 1) < 20)
+		stackchanDebugTransition(DEBUG_ICE_DATAGRAM, !!outgoing, kind, result < 0 ? -error : code ? (int)code : result);
 }
 
 static void fail(LiveTransport *t, int code)
@@ -484,6 +505,10 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("queueEvents", uxQueueMessagesWaiting(t->events));
 	STAT("queueCommands", uxQueueMessagesWaiting(t->commands));
 	STAT("tcp", t->tcp);
+	STAT("iceSent", atomic_load(&t->iceSent));
+	STAT("iceReceived", atomic_load(&t->iceReceived));
+	STAT("iceRejected", atomic_load(&t->iceRejected));
+	STAT("iceErrors", atomic_load(&t->iceErrors));
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
     STAT("interruptions", stats.interruptions);

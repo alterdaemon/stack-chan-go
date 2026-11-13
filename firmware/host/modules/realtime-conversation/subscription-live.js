@@ -12,6 +12,15 @@ export function subscriptionSdpMetadata(sdp) {
   const audio = /^m=audio ([0-9]{1,5}) /m.exec(sdp)
   const application = /^m=application ([0-9]{1,5}) /m.exec(sdp)
   const opus = /^a=rtpmap:[0-9]+ opus\/([0-9]{1,6})(?:\/([0-9]{1,2}))?\r?$/im.exec(sdp)
+  const mediaStart = sdp.indexOf('\nm=')
+  const session = mediaStart < 0 ? sdp : sdp.slice(0, mediaStart)
+  const media = mediaStart < 0 ? '' : sdp.slice(mediaStart)
+  let ipv4Candidates = 0,
+    ipv6Candidates = 0
+  for (const candidate of sdp.matchAll(/^a=candidate:\S+ \d+ \S+ \d+ (\S+)/gm)) {
+    if (candidate[1].includes(':')) ipv6Candidates++
+    else if (/^\d+\.\d+\.\d+\.\d+$/.test(candidate[1])) ipv4Candidates++
+  }
   return {
     audioPort: audio ? Number(audio[1]) : undefined,
     applicationPort: application ? Number(application[1]) : undefined,
@@ -21,6 +30,12 @@ export function subscriptionSdpMetadata(sdp) {
     iceLite: /^a=ice-lite\r?$/m.test(sdp),
     opusRate: opus ? Number(opus[1]) : undefined,
     opusChannels: opus?.[2] ? Number(opus[2]) : undefined,
+    iceUfragLength: /^a=ice-ufrag:([^\r\n]*)/m.exec(sdp)?.[1].length ?? 0,
+    icePasswordLength: /^a=ice-pwd:([^\r\n]*)/m.exec(sdp)?.[1].length ?? 0,
+    iceSessionAttributes: (session.match(/^a=ice-(?:ufrag|pwd):/gm) ?? []).length,
+    iceMediaAttributes: (media.match(/^a=ice-(?:ufrag|pwd):/gm) ?? []).length,
+    ipv4Candidates,
+    ipv6Candidates,
   }
 }
 

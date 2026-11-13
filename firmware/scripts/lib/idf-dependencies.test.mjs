@@ -157,6 +157,13 @@ test('discovers local WebRTC components without editing their sources and isolat
         '/* SDK license */\nint f() { return esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc); }\n',
       )
     }
+    if (name === 'esp_peer') {
+      mkdirSync(path.join(component, 'src/transport'), { recursive: true })
+      writeFileSync(
+        path.join(component, 'src/transport/udp.c'),
+        '#define TAG "UDP"\nvoid f() { measure_stop("sendto");\nret = recvfrom(target_fd, buf, len, 0, (struct sockaddr *)&addr_storage, &addr_len); }\n',
+      )
+    }
   }
   const options = {
     outputDirectory,
@@ -171,7 +178,7 @@ test('discovers local WebRTC components without editing their sources and isolat
     const manifestPath = prepareCoreS3IdfDependencies(options)
     const components = path.resolve(path.dirname(manifestPath), '../components')
     for (const name of names) {
-      if (name !== 'esp_webrtc')
+      if (name !== 'esp_webrtc' && name !== 'esp_peer')
         assert.equal(
           realpathSync(path.join(components, name)),
           realpathSync(path.join(solutionDirectory, 'components', name)),
@@ -190,6 +197,15 @@ test('discovers local WebRTC components without editing their sources and isolat
       'only the generated call uses the supplied implementation and retains the SDK license',
     )
     assert.ok(original.includes('esp_peer_get_default_impl()'), 'external SDK remains unchanged')
+    const udp = readFileSync(path.join(components, 'esp_peer/src/transport/udp.c'), 'utf8')
+    assert.ok(udp.includes('stackchanObserveUdp(1, buf, len, ret);'))
+    assert.ok(udp.includes('stackchanObserveUdp(0, buf, ret, ret);'))
+    assert.ok(udp.includes('errno = saved_errno;'))
+    assert.ok(
+      !readFileSync(path.join(solutionDirectory, 'components/esp_peer/src/transport/udp.c'), 'utf8').includes(
+        'stackchanObserveUdp',
+      ),
+    )
     writeFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), 'unsupported SDK source\n')
     assert.throws(() => prepareCoreS3IdfDependencies(options), /Unsupported WebRTC peer entry point/)
     assert.equal(readFileSync(path.join(components, 'esp_webrtc', relative), 'utf8'), generated)

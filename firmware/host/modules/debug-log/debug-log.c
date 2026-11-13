@@ -17,6 +17,7 @@ static DebugEvent records[DEBUG_NATIVE_COUNT];
 static portMUX_TYPE debugLock = portMUX_INITIALIZER_UNLOCKED;
 static atomic_bool enabled;
 static unsigned head, count, sequence, dropped;
+int stackchanDebugIsEnabled(void) { return atomic_load(&enabled); }
 
 void xs_device_debug_available(xsMachine *the) {
 #ifdef mxDebug

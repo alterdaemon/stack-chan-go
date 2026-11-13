@@ -183,6 +183,15 @@ Subscription calls negotiate audio alone and use their existing sideband for con
 API-key calls retain their data channel. Decode both enums against the matching build's SDK headers. For
 `esp_peer` 1.5.5, peer states 3/4/5/6/7/8 mean gathering/pairing/paired/connecting/
 connected/failed. A failure before pairing does not establish a DTLS failure.
+During diagnostic ICE pairing, `ice.datagram` records at most 20 UDP observations
+per transport: `request` is 1 for send or 0 for receive; `value` is the STUN binding
+type (1 request, 257 success, 273 error), or 0 for a socket error. `result` is the
+datagram byte count, a numeric STUN error when present, or negative socket errno.
+Final counters `iceSent`, `iceReceived`, `iceRejected` and `iceErrors` include all
+observations while pairing, beyond the record cap. These identify STUN-shaped
+traffic; the SDK still validates integrity and nomination. Sends without replies
+do not establish which network component failed. Generated SDK UDP observers
+preserve return values and errno; they retain no datagrams or addresses.
 SDP logs contain capability numbers only: no addresses, ICE passwords,
 fingerprints, session descriptions or speech content. Dropped records or an
 unexpected diagnostic Off invalidate a trial. Consult matching primary SDK and
