@@ -5,6 +5,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
   return new Promise((resolve, reject) => {
     let client,
       timer,
+      completionErrorTimer,
       buffer,
       offset = 0,
       received = 0,
@@ -17,6 +18,16 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
     let body = request.body
     function transportFailure(message, cause) {
       const error = new Error(message)
+      const tlsReasons = {
+        'recordProtocol: bad data': 'tls_record_data',
+        'recordProtocol: auth failed': 'tls_record_auth',
+        'recordProtocol auth failed': 'tls_record_auth',
+        'finished: auth err': 'tls_finished_auth',
+        'certificate: auth err': 'tls_certificate_auth',
+        'serverKeyExchange: failed to verify signature': 'tls_signature',
+        'handshake: unsuppoorted cipher': 'tls_cipher',
+        'handshake: unsupported compression': 'tls_compression',
+      }
       // SDK exceptions have no stable class hierarchy. Export only recognized
       // local reasons and numeric transport codes, never their raw message.
       if (
@@ -25,6 +36,12 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
         )
       )
         error.reason = cause.message.replace(/ /g, '_')
+      else if (Object.hasOwn(tlsReasons, cause?.message)) error.reason = tlsReasons[cause.message]
+      const alert = /^alert: ([0-9]{1,3}), ([0-9]{1,3})$/.exec(cause?.message ?? '')
+      if (alert && +alert[1] <= 255 && +alert[2] <= 255) {
+        error.reason = 'tls_alert'
+        error.code = (+alert[1] << 8) | +alert[2]
+      }
       const code = typeof cause === 'number' ? cause : cause?.code
       if (Number.isInteger(code) && Math.abs(code) <= 2147483647) error.code = code
       return error
@@ -33,6 +50,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       if (finished) return
       finished = true
       if (timer !== undefined) platform.cancel(timer)
+      if (completionErrorTimer !== undefined) platform.cancel(completionErrorTimer)
       const connection = client
       client = undefined
       body = undefined
@@ -156,7 +174,16 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
           }
         },
         onDone(error) {
-          finish(error || !Number.isInteger(status) ? transportFailure('HTTPS request failed', error) : undefined)
+          if (finished) return
+          // The SDK reports onDone(new Error) before client.onError(cause).
+          // Leave this callback before accepting the generic fallback so the
+          // actual TLS/socket cause wins, without exposing exception text.
+          if (error) {
+            completionErrorTimer ??= platform.schedule(() => {
+              completionErrorTimer = undefined
+              finish(transportFailure('HTTPS request failed', error))
+            }, 0)
+          } else finish(!Number.isInteger(status) ? transportFailure('HTTPS request failed') : undefined)
         },
       })
     } catch (error) {

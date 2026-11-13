@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createClosingClient, guardSocketCallbacks, requestHttps } from '../http-core.js'
-import { normalizeRequest } from '../http-options.js'
+import { httpFailureMetadata, normalizeRequest } from '../http-options.js'
 import { createHttpProxy } from '../http-proxy.js'
 import { createHttpQueue } from '../http-queue.js'
 import { createSubscriptionStream } from '../subscription-stream.js'
@@ -634,6 +634,32 @@ test('SDK transport failures retain only recognized reasons and numeric codes', 
       assert.equal(error.code, typeof cause === 'number' ? cause : cause.code)
       return true
     })
+  }
+})
+
+test('the SDK generic onDone cannot hide its following TLS error', async () => {
+  for (const [message, reason, code] of [
+    ['recordProtocol: auth failed', 'tls_record_auth', undefined],
+    ['recordProtocol auth failed', 'tls_record_auth', undefined],
+    ['alert: 2, 20', 'tls_alert', 532],
+    ['synthetic-private-TLS-message', undefined, undefined],
+  ]) {
+    const f = fixture()
+    f.cb.onWritable.call(f.context, 3)
+    f.cb.onDone(new Error())
+    f.connection.onError(new Error(message))
+    await assert.rejects(f.promise, (error) => {
+      const metadata = httpFailureMetadata(error)
+      assert.equal(metadata.errorCode, 'https_connection')
+      assert.equal(metadata.phase, 'sent')
+      assert.equal(metadata.written, 3)
+      assert.equal(metadata.expected, 3)
+      assert.equal(metadata.reason, reason)
+      assert.equal(metadata.code, code)
+      assert.ok(!JSON.stringify(metadata).includes('private'))
+      return true
+    })
+    assert.equal(f.closes, 1)
   }
 })
 
