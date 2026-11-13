@@ -979,6 +979,7 @@ export default class Conversation {
           'subscription_bootstrap_failed',
           'subscription_control_failed',
           'subscription_control_timeout',
+          'subscription_control_unavailable',
           'subscription_invalid_call',
           'subscription_invalid_sdp',
         ].includes(error?.code)
@@ -987,6 +988,7 @@ export default class Conversation {
           'ChatGPT connection failed',
           error.code,
           error.code.startsWith('subscription_control_') ? 'control' : 'signaling',
+          error.status,
         )
       else error = new ConversationError(error?.message ?? 'Conversation failed', 'operation_failed', 'transport')
     }

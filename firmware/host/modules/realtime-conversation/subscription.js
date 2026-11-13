@@ -27,14 +27,36 @@ const auth = new SubscriptionAuth({
 export function openSubscriptionControl(callId, headers, onMessage) {
   return new Promise((resolve, reject) => {
     const network = device.network.wss
-    const Client = network.io ?? device.network.ws.io
+    const Client = network?.io ?? device.network.ws?.io
+    if (!network || typeof Client !== 'function')
+      throw Object.assign(new Error('Subscription control unavailable'), { code: 'subscription_control_unavailable' })
     let socket,
       opened = false,
       closed = false,
       writable = 0,
       queued = 0,
       incoming = [],
-      incomingSize = 0
+      incomingSize = 0,
+      upgradeStatus
+    const Socket = network.socket?.io
+    const CheckedSocket =
+      typeof Socket === 'function'
+        ? class extends guardSocketCallbacks(Socket) {
+            #statusLine = ''
+            read(data) {
+              const value = data === undefined ? super.read() : super.read(data)
+              if (this.#statusLine !== undefined && typeof value === 'number') {
+                if (value === 10) {
+                  const match = /^HTTP\/1\.[01] ([1-5][0-9]{2}) /.exec(this.#statusLine)
+                  if (match) upgradeStatus = Number(match[1])
+                  this.#statusLine = undefined
+                } else if (this.#statusLine.length < 32) this.#statusLine += String.fromCharCode(value)
+                else this.#statusLine = undefined
+              }
+              return value
+            }
+          }
+        : Socket
     const queue = []
     const fail = (timedOut = false) => {
       channel.close()
@@ -42,6 +64,7 @@ export function openSubscriptionControl(callId, headers, onMessage) {
         reject(
           Object.assign(new Error('Subscription control connection failed'), {
             code: timedOut === true ? 'subscription_control_timeout' : 'subscription_control_failed',
+            ...(upgradeStatus === undefined ? {} : { status: upgradeStatus }),
           }),
         )
       else onMessage({ type: 'error', error: { code: 'subscription_control_lost' } })
@@ -83,9 +106,7 @@ export function openSubscriptionControl(callId, headers, onMessage) {
       socket = new Client({
         ...network,
         ...(network.dns?.io ? { dns: { ...network.dns, io: closingDNS(network.dns.io, () => closed) } } : {}),
-        ...(typeof network.socket?.io === 'function'
-          ? { socket: { ...network.socket, io: guardSocketCallbacks(network.socket.io) } }
-          : {}),
+        ...(typeof CheckedSocket === 'function' ? { socket: { ...network.socket, io: CheckedSocket } } : {}),
         host: 'api.openai.com',
         path: `/v1/live/${encodeURIComponent(callId)}`,
         port: 443,

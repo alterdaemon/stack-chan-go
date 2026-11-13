@@ -157,12 +157,13 @@ await test('subscription startup keeps safe stage codes without exposing raw loc
     'subscription_bootstrap_failed',
     'subscription_control_failed',
     'subscription_control_timeout',
+    'subscription_control_unavailable',
     'subscription_invalid_call',
     'subscription_invalid_sdp',
   ]) {
     const h = harness({ auth: 'chatgpt', apiKey: undefined, delegation: undefined }, () => ({
       create: async () => {
-        throw Object.assign(new Error('synthetic-sensitive-error-body'), { code })
+        throw Object.assign(new Error('synthetic-sensitive-error-body'), { code, status: 403 })
       },
       cancelJob() {},
       dispose() {},
@@ -173,6 +174,7 @@ await test('subscription startup keeps safe stage codes without exposing raw loc
     await failure
     equal(h.errors[0].stage, code.startsWith('subscription_control_') ? 'control' : 'signaling')
     equal(h.errors[0].message, 'ChatGPT connection failed')
+    equal(h.errors[0].status, 403)
     equal(h.requests.length, 0)
   }
 })

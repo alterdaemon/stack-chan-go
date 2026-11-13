@@ -103,6 +103,46 @@ try {
   rejected = true
 }
 assert(rejected)
+// The SDK hides upgrade failures. Observe only the bounded first status line;
+// subsequent headers/body must neither change the code nor enter the error.
+class TLS {
+  read(value) {
+    return value === undefined ? this.byte : value
+  }
+}
+globalThis.device.network.wss = { io: Socket, socket: { io: TLS } }
+for (const [line, status] of [
+  ['HTTP/1.1 403 Forbidden\r\n', 403],
+  ['HTTP/1.0 404 Not Found\r\n', 404],
+  ['invalid\r\n', undefined],
+  [`${'x'.repeat(40)}\r\n`, undefined],
+]) {
+  const denied = openSubscriptionControl('rtc_denied', {}, () => {})
+  const transport = new socket.options.socket.io({})
+  for (const character of `${line}HTTP/1.1 401 synthetic-sensitive-header\r\n`) {
+    transport.byte = character.charCodeAt(0)
+    equal(transport.read(), transport.byte)
+  }
+  const buffer = new ArrayBuffer(1)
+  equal(transport.read(buffer), buffer, 'the observer preserves buffered reads')
+  socket.options.onError()
+  let failure
+  try {
+    await denied
+  } catch (error) {
+    failure = error
+  }
+  equal(failure.code, 'subscription_control_failed')
+  equal(failure.status, status)
+  equal(failure.message, 'Subscription control connection failed')
+}
+globalThis.device.network.wss = undefined
+try {
+  await openSubscriptionControl('rtc_unavailable', {}, () => {})
+  assert(false, 'missing WSS must reject')
+} catch (error) {
+  equal(error.code, 'subscription_control_unavailable')
+}
 const stream = createSubscriptionStream(
   (bytes) => decoder.decode(bytes),
   (text) => ArrayBuffer.fromString(text),
