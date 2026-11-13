@@ -1,4 +1,5 @@
 import RealtimeConversation from 'realtimeConversation'
+import { requestHttps } from 'realtimeConversation/http-core'
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
@@ -277,6 +278,47 @@ for (const value of codexEvents) {
     codexStream.write(new Uint8Array(bytes.slice(index, index + 1)))
 }
 equal(JSON.parse(decoder.decode(codexStream.finish())).answer, 'Żółw 🌍')
+let terminalCallbacks,
+  terminalCloses = 0
+const terminalRequest = requestHttps(
+  {
+    headers: [],
+    body: new ArrayBuffer(0),
+    timeoutMs: 1000,
+    responseFormat: 'subscription-response',
+  },
+  {
+    createClient: () => ({
+      request: (value) => {
+        terminalCallbacks = value
+      },
+      close: () => terminalCloses++,
+    }),
+    createSubscriptionStream: () =>
+      createSubscriptionStream(
+        (bytes) => decoder.decode(bytes),
+        (text) => ArrayBuffer.fromString(text),
+      ),
+    schedule: (callback, delay) => Timer.set(callback, delay),
+    cancel: (timer) => Timer.clear(timer),
+  },
+)
+terminalCallbacks.onHeaders(200, new Map())
+const terminalBytes = new Uint8Array(
+  ArrayBuffer.fromString(codexEvents.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('')),
+)
+terminalCallbacks.onReadable.call(
+  {
+    read(view) {
+      view.set(terminalBytes)
+      return terminalBytes.length
+    },
+  },
+  terminalBytes.length,
+)
+const terminalResponse = await terminalRequest
+equal(JSON.parse(decoder.decode(terminalResponse.body)).answer, 'Żółw 🌍')
+equal(terminalCloses, 1, 'terminal completion closes HTTP without waiting for EOF')
 await new Promise((resolve) => Timer.set(resolve, 1))
 let lateDNS,
   connected = 0

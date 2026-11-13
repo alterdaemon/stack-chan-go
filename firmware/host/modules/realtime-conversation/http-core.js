@@ -124,6 +124,7 @@ export function requestHttps(request, platform, setCancel = () => {}) {
                 if (this.read(view) !== view.length) throw new Error('HTTPS short read')
                 received += view.length
                 stream.write(view)
+                if (stream.complete) return finish()
                 count -= view.length
               }
               return

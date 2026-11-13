@@ -88,7 +88,6 @@ export function createSubscriptionStream(decode, encode) {
       .join('\n')
     if (!data || data === '[DONE]') return
     const value = JSON.parse(data)
-    if (terminal) throw new Error('Subscription stream continued after completion')
     if (['response.failed', 'response.incomplete', 'error'].includes(value.type)) {
       terminal = true
       result = {
@@ -122,7 +121,11 @@ export function createSubscriptionStream(decode, encode) {
     }
   }
   return {
+    get complete() {
+      return terminal
+    },
     write(bytes) {
+      if (terminal) return
       let input = bytes
       if (carry.length) {
         input = new Uint8Array(carry.length + bytes.length)
@@ -145,6 +148,11 @@ export function createSubscriptionStream(decode, encode) {
         if (delimiter > 32768) throw new Error('Subscription event exceeds limit')
         event(pending.slice(0, delimiter))
         pending = pending.slice(delimiter + 2)
+        if (terminal) {
+          pending = ''
+          carry = new Uint8Array()
+          break
+        }
         delimiter = pending.indexOf('\n\n')
       }
       if (pending.length > 32768) throw new Error('Subscription event exceeds limit')

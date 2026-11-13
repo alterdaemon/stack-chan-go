@@ -636,3 +636,65 @@ test('SDK transport failures retain only recognized reasons and numeric codes', 
     })
   }
 })
+
+test('Codex terminal events settle and close HTTPS without waiting for HTTP EOF', async () => {
+  for (const event of [
+    {
+      type: 'response.completed',
+      response: { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '323' }] }] },
+    },
+    { type: 'response.failed', response: { error: { code: 'unsupported_value', param: 'reasoning.effort' } } },
+  ]) {
+    let callbacks,
+      connection,
+      closes = 0,
+      cancelled = 0
+    const request = requestHttps(post({ responseFormat: 'subscription-response' }), {
+      createClient: (options) => {
+        connection = options
+        return {
+          request: (value) => {
+            callbacks = value
+          },
+          close: () => closes++,
+        }
+      },
+      createSubscriptionStream: () => createSubscriptionStream(decode, encode),
+      schedule: (callback, ms) => (ms ? 1 : queueMicrotask(callback)),
+      cancel: () => cancelled++,
+    })
+    callbacks.onHeaders(200, new Map())
+    const bytes = new Uint8Array(encode(`data: ${JSON.stringify(event)}\n\ndata: trailing-without-EOF`))
+    callbacks.onReadable.call(
+      {
+        read(view) {
+          view.set(bytes)
+          return bytes.length
+        },
+      },
+      bytes.length,
+    )
+    // No onDone: the server may keep its HTTP stream open after the terminal event.
+    let timeout
+    try {
+      const response = await Promise.race([
+        request,
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('terminal response waited for EOF')), 100)
+        }),
+      ])
+      const result = JSON.parse(decode(response.body))
+      assert.equal(
+        result.answer ?? result.providerCode,
+        event.type === 'response.completed' ? '323' : 'unsupported_value',
+      )
+      assert.equal(closes, 1)
+      assert.equal(cancelled, 1)
+      callbacks.onDone(new Error('late close'))
+      connection.onError(new Error('late socket'))
+      assert.equal(closes, 1)
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+})
