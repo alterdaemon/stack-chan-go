@@ -18,7 +18,7 @@
       {
         "source": "../../../modules/ui/assets/fonts/k8x12",
         "size": 24,
-        "characters": "Stack-chan[・ω・]",
+        "characters": "Stack-chan[・＿・]GO",
         "monochrome": true
       }
     ]
@@ -40,5 +40,8 @@
     "timezone-settings": "./timezone-stub",
     "consts": "../../../modules/preferences/consts",
     "main": "./startup-error.test"
+  },
+  "config": {
+    "firmwareVersion": "2.1.0-R15"
   }
 }

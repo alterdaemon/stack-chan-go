@@ -1,6 +1,7 @@
 import { KeyboardField } from 'common/keyboard'
 import { HorizontalExpandingKeyboard } from 'keyboard'
 import { localize, type SupportedLocale } from 'localization'
+import config from 'mc/config'
 import type {
   Application as PiuApplication,
   Column as PiuColumn,
@@ -294,12 +295,25 @@ class VolumeSliderBehavior extends Behavior {
 const SettingsMenuView = {
   create(context: SettingsViewContext): SettingsViewInstance {
     const styles = uiStyles()
+    const versionText = `v${config.firmwareVersion}`
+    const versionStyle = new Style({
+      font: 'k8x12-12',
+      color: UI.colors.textMuted,
+      horizontal: 'right',
+      vertical: 'middle',
+    })
+    const versionWidth = Math.ceil(versionStyle.measure(versionText).width)
     const address = new Label(null, {
       name: 'www-address',
       left: 12,
-      right: 12,
+      right: 12 + versionWidth + 8,
       height: 24,
-      style: styles.bodyMuted,
+      style: new Style({
+        font: 'k8x12-12',
+        color: UI.colors.textMuted,
+        horizontal: 'left',
+        vertical: 'middle',
+      }),
     })
     const content = new Container(null, {
       left: 0,
@@ -313,7 +327,7 @@ const SettingsMenuView = {
           left: 0,
           right: 0,
           top: UI.headerHeight,
-          bottom: 0,
+          bottom: 24,
           active: true,
           backgroundTouch: true,
           clip: true,
@@ -360,8 +374,25 @@ const SettingsMenuView = {
                   },
                   { left: 0, right: 0 },
                 ),
-                address,
               ],
+            }),
+          ],
+        }),
+        new Container(null, {
+          name: 'settings:footer',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 24,
+          contents: [
+            address,
+            new Label(null, {
+              name: 'firmware-version',
+              right: 12,
+              width: versionWidth,
+              height: 24,
+              string: versionText,
+              style: versionStyle,
             }),
           ],
         }),

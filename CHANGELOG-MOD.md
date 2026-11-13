@@ -13,6 +13,13 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 ## 2.1.0
 
+### 2.1.0-R5
+
+Release impact: patch.
+
+- Show GO and the complete fork firmware version on the welcome screen, keeping MODs and Settings in their existing bottom positions.
+- Show the firmware version at the bottom right of the robot's startup Settings menu, beside its Wi-Fi address; keep the version visible while offline.
+
 ### 2.1.0-R4
 
 Release impact: minor.

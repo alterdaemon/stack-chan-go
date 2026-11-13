@@ -1,79 +1,127 @@
-import { showStartupSplash, showWiFiRecoveryChoice } from 'startup-splash'
-import { equal } from 'testing/assert'
+import { SUPPORTED_LOCALES, setLocalizationLanguage } from 'localization'
+import type { Container as PiuContainer, Content as PiuContent, Label as PiuLabel, Style as PiuStyle } from 'piu/MC'
+import { showStartupSplash, showWiFiConnectionStatus, showWiFiRecoveryChoice } from 'startup-splash'
+import { assert, equal } from 'testing/assert'
+import Timer from 'timer'
 
 trace('=== startup-splash test ===\n')
 
-let touchCount = 0
-const application = showStartupSplash({
-  onSettings() {
-    touchCount += 1
-  },
-})
-
-const column = application.first as unknown as {
-  first: {
-    string: string
-    next: {
-      string: string
-    }
+function find(root: PiuContainer, name: string): PiuContent | undefined {
+  for (let node = root.first; node; node = node.next) {
+    if (node.name === name) return node
+    const child = find(node as PiuContainer, name)
+    if (child) return child
   }
-  next: {
-    first: {
-      next?: {
-        behavior: {
-          onTouchBegan: (container: unknown, id: number, x: number, y: number) => void
-          onTouchEnded: (container: unknown) => void
-        }
-      }
-      behavior: {
-        onTouchBegan: (container: unknown, id: number, x: number, y: number) => void
-        onTouchEnded: (container: unknown) => void
-      }
-    }
-  }
+  return undefined
 }
-const title = column.first
-const message = title.next
-const settingsButton = column.next.first
 
-equal(title.string, 'Stack-chan[・＿・]', 'splash title should show the product name')
-equal(message.string, 'まもなく起動します', 'splash message should show startup progress')
+function tap(content: PiuContent | undefined) {
+  assert(!!content, 'action must exist')
+  const button = content as PiuContent
+  const behavior = button.behavior as {
+    onTouchBegan(content: PiuContent, id: number, x: number, y: number): void
+    onTouchEnded(content: PiuContent): void
+  }
+  behavior.onTouchBegan(button, 0, button.x, button.y)
+  behavior.onTouchEnded(button)
+}
 
-settingsButton.behavior.onTouchBegan(settingsButton, 0, 0, 0)
-settingsButton.behavior.onTouchEnded(settingsButton)
-equal(touchCount, 1, 'visible settings action should call the provided callback')
-
+let settingsCount = 0
+let modsCount = 0
 let retryCount = 0
 let offlineCount = 0
-showWiFiRecoveryChoice({
-  message: '接続失敗',
-  onRetry() {
-    retryCount += 1
-  },
-  onOffline() {
-    offlineCount += 1
-  },
-})
+let index = 0
+let recovery = false
+let application: ReturnType<typeof showStartupSplash>
 
-const retryButton = column.next.first
-const offlineButton = retryButton.next as typeof retryButton
-retryButton.behavior.onTouchBegan(retryButton, 0, 0, 0)
-retryButton.behavior.onTouchEnded(retryButton)
-offlineButton.behavior.onTouchBegan(offlineButton, 0, 0, 0)
-offlineButton.behavior.onTouchEnded(offlineButton)
-equal(retryCount, 1, 'recovery view should expose retry as a touch action')
-equal(offlineCount, 1, 'recovery view should expose offline boot as a touch action')
-
-let modsCount = 0
-const selectionApplication = showStartupSplash({
-  onMods() {
-    modsCount += 1
+const settingsOnly = showStartupSplash({
+  onSettings() {
+    settingsCount++
   },
 })
-const selectionColumn = selectionApplication.first as unknown as typeof column
-const modsButton = selectionColumn.next.first
-modsButton.behavior.onTouchBegan(modsButton, 0, 0, 0)
-modsButton.behavior.onTouchEnded(modsButton)
-equal(modsCount, 1, 'startup view should expose the MOD manager as a touch action')
+equal((find(settingsOnly, 'startup:actions') as PiuContainer).length, 1)
+tap(find(settingsOnly, 'startup:settings'))
+equal(settingsCount, 1, 'settings-only startup retains its callback')
+settingsCount = 0
 
-trace('@@STACKCHAN_TEST:PASS@@\n')
+function showLocale() {
+  const locale = SUPPORTED_LOCALES[index]
+  setLocalizationLanguage(locale)
+  application = showStartupSplash({
+    onSettings() {
+      settingsCount++
+    },
+    onMods() {
+      modsCount++
+    },
+  })
+  trace(`RENDER splash ${locale} welcome\n`)
+}
+
+showLocale()
+const timer = Timer.repeat(() => {
+  const title = find(application, 'startup:title') as PiuLabel
+  const fork = find(application, 'startup:fork') as PiuLabel
+  const version = find(application, 'startup:version') as PiuLabel
+  const message = find(application, 'startup:message') as PiuLabel
+  const actions = find(application, 'startup:actions') as PiuContainer
+  equal(application.width, 320)
+  equal(application.height, 240)
+  equal(title.string, 'Stack-chan[・＿・]')
+  equal(fork.string, 'GO')
+  equal(version.string, 'v2.1.0-R15', 'display the complete embedded fork revision')
+  assert(
+    (version.style as PiuStyle).measure('GO').height < (fork.style as PiuStyle).measure('GO').height,
+    'version must be smaller than GO',
+  )
+  equal(fork.y, title.y + title.height)
+  equal(version.y, fork.y + fork.height)
+  equal(message.y, version.y + version.height)
+  assert(message.y + message.height <= actions.y, 'progress must stay above the actions')
+  equal(actions.y, 184, 'retain the original bottom action position')
+  equal(actions.height, 44, 'retain existing touch targets')
+  for (const label of [title, fork, version, message]) {
+    assert((label.style as PiuStyle).measure(label.string).width <= label.width, 'text must fit its label')
+  }
+  for (let button = actions.first; button; button = button.next) {
+    equal(button.height, 44)
+    equal(button.width, 148)
+    assert(button.y + button.height <= 228, 'button must fit the existing bottom margin')
+  }
+
+  if (!recovery) {
+    tap(find(application, 'startup:settings'))
+    tap(find(application, 'startup:mods'))
+    equal(settingsCount, index + 1)
+    equal(modsCount, index + 1)
+    showWiFiConnectionStatus({ attempt: 1, maxAttempts: 3 })
+    equal(actions.length, 0, 'connecting hides actions without removing identity')
+    assert(message.string.length > 0)
+    showWiFiRecoveryChoice({
+      message: 'Wi-Fi unavailable',
+      onRetry() {
+        retryCount++
+      },
+      onOffline() {
+        offlineCount++
+      },
+    })
+    recovery = true
+    trace(`RENDER splash ${SUPPORTED_LOCALES[index]} recovery\n`)
+    return
+  }
+
+  equal(message.string, 'Wi-Fi unavailable')
+  tap(actions.first)
+  tap(actions.last)
+  equal(retryCount, index + 1)
+  equal(offlineCount, index + 1)
+  recovery = false
+  if (++index < SUPPORTED_LOCALES.length) {
+    showLocale()
+    return
+  }
+  Timer.clear(timer)
+  setLocalizationLanguage('ja')
+  trace('@@STACKCHAN_TEST:PASS@@\n')
+}, 100)

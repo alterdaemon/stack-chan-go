@@ -100,7 +100,8 @@ class UpdateTests(unittest.TestCase):
             root = Path(folder)
             project = 'firmware/dist/tmp/esp32/m5stackchan_cores3/release/stack-chan-host'
             build = project + '/xsProj-esp32s3'
-            settings = {'openaiLive': {'model': 'test-voice'}, 'tts': {'volume': 1}}
+            settings = {'openaiLive': {'model': 'test-voice'}, 'tts': {'volume': 1},
+                        'firmwareVersion': f'0.0.0-R{package.REVISION}'}
             modules = {name: ['fixture'] for name in (
                 'openai-live-integrated', 'openai-live-session', 'openai-live-settings', 'realtimeConversation')}
             fixture = {
@@ -152,6 +153,15 @@ class UpdateTests(unittest.TestCase):
                 self.assertEqual(full[0x8000:0x8000 + len(self.table)], self.table)
                 self.assertEqual(inspect_image.call_count, 2)
                 self.assertTrue(inspect_image.call_args.kwargs['check'])
+                flat_path = root / project / 'manifest_flat.json'
+                flat = json.loads(flat_path.read_text())
+                for bad_version in (None, '2.1.0-R4'):
+                    flat['config']['firmwareVersion'] = bad_version
+                    flat_path.write_text(json.dumps(flat))
+                    with self.assertRaisesRegex(ValueError, 'Built firmware version'):
+                        package.package_update(root, output)
+                flat['config']['firmwareVersion'] = settings['firmwareVersion']
+                flat_path.write_text(json.dumps(flat))
                 package.package_update(root, output)
                 self.assertEqual(sorted(output.iterdir()), files)
                 changed_app = bytearray(self.app)

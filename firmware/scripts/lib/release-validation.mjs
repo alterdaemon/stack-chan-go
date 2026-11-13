@@ -62,6 +62,15 @@ export function validateRelease(rootDirectory, tag) {
     }
   }
 
+  for (const relativePath of ['firmware/host/app/manifest.json', 'firmware/host/app/manifest_wasm.json']) {
+    const document = JSON.parse(readFileSync(path.join(rootDirectory, relativePath), 'utf8'))
+    if (document.config?.firmwareVersion !== version) {
+      throw new Error(
+        `${relativePath} firmwareVersion is ${document.config?.firmwareVersion ?? 'missing'}; expected ${version}`,
+      )
+    }
+  }
+
   const flashManifestDirectory = path.join(rootDirectory, 'web', 'flash')
   const flashManifestNames = readdirSync(flashManifestDirectory).filter((name) =>
     /^manifest_esp32_.*\.json$/.test(name),

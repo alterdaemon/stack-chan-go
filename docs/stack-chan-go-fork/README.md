@@ -3,7 +3,7 @@
 [Repository](https://github.com/alterdaemon/stack-chan-go) ·
 [Changelog](../../CHANGELOG-MOD.md)
 
-Current product version: **2.1.0-R4**. Standard hardware: M5StackChan CoreS3.
+Current product version: **2.1.0-R5**. Standard hardware: M5StackChan CoreS3.
 The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
@@ -11,11 +11,12 @@ optimize performance, and keep the fork up to date and in sync with upstream.
 
 ## What this fork adds
 
-Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
+Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 
 | Area | What you get |
 | --- | --- |
 | Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
+| Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
 | Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
 | Personal settings | Added password-protected Wi-Fi Settings alongside Bluetooth. Save instructions, models, thinking effort, separate Live/Realtime voices, pitch and speaking style. |
@@ -23,7 +24,8 @@ Main differences in **2.1.0-R4** compared with upstream **2.1.0**:
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
-See the [R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for changes and comparison links.
+See the [R5 changes](../../CHANGELOG-MOD.md#210-r5) for the local candidate and the
+[published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
 
 Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
@@ -204,9 +206,10 @@ BINs. Debug/instrument/alternate-manifest builds do not publish these packages.
 Builds and packaging do not flash a device. Different contents under an existing
 revision are rejected; identical repackaging is allowed.
 
-Local R4 builds produce `StackChan-Community-v2.1.0-R4-app.bin` and
-`StackChan-Community-v2.1.0-R4.bin` in `internal/release-packages/`. Download
-the preconfigured pair from the [R4 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
+Local R5 builds produce `StackChan-Community-v2.1.0-R5-app.bin` and
+`StackChan-Community-v2.1.0-R5.bin` in `internal/release-packages/`.
+R5 is a local candidate; the published preconfigured pair remains available from
+the [R4 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
 
 To package an existing release in the same environment:
 
@@ -215,7 +218,10 @@ python3 firmware/scripts/mod/package-release.py
 ```
 
 For a new revision, advance package/lockfile versions, web flash manifests,
-the packager revision and filenames below; add its numbered changelog section.
+`config.firmwareVersion` in `firmware/host/app/manifest.json` and
+`manifest_wasm.json`, the packager revision and filenames; add its numbered
+changelog section. Both device version labels read this embedded configuration;
+release validation rejects a missing or mismatched display version.
 Run `npm run check:release -- v<version>` from `firmware/`, relevant regressions,
 the release build and image checks. Publish only the two validated BINs from
 one build. Preserve existing images outside Git. Documentation/CI cleanup does
@@ -335,6 +341,11 @@ so flashing it at `0x0` resets them. Do not use differential-flashing options to
 preserve user data: they may fall back to rewriting the entire input image.
 
 ## Settings
+
+At startup, the welcome screen shows `GO` with the full fork version immediately
+below it in smaller text. The robot's startup Settings main menu also shows the
+version at the bottom right, beside the Wi-Fi address on the left. The version
+remains visible while disconnected; browser Settings is unchanged.
 
 Open the robot's Settings mode to use BLE or `http://<robot-IP>/settings/`.
 The HTTP listener runs only while Settings is open. Initial WWW password

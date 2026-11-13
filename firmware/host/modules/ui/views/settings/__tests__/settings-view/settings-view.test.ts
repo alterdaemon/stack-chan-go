@@ -1,5 +1,11 @@
-import { setLocalizationLanguage } from 'localization'
-import type { Container as PiuContainer, Content as PiuContent } from 'piu/MC'
+import { SUPPORTED_LOCALES, setLocalizationLanguage } from 'localization'
+import type {
+  Container as PiuContainer,
+  Content as PiuContent,
+  Label as PiuLabel,
+  Scroller as PiuScroller,
+  Style as PiuStyle,
+} from 'piu/MC'
 import { Application } from 'piu/MC'
 import {
   type SettingsStatus,
@@ -9,7 +15,8 @@ import {
   type SettingsViewInstance,
   settingsViews,
 } from 'settings-view'
-import { equal } from 'testing/assert'
+import { assert, equal } from 'testing/assert'
+import Timer from 'timer'
 
 trace('=== settings-view test ===\n')
 
@@ -124,7 +131,7 @@ equal(
 const menuView = settingsViews[SettingsViewId.MENU].create(context)
 equal(application.length, 0, 'creating a settings view should not mount it')
 mount(menuView)
-const menuScroller = menuView.content.last as PiuContainer
+const menuScroller = (menuView.content.first as PiuContainer).next as PiuContainer
 const menuItems = menuScroller.first as PiuContainer
 const wifiMenuItem = menuItems.first as Touchable
 press(wifiMenuItem)
@@ -138,7 +145,10 @@ equal(navigatedView, SettingsViewId.TIMEZONE, 'time zone menu item should naviga
 const languageMenuItem = timezoneMenuItem.next as Touchable
 press(languageMenuItem)
 equal(navigatedView, SettingsViewId.LANGUAGE, 'language menu item should navigate through the shared action')
-const address = menuItems.last as PiuContent & { string?: string }
+const footer = menuView.content.last as PiuContainer
+const address = footer.first as PiuLabel
+const firmwareVersion = footer.last as PiuLabel
+equal(firmwareVersion.string, 'v2.1.0-R15')
 equal(address.visible, false, 'no URL before Wi-Fi is ready')
 status.wifi = SettingsStatusValue.CONNECTED
 status['wifi.address'] = '192.0.2.10'
@@ -148,6 +158,7 @@ equal(address.visible, true)
 status.wifi = SettingsStatusValue.NOT_CONNECTED
 menuView.update?.()
 equal(address.visible, false, 'hide a stale URL after disconnection')
+equal(firmwareVersion.visible, true, 'version remains visible while disconnected')
 delete status['wifi.address']
 
 const menuHeader = menuView.content.first as PiuContainer
@@ -315,4 +326,61 @@ const chineseLabel = chineseHeader.next as PiuContent & { string?: string }
 equal(chineseLabel.string, 'Wi-Fi：已连接', 'settings view should switch to Simplified Chinese immediately')
 setLocalizationLanguage('ja')
 
-trace('@@STACKCHAN_TEST:PASS@@\n')
+let localeIndex = 0
+let connected = true
+let currentMenu: SettingsViewInstance
+function showMenu() {
+  setLocalizationLanguage(SUPPORTED_LOCALES[localeIndex])
+  status.wifi = SettingsStatusValue.CONNECTED
+  status['wifi.address'] = '192.168.100.200'
+  currentMenu = settingsViews[SettingsViewId.MENU].create(context)
+  mount(currentMenu)
+  trace(`RENDER settings ${SUPPORTED_LOCALES[localeIndex]} connected\n`)
+}
+showMenu()
+const layoutTimer = Timer.repeat(() => {
+  const menuFooter = currentMenu.content.last as PiuContainer
+  const addressLabel = menuFooter.first as PiuLabel
+  const versionLabel = menuFooter.last as PiuLabel
+  const scroller = (currentMenu.content.first as PiuContainer).next as PiuScroller
+  equal(menuFooter.y + menuFooter.height, application.height, 'footer stays at the bottom')
+  equal(menuFooter.height, 24)
+  assert(scroller.y + scroller.height <= menuFooter.y, 'menu must not cover footer')
+  equal(versionLabel.string, 'v2.1.0-R15')
+  equal(versionLabel.visible, true)
+  equal(versionLabel.x + versionLabel.width, application.width - 12)
+  assert(
+    (versionLabel.style as PiuStyle).measure(versionLabel.string).width <= versionLabel.width,
+    'full revision must fit',
+  )
+  assert(addressLabel.x + addressLabel.width + 8 <= versionLabel.x, 'address and version must not overlap')
+  if (connected) {
+    equal(addressLabel.visible, true)
+    equal(addressLabel.string, 'http://192.168.100.200')
+    assert(
+      (addressLabel.style as PiuStyle).measure(addressLabel.string).width <= addressLabel.width,
+      'full IPv4 URL must fit',
+    )
+    const rows = scroller.first as PiuContainer
+    for (let row = rows.first; row; row = row.next) {
+      assert(row.y + row.height <= menuFooter.y, 'all menu rows must stay above footer')
+      equal(application.hit(row.x + row.width / 2, row.y + row.height / 2), row, 'menu row remains tappable')
+    }
+    scroller.scrollTo(0, 44)
+    status.wifi = SettingsStatusValue.NOT_CONNECTED
+    currentMenu.update?.()
+    connected = false
+    trace(`RENDER settings ${SUPPORTED_LOCALES[localeIndex]} disconnected\n`)
+    return
+  }
+  equal(addressLabel.visible, false)
+  currentMenu.dispose?.()
+  connected = true
+  if (++localeIndex < SUPPORTED_LOCALES.length) {
+    showMenu()
+    return
+  }
+  Timer.clear(layoutTimer)
+  setLocalizationLanguage('ja')
+  trace('@@STACKCHAN_TEST:PASS@@\n')
+}, 100)

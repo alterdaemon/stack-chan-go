@@ -3,6 +3,9 @@
     "../../../../manifest.json",
     "../../../../../testing/manifest.json"
   ],
+  "config": {
+    "firmwareVersion": "2.1.0-R15"
+  },
   "resources": {
     "*": ["../../../../../../app/strings/*"],
     "*-mask": [

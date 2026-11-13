@@ -74,6 +74,7 @@
   ],
   "strip": [],
   "config": {
+    "firmwareVersion": "2.1.0-R5",
     "sntp": "pool.ntp.org",
     "driver": {
       "panId": 1,

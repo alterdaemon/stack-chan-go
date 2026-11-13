@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 
-REVISION = 4
+REVISION = 5
 
 
 def require(condition, message):
@@ -74,6 +74,7 @@ def package_update(root, output):
     layout = json.loads((root / 'firmware/host/app/gpt-live-layout.json').read_text())
     requested = json.loads((root / 'firmware/host/app/manifest_openai_live_settings.json').read_text())['config']
     flat = json.loads((project / 'manifest_flat.json').read_text())
+    require(flat['config'].get('firmwareVersion') == version, 'Built firmware version differs from source')
     require(flat['config']['openaiLive'] == requested['openaiLive'], 'Built GPT-Live settings differ from source')
     require(not requested['openaiLive'].get('apiKey'), 'Do not embed an API key in a distributed image')
     require({'openai-live-integrated', 'openai-live-session', 'openai-live-settings', 'realtimeConversation'}

@@ -3,6 +3,9 @@
     "NAME": "stack-chan-host"
   },
   "include": ["../platforms/wasm/manifest.json"],
+  "config": {
+    "firmwareVersion": "2.1.0-R5"
+  },
   "resources": {
     "*": ["./strings/*"],
     "*-mask": [

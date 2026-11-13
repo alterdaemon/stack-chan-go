@@ -1,8 +1,9 @@
 import { localize } from 'localization'
+import config from 'mc/config'
 import type { Application as PiuApplication, Container as PiuContainer, Label as PiuLabel } from 'piu/MC'
-import { Application, Column, Container, Label } from 'piu/MC'
+import { Application, Column, Container, Label, Style } from 'piu/MC'
 import { ActionButton } from 'ui-controls'
-import { UI, uiStyles } from 'ui-theme'
+import { UI, uiFont, uiStyles } from 'ui-theme'
 
 export type StartupSplashOptions = {
   message?: string
@@ -117,13 +118,15 @@ function setMessage(message: string) {
 export function showStartupSplash(options: StartupSplashOptions = {}): PiuApplication {
   const styles = uiStyles()
   const messageLabel = new Label(null, {
+    name: 'startup:message',
     left: 12,
     right: 12,
     height: 28,
     string: options.message ?? localize('splash.starting'),
-    style: styles.bodyMuted,
+    style: new Style({ font: uiFont(), color: UI.colors.textMuted, horizontal: 'center', vertical: 'middle' }),
   })
   const actionArea = new Container(null, {
+    name: 'startup:actions',
     left: 0,
     right: 0,
     bottom: 12,
@@ -145,11 +148,33 @@ export function showStartupSplash(options: StartupSplashOptions = {}): PiuApplic
         top: 66,
         contents: [
           new Label(null, {
+            name: 'startup:title',
             left: 0,
             right: 0,
             height: 42,
             string: 'Stack-chan[・＿・]',
             style: styles.brand,
+          }),
+          new Label(null, {
+            name: 'startup:fork',
+            left: 0,
+            right: 0,
+            height: 28,
+            string: 'GO',
+            style: styles.brand,
+          }),
+          new Label(null, {
+            name: 'startup:version',
+            left: 0,
+            right: 0,
+            height: 16,
+            string: `v${config.firmwareVersion}`,
+            style: new Style({
+              font: 'k8x12-12',
+              color: UI.colors.textMuted,
+              horizontal: 'center',
+              vertical: 'middle',
+            }),
           }),
           messageLabel,
         ],
