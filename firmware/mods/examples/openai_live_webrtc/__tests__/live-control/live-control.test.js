@@ -1,6 +1,7 @@
 import { createAppControllerApplication } from 'app-controller'
 import { SimpleFace } from 'behaviors/face'
 import { ChatStatusBar } from 'chat-status-bar'
+import Debug from 'device-debug'
 import { onClose, onContextCreated } from 'openai-live-integrated'
 import { Container } from 'piu/MC'
 import { assert, equal } from 'testing/assert'
@@ -11,6 +12,7 @@ const delay = () => new Promise((resolve) => Timer.set(resolve, 10))
 
 async function run() {
   globalThis.amp = {}
+  Debug.install({ enabled: true, emit() {} })
   const controller = createAppControllerApplication(
     { face: new SimpleFace({}), appBar: new ChatStatusBar() },
     { displayListLength: 4096 },
@@ -174,14 +176,28 @@ async function run() {
   equal(released, 3, 'tap stops the conversation after returning to the face')
   equal(balloons.length, 0, 'tap, cancellation and drawer actions leave the avatar unobscured')
   equal(hiddenBalloons, 0, "LIVE notices never dismiss another feature's balloon")
+  await Debug.controlLive('start')
+  await waitFor('STARTED')
+  equal(acquired, 4, 'USB starts the same session owner as the touch control')
+  try {
+    await Debug.controlLive('start')
+    assert(false, 'duplicate USB Start must reject')
+  } catch (error) {
+    equal(error.code, 'live_active')
+  }
+  await Debug.stopControlledLive()
+  await waitFor('LIVE OFF')
+  equal(released, 4, 'ending diagnostics releases the USB-owned conversation')
   gesture()
   await waitFor('STARTED')
+  await Debug.stopControlledLive()
+  equal(released, 4, 'ending diagnostics leaves a manually started conversation active')
   await onClose()
-  equal(released, 4, 'host close awaits conversation and the audio lease')
+  equal(released, 5, 'host close awaits conversation and the audio lease')
   equal(label(), 'LIVE OFF', 'host close cancels notices and leaves the control idle')
   gesture()
   await delay()
-  equal(acquired, 4, 'the closing host cannot start another conversation')
+  equal(acquired, 5, 'the closing host cannot start another conversation')
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }
 

@@ -134,6 +134,14 @@ Capture aborts on unexpected Off or lost control acknowledgements. A sustained
 Rebooting discards trials: reconnect USB and reapply them after changing model.
 Model selection itself is not currently a USB trial command.
 
+For automated connection checks in that same capture process, `diag live start`
+and `diag live stop` use the existing LIVE session and saved AI connection.
+Wait for the `live` control record: `phase: applied` confirms connection or stop;
+`phase: failed` reports a safe error code. Stop is accepted during startup.
+Diagnostics Off, USB disconnect and lease expiry stop a session started through
+USB. A session started with the touch control remains under the user's control.
+These commands do not change saved settings or select another provider.
+
 To investigate repeated answers, keep Interruption On and the microphone on.
 First say “Hello, are you there?” once and stay silent for ten seconds. Next set
 speaker to zero and repeat once: silence from the speaker is expected, while the

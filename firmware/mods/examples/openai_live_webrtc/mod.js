@@ -119,6 +119,7 @@ export function onContextCreated(robot) {
   const Conversation = Modules.importNow('realtimeConversation')
   const power = Modules.importNow('network-power')
   const levels = Modules.has('io-performance') ? Modules.importNow('io-performance') : undefined
+  const debug = Modules.has('device-debug') ? Modules.importNow('device-debug') : undefined
   const drawer = robot.ui.drawer
   const defaults =
     (Modules.has('mod/config') ? Modules.importNow('mod/config').openaiLive : undefined) ??
@@ -183,6 +184,7 @@ export function onContextCreated(robot) {
     onInterruption: () => feedback?.interrupt(),
     onState(state, detail) {
       const active = ['connecting', 'connected', 'closing'].includes(state)
+      if (!active) debug?.releaseLive(session)
       if (state === 'connecting') {
         headLed = robot.lighting?.led?.head
         try {
@@ -242,15 +244,21 @@ export function onContextCreated(robot) {
   closeSession = () => {
     shuttingDown = true
     clearStatus()
+    debug?.unregisterLive(session)
     return session.stop()
   }
+  function startLive() {
+    if (shuttingDown || session.active) return
+    session.settings = readSettings()
+    return session.start()
+  }
+  debug?.registerLive(session, { start: startLive, stop: () => session.stop() })
   function toggleLive() {
     if (shuttingDown || session.active?.closing) return
     if (session.active) void session.stop()
     else {
       try {
-        session.settings = readSettings()
-        void session.start()
+        void startLive()
       } catch (error) {
         session.onState('error', diagnostic(error, 'configuration', 'settings_read'))
       }

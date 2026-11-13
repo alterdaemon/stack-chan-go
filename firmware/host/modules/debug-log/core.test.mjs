@@ -223,3 +223,39 @@ test('a trial cannot run after its USB session ends or report success in a later
     false,
   )
 })
+
+test('USB LIVE accepts only explicit actions and Stop can cancel a pending Start', async () => {
+  const f = fixture(),
+    calls = []
+  let finish
+  f.recorder.platform.live = (action) => {
+    calls.push(action)
+    if (action === 'start')
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    finish?.()
+    return Promise.resolve()
+  }
+  f.recorder.command('diag live start')
+  await Promise.resolve()
+  assert.deepEqual(calls, [])
+  f.recorder.command('diag on')
+  for (const command of ['diag live toggle', 'diag live start extra', 'diag live ', 'diag live restart'])
+    f.recorder.command(command)
+  assert.deepEqual(calls, [])
+  f.recorder.command('diag live start')
+  f.recorder.command('diag live start')
+  assert.equal(f.lines.at(-1).action, 'command_pending')
+  for (let i = 0; i < 3; i++) await Promise.resolve()
+  assert.deepEqual(calls, ['start'])
+  f.recorder.command('diag live stop')
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  assert.deepEqual(calls, ['start', 'stop'])
+  assert.ok(f.lines.some((r) => r.action === 'live' && r.setting === 'stop' && r.phase === 'applied'))
+  f.recorder.command('diag live start')
+  f.recorder.command('diag off')
+  f.recorder.command('diag on')
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  assert.deepEqual(calls, ['start', 'stop'], 'a stale queued start cannot run after Off')
+})

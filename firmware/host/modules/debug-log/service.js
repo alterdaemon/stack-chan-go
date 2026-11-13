@@ -60,6 +60,7 @@ export default function start() {
     now,
     stamp,
     info: () => ({ firmware: config.firmwareVersion, ...info(), ...Debug.tuningSnapshot() }),
+    live: (action) => Debug.controlLive(action),
     async tune(parameter, value) {
       if (parameter === 'reset') {
         tune(0, 0)
@@ -72,7 +73,10 @@ export default function start() {
     snapshot,
     change(value) {
       enable(value)
-      if (!value) void Debug.resetTuning().catch(() => {})
+      if (!value) {
+        void Debug.resetTuning().catch(() => {})
+        void Debug.stopControlledLive().catch(() => {})
+      }
       if (timer !== undefined) {
         Timer.clear(timer)
         timer = undefined

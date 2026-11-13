@@ -126,6 +126,7 @@ export class DebugRecorder {
   #dropped = 0
   #capture = 0
   #trialPending = false
+  #livePending = false
   constructor(platform) {
     this.platform = platform
     this.parser = new CommandParser((line) => this.command(line))
@@ -161,7 +162,34 @@ export class DebugRecorder {
       if (this.#enabled) this.#deadline = this.platform.now() + LEASE_MS
       this.#control(this.#enabled ? 'alive' : 'off')
     } else if (line === 'diag status') this.#control('status')
-    else if (line === 'diag reset' || line?.startsWith('diag set ')) {
+    else if (line?.startsWith('diag live ')) {
+      if (!this.#enabled) return this.#control('enable_required')
+      const action = line.slice(10)
+      if (!['start', 'stop'].includes(action) || !this.platform.live) return this.#control('invalid_command')
+      if (action === 'start' && this.#livePending) return this.#control('command_pending')
+      if (action === 'start') this.#livePending = true
+      const capture = this.#capture
+      const fields = { parameter: 'live', setting: action }
+      this.#control('live', { ...fields, phase: 'pending' })
+      Promise.resolve()
+        .then(() => {
+          if (!this.#enabled || this.#capture !== capture)
+            throw Object.assign(new Error('Diagnostic session ended'), { code: 'cancelled' })
+          return this.platform.live(action)
+        })
+        .then(
+          () => {
+            if (this.#enabled && this.#capture === capture) this.#control('live', { ...fields, phase: 'applied' })
+          },
+          (error) => {
+            if (this.#enabled && this.#capture === capture)
+              this.#control('live', { ...fields, phase: 'failed', errorCode: error?.code ?? 'live_failed' })
+          },
+        )
+        .finally(() => {
+          if (action === 'start') this.#livePending = false
+        })
+    } else if (line === 'diag reset' || line?.startsWith('diag set ')) {
       if (!this.#enabled) {
         this.#control('enable_required')
         return

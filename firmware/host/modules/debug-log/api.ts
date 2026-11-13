@@ -9,6 +9,8 @@ type Recorder = {
 let recorder: Recorder | undefined
 type Tuner = { set(name: string, value: number | string): Promise<void>; reset(): Promise<void>; snapshot(): Fields }
 let tuner: { owner: object; value: Tuner } | undefined
+type LiveControl = { start(): Promise<boolean> | undefined; stop(): Promise<unknown> }
+let live: { owner: object; value: LiveControl; controlled: boolean } | undefined
 const context = { application: 'initialization', network: 'unknown' }
 export default {
   get enabled(): boolean {
@@ -22,6 +24,39 @@ export default {
   },
   unregisterTuner(owner: object): void {
     if (tuner?.owner === owner) tuner = undefined
+  },
+  registerLive(owner: object, value: LiveControl): void {
+    live = { owner, value, controlled: false }
+  },
+  unregisterLive(owner: object): void {
+    if (live?.owner === owner) live = undefined
+  },
+  releaseLive(owner: object): void {
+    if (live?.owner === owner) live.controlled = false
+  },
+  async controlLive(action: 'start' | 'stop'): Promise<void> {
+    if (!recorder?.enabled || !live)
+      throw Object.assign(new Error('LIVE control unavailable'), { code: 'live_unavailable' })
+    const owner = live
+    if (action === 'stop') {
+      const stopped = owner.value.stop()
+      owner.controlled = false
+      await stopped
+    } else if (action === 'start') {
+      const started = owner.value.start()
+      if (!started) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
+      owner.controlled = true
+      if (!(await started)) {
+        owner.controlled = false
+        throw Object.assign(new Error('LIVE did not connect'), { code: 'live_start_failed' })
+      }
+    } else throw Object.assign(new Error('Invalid LIVE action'), { code: 'invalid_parameter' })
+  },
+  async stopControlledLive(): Promise<void> {
+    if (!live?.controlled) return
+    const owner = live
+    owner.controlled = false
+    await owner.value.stop()
   },
   tune(name: string, value: number | string): Promise<void> {
     if (!recorder?.enabled || !tuner)

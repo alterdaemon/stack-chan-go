@@ -13,7 +13,7 @@ test('USB status and snapshots report the running build configuration across rev
 
       const source = readFileSync(${JSON.stringify(fileURLToPath(new URL('./service.js', import.meta.url)))}, 'utf8')
       for (const firmwareVersion of ['2.1.0-R5', '3.7.2-R19']) {
-        let serial, recorder, sequence = 0
+        let serial, recorder, sequence = 0, stopped = 0
         const records = []
         const native = {
           xs_device_debug_now: () => 0,
@@ -50,6 +50,7 @@ test('USB status and snapshots report the running build configuration across rev
             snapshot: () => ({ application: 'test' }),
             tuningSnapshot: () => ({}),
             resetTuning: async () => {},
+            stopControlledLive: async () => { stopped++ },
           } },
           'stackchan-usb-serial': { default: USBSerial },
           'stackchan-usb-serial-types': { isUSBSerialOutputFullError: () => false },
@@ -66,6 +67,7 @@ test('USB status and snapshots report the running build configuration across rev
         serial.send('diag on')
         serial.send('diag off')
         assert.equal(recorder.enabled, false)
+        assert.equal(stopped, 1, 'ending diagnostics stops the USB-owned LIVE session')
         for (const action of ['status', 'on', 'off']) {
           assert.equal(records.find((record) => record.action === action)?.firmware, firmwareVersion)
         }

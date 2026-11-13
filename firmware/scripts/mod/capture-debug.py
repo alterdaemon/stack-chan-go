@@ -109,7 +109,7 @@ def main():
                         print(json.dumps(event), flush=True)
                         if args.command != 'capture':
                             return
-                    elif action in ('status', 'set', 'invalid_command', 'command_pending', 'enable_required'):
+                    elif action in ('status', 'set', 'live', 'invalid_command', 'command_pending', 'enable_required'):
                         print(json.dumps(event), flush=True)
             if len(pending) > 4096:
                 pending.clear()

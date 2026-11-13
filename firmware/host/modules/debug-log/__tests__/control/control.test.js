@@ -1,5 +1,76 @@
+import Debug from 'device-debug'
 import { DebugRecorder } from 'device-debug/core'
 import Timer from 'timer'
+
+async function verifyLiveAPI() {
+  // The production API owns only USB-started sessions. Ending diagnostics must
+  // cancel an in-flight USB start without stopping a manually started session.
+  let apiEnabled = false
+  const apiRecorder = {
+    get enabled() {
+      return apiEnabled
+    },
+    emit() {},
+  }
+  Debug.install(apiRecorder)
+  const owner = {}
+  let finishStart,
+    stopped = 0
+  Debug.registerLive(owner, {
+    start: () =>
+      new Promise((resolve) => {
+        finishStart = resolve
+      }),
+    stop: async () => {
+      stopped++
+      finishStart?.(false)
+    },
+  })
+  try {
+    await Debug.controlLive('start')
+    throw new Error('Disabled LIVE was accepted')
+  } catch (error) {
+    if (error.code !== 'live_unavailable') throw error
+  }
+  apiEnabled = true
+  const starting = Debug.controlLive('start').catch((error) => error)
+  await Debug.stopControlledLive()
+  if ((await starting)?.code !== 'live_start_failed') throw new Error('Cancelled LIVE was reported connected')
+  if (stopped !== 1) throw new Error('USB start was not stopped exactly once')
+  Debug.registerLive(owner, {
+    start: () => undefined,
+    stop: async () => {
+      stopped++
+    },
+  })
+  try {
+    await Debug.controlLive('start')
+  } catch (error) {
+    if (error.code !== 'live_active') throw error
+  }
+  await Debug.stopControlledLive()
+  if (stopped !== 1) throw new Error('A manual session gained USB ownership')
+  Debug.registerLive(owner, {
+    start: async () => true,
+    stop: async () => {
+      stopped++
+    },
+  })
+  await Debug.controlLive('start')
+  Debug.releaseLive(owner)
+  await Debug.stopControlledLive()
+  if (stopped !== 1) throw new Error('An ended USB session retained ownership of a later session')
+  Debug.unregisterLive({})
+  await Debug.controlLive('stop')
+  if (stopped !== 2) throw new Error('Explicit Stop failed')
+  Debug.unregisterLive(owner)
+}
+try {
+  await verifyLiveAPI()
+} catch (error) {
+  trace(`LIVE API fixture: ${error.message} (${error.code})\n`)
+  throw error
+}
 
 let now = 0,
   sequence = 0,

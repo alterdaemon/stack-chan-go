@@ -7,5 +7,8 @@
   "modules": {
     "main": "./control.test",
     "device-debug/core": "../../core"
+  },
+  "defines": {
+    "main": { "async": 1 }
   }
 }
