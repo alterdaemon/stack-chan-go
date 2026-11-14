@@ -58,7 +58,9 @@ function attachErrorMetadata(error, source) {
     error.providerCode = source.code
   if (
     typeof source?.param === 'string' &&
-    /^(?:session|delegation|model|audio|tools|reasoning)(?:[.[\]a-z0-9_]){0,96}$/i.test(source.param)
+    /^(?:session|delegation|model|audio|tools|reasoning|channel|content|event)(?:[.[\]a-z0-9_]){0,96}$/i.test(
+      source.param,
+    )
   )
     error.param = source.param
   return error
@@ -1164,6 +1166,7 @@ export default class Conversation {
       fields.reason = response?.status_details?.reason
       fields.errorCode = error?.code
       fields.providerCode = error?.providerCode
+      fields.param = error?.param
       fields.stage = error?.stage
       fields.status = error?.status
       fields.client_event_id = error?.event_id ?? message?.client_event_id

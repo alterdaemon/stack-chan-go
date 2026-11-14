@@ -275,6 +275,8 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
         assert(stats.sourceLevel == (semitones ? 200 : 400));
         assert(stats.volumeQ10 == testVolume * testSpeakerTrim / 1024);
         assert(stats.playbackLevel == (testVolume ? 400 : 0));
+        assert(stats.sourcePeak == 400);
+        assert(stats.playbackPeak == (testVolume ? 400 : 0));
     } else assert(!atomic_load(&audio.sourceLevel));
     if (interruptRecovery && interruption) {
         assert(!atomic_load(&audio.yieldOutput));

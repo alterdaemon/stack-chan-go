@@ -43,6 +43,8 @@ const NUMBER_FIELDS = new Set([
   'playbackLevel',
   'sourceLevel',
   'volumeQ10',
+  'sourcePeak',
+  'playbackPeak',
   'volume',
   'interruptions',
   'flushedInterruptions',
@@ -314,7 +316,7 @@ export class DebugRecorder {
             (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
-            (parameter === 'probe' && ['reasoning', 'search', 'english', 'polish'].includes(value)) ||
+            (parameter === 'probe' && ['reasoning', 'search', 'english', 'polish', 'rejection'].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

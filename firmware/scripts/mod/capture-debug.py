@@ -2,6 +2,7 @@
 """Control RAM-only device diagnostics over USB without resetting the board."""
 import argparse
 from datetime import datetime, timezone
+import fcntl
 import json
 import os
 import re
@@ -42,6 +43,7 @@ def main():
         fd_out = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         output = os.fdopen(fd_out, 'w', buffering=1)
     fd = None
+    locked = False
     old = None
     records = 0
     max_dropped = 0
@@ -72,6 +74,11 @@ def main():
 
     try:
         fd = os.open(args.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except BlockingIOError:
+            raise RuntimeError('USB port is already owned; stop the other reader or writer first') from None
         old = termios.tcgetattr(fd)
         raw = list(old)
         raw[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG)
@@ -114,7 +121,10 @@ def main():
                         requested_off = command == 'diag off'
             if fd not in ready:
                 continue
-            chunk = os.read(fd, 4096)
+            try:
+                chunk = os.read(fd, 4096)
+            except BlockingIOError:
+                continue
             if not chunk:
                 raise RuntimeError('USB device disconnected')
             pending.extend(chunk)
@@ -154,7 +164,7 @@ def main():
         pass
     finally:
         if fd is not None:
-            if args.command == 'capture':
+            if locked and args.command == 'capture':
                 try:
                     os.write(fd, b'diag off\n')
                     # Read acknowledgement without extending the capture indefinitely.

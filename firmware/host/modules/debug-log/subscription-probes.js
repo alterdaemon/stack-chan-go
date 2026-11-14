@@ -9,7 +9,7 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
         speech = value
         send({
           type: 'session.context.append',
-          channel: 'final',
+          channel: 'speakable',
           content: [
             {
               type: 'input_text',
@@ -21,6 +21,16 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
           ],
         })
         return
+      }
+      if (value === 'rejection') {
+        try {
+          await delegate('Say OK.', true)
+        } catch (error) {
+          if (![401, 403].includes(error.status)) throw error
+          diagnose?.('probe.rejection', () => ({ status: error.status, accepted: true }))
+          return
+        }
+        throw new Error('Invalid diagnostic token was not rejected')
       }
       const prompts = {
         reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',

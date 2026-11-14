@@ -15,7 +15,7 @@ typedef struct {
 	unsigned requestedRate, requestedChannels, sourceFrameBytes;
 	unsigned audibleMs;
     unsigned playbackLevel, interruptions, flushedInterruptions;
-    unsigned sourceLevel, volumeQ10;
+    unsigned sourceLevel, volumeQ10, sourcePeak, playbackPeak;
 } LiveAudioStats;
 
 int liveAudioOpen(LiveAudio **audio, esp_webrtc_media_provider_t *provider, bool bargeIn, int pitch, bool realtime);

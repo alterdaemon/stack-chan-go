@@ -16,6 +16,7 @@ const probes = Modules.importNow('device-debug/subscription-probes', true).creat
 })
 await probes.run('probe', 'english')
 equal(probeMessages[0].type, 'session.context.append', 'the lazy USB probe loads through the XS namespace')
+equal(probeMessages[0].channel, 'speakable')
 probes.reset()
 
 let socket

@@ -8,7 +8,7 @@ export function subscriptionErrorMetadata(text) {
       result.providerCode = code
     if (
       typeof source?.param === 'string' &&
-      /^(?:session|delegation|model|audio|tools|reasoning|input|instructions|store|stream|tool_choice)(?:[.[\]a-z0-9_]){0,96}$/i.test(
+      /^(?:session|delegation|model|audio|tools|reasoning|input|instructions|store|stream|tool_choice|channel|content|event)(?:[.[\]a-z0-9_]){0,96}$/i.test(
         source.param,
       )
     )

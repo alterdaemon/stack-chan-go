@@ -387,7 +387,7 @@ export class SubscriptionLive {
       throw Object.assign(new Error('Subscription probe unavailable'), { code: 'not_connected' })
     this.#probes ??= this.createProbes?.({
       send: (message) => this.#channel.send(message),
-      delegate: (text) => this.#delegate(this.uuid(), text, true),
+      delegate: (text, rejection) => this.#delegate(this.uuid(), text, rejection ? 'rejection' : true),
       diagnose: this.diagnose,
     })
     if (!this.#probes) throw new Error('Subscription diagnostics unavailable')
@@ -400,6 +400,7 @@ export class SubscriptionLive {
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
       effort: this.options.reasoningEffort ?? 'medium',
+      probe: probe === 'rejection' ? 'rejection' : probe ? 'diagnostic' : undefined,
     }))
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
@@ -407,8 +408,9 @@ export class SubscriptionLive {
       if (this.#job !== job || this.#closed) return
       if (credentials.accountId !== this.accountId) throw new Error('Subscription account changed')
       const headers = {
-        Authorization: `Bearer ${credentials.accessToken}`,
+        Authorization: `Bearer ${probe === 'rejection' ? 'stackchan-diagnostic-invalid' : credentials.accessToken}`,
         'ChatGPT-Account-ID': credentials.accountId,
+        originator: 'stack-chan-go',
         'Content-Type': 'application/json',
         'User-Agent': this.headers['User-Agent'],
         Accept: 'text/event-stream',
@@ -417,7 +419,7 @@ export class SubscriptionLive {
         method: 'POST',
         headers,
         responseFormat: 'subscription-response',
-        timeoutMs: 300000,
+        timeoutMs: probe === 'rejection' ? 15000 : 300000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
           reasoning: { effort: this.options.reasoningEffort ?? 'medium' },

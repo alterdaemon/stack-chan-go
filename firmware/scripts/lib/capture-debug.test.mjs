@@ -6,6 +6,36 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
+test('USB capture rejects an existing writer lock before commands or terminal changes', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import fcntl, os, pty, select, subprocess, sys, tempfile, termios
+master, slave = pty.openpty()
+try:
+    fcntl.flock(slave, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    before = termios.tcgetattr(slave)
+    with tempfile.TemporaryDirectory() as directory:
+        for action in ['status', 'off', 'capture']:
+            command = [sys.executable, sys.argv[1], '--port', os.ttyname(slave), '--command', action]
+            if action == 'capture': command += ['--output', os.path.join(directory, 'trace.jsonl')]
+            child = subprocess.run(command, capture_output=True, text=True, timeout=3)
+            assert child.returncode != 0 and 'already owned' in child.stderr
+            assert not select.select([master], [], [], 0)[0], 'Commands sent to an owned port'
+            assert termios.tcgetattr(slave) == before, 'Owned terminal settings changed'
+finally:
+    os.close(master); os.close(slave)
+print('passed shared writer lock')
+`,
+      fileURLToPath(new URL('../mod/capture-debug.py', import.meta.url)),
+    ],
+    { encoding: 'utf8' },
+  )
+  assert.match(result, /passed shared writer lock/)
+})
+
 test('qualification defaults are bounded baselines and reject a model/effort Cartesian product', () => {
   const result = execFileSync(
     'python3',

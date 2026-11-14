@@ -586,7 +586,7 @@ function liveFixture() {
     sent,
     events,
     receive: (event) => receive(event),
-    finish: (value) => finishJob(reply(value)),
+    finish: (value, status) => finishJob(reply(value, status)),
     get closes() {
       return closes
     },
@@ -1016,7 +1016,7 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   assert.deepEqual(f.sent, [])
   await tuner.set('probe', 'english')
   assert.equal(f.sent[0].type, 'session.context.append')
-  assert.equal(f.sent[0].channel, 'final')
+  assert.equal(f.sent[0].channel, 'speakable')
   assert.ok(f.sent[0].content[0].text.includes('voice test'))
   const missingSearch = tuner.set('probe', 'search')
   await tick()
@@ -1025,6 +1025,34 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   f.live.dispose()
   assert.equal(removed, f.live)
   await assert.rejects(tuner.set('probe', 'reasoning'), /unavailable/)
+})
+
+test('the fixed rejection probe isolates HTTP response delivery without sending an account token', async () => {
+  const f = liveFixture()
+  f.live.debug = { enabled: true }
+  await f.live.create(
+    'v=0 offer',
+    { instructions: '', voice: 'cove' },
+    () => {},
+    () => true,
+  )
+  f.live.activate()
+  f.receive({ type: 'session.started' })
+  const rejected = f.live.probe('probe', 'rejection')
+  await tick()
+  assert.equal(f.requests.at(-1).options.headers.Authorization, 'Bearer stackchan-diagnostic-invalid')
+  assert.equal(f.requests.at(-1).options.timeoutMs, 15000)
+  assert.equal(f.requests.at(-1).url, 'https://chatgpt.com/backend-api/codex/responses')
+  await assert.rejects(f.live.probe('probe', 'reasoning'), /unavailable/)
+  f.finish({ error: { code: 'invalid_token' } }, 401)
+  await rejected
+  assert.deepEqual(f.sent, [])
+  const calculation = f.live.probe('probe', 'reasoning')
+  await tick()
+  assert.equal(f.requests.at(-1).options.headers.Authorization, 'Bearer subscription-only')
+  f.finish({ answer: '323', searched: false })
+  await calculation
+  f.live.dispose()
 })
 
 test('subscription requests honor selected model and each effort without public API overrides', async () => {
@@ -1054,6 +1082,7 @@ test('subscription requests honor selected model and each effort without public 
       assert.equal(body.store, false)
       assert.equal(body.stream, true)
       assert.equal(f.requests.at(-1).options.headers.Accept, 'text/event-stream')
+      assert.equal(f.requests.at(-1).options.headers.originator, 'stack-chan-go')
       assert.equal(f.requests[0].options.headers['OpenAI-Alpha'], 'quicksilver=v2')
       assert.equal(f.requests.at(-1).options.headers['OpenAI-Alpha'], undefined)
       assert.equal(f.requests.at(-1).options.headers['session-id'], undefined)

@@ -134,7 +134,7 @@ struct LiveAudio {
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
 	atomic_uint micLevel, cleanLevel, referenceLevel, playbackLevel;
-	atomic_uint sourceLevel;
+	atomic_uint sourceLevel, sourcePeak, playbackPeak;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
 	atomic_int error;
@@ -403,10 +403,12 @@ static void audioTask(void *ctx)
         }
 		unsigned volume = atomic_load(&a->volume);
         volume = volume * atomic_load(&diagnosticSpeaker) / 1024;
-        if (stackchanDebugIsEnabled && stackchanDebugIsEnabled()) {
+        bool diagnosticLevels = stackchanDebugIsEnabled && stackchanDebugIsEnabled();
+        if (diagnosticLevels) {
             unsigned sourceLevel = 0;
             for (int i = 0; i < BLOCK; i++) sourceLevel += abs(tx[i]);
             atomic_store(&a->sourceLevel, sourceLevel / BLOCK);
+            if (sourceLevel / BLOCK > atomic_load(&a->sourcePeak)) atomic_store(&a->sourcePeak, sourceLevel / BLOCK);
         }
         unsigned playbackLevel = 0;
         bool quiesced = atomic_load(&a->quiesced) || atomic_load(&a->yieldOutput);
@@ -424,6 +426,8 @@ static void audioTask(void *ctx)
 			break;
 		}
         atomic_store(&a->playbackLevel, playbackLevel / BLOCK);
+        if (diagnosticLevels && playbackLevel / BLOCK > atomic_load(&a->playbackPeak))
+            atomic_store(&a->playbackPeak, playbackLevel / BLOCK);
         if (playbackLevel && !quiesced) atomic_fetch_add(&a->audibleMs, 10);
 		for (int i = 0; i < BLOCK; i++) {
 			pair[i * 2] = rx[i * 2];
@@ -673,6 +677,8 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
     s->flushedInterruptions = atomic_load(&a->interruptFlushed);
     s->sourceLevel = atomic_load(&a->sourceLevel);
     s->volumeQ10 = atomic_load(&a->volume) * atomic_load(&diagnosticSpeaker) / 1024;
+    s->sourcePeak = atomic_load(&a->sourcePeak);
+    s->playbackPeak = atomic_load(&a->playbackPeak);
 }
 
 void xs_io_audio_levels(xsMachine *the) {

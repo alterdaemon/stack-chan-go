@@ -379,6 +379,23 @@ await test('HTTP rejection preserves safe API identifiers without storing the re
   check(!JSON.stringify(h.errors[0]).includes('private'))
   check(!JSON.stringify(h.errors[0]).includes('sk-proj-secret'))
 })
+await test('rejected control field names survive safe diagnostics without response text', async () => {
+  const records = []
+  const h = harness({
+    debug: { enabled: true, event: (scope, event, fields) => records.push({ scope, event, ...fields }) },
+  })
+  h.reply(async () => ({
+    status: 400,
+    text: async () => JSON.stringify({ error: { code: 'invalid_value', param: 'channel', message: 'private detail' } }),
+  }))
+  const p = rejected(h.c.connect(), 'http_error')
+  await h.signal()
+  await p
+  await flush()
+  equal(h.errors[0].param, 'channel')
+  check(records.some((entry) => entry.event === 'failure' && entry.param === 'channel'))
+  check(!JSON.stringify(records).includes('private detail'))
+})
 await test('untrusted API metadata cannot become diagnostic identifiers', async () => {
   const h = harness()
   h.reply(async () => ({
