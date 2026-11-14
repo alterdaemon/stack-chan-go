@@ -53,6 +53,8 @@ export function httpFailureMetadata(error) {
   if (Number.isInteger(error?.tlsDrains) && error.tlsDrains >= 0) metadata.tlsDrains = error.tlsDrains
   for (const name of ['socketReceived', 'socketWritten', 'socketBuffered', 'tlsReceived', 'tlsRead', 'tlsBuffered'])
     if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
+  for (const name of ['tlsRecords', 'tlsRecordType', 'tlsRecordRead', 'tlsRecordExpected'])
+    if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
   if (Number.isSafeInteger(error?.sseEvents) && error.sseEvents >= 0) metadata.sseEvents = error.sseEvents
   if (['http1', 'other'].includes(error?.httpPrefix)) metadata.httpPrefix = error.httpPrefix
   if (Number.isInteger(error?.httpStatus) && error.httpStatus >= 100 && error.httpStatus <= 599)

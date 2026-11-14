@@ -31,6 +31,10 @@ const NUMBER_FIELDS = new Set([
   'tlsReceived',
   'tlsRead',
   'tlsBuffered',
+  'tlsRecords',
+  'tlsRecordType',
+  'tlsRecordRead',
+  'tlsRecordExpected',
   'httpStatus',
   'httpHeaderBytes',
   'httpHeaderScan',
@@ -57,6 +61,7 @@ const NUMBER_FIELDS = new Set([
   'sourceLevel',
   'volumeQ10',
   'sourcePeak',
+  'sourceAbsPeak',
   'playbackPeak',
   'volume',
   'interruptions',
@@ -283,7 +288,10 @@ export class DebugRecorder {
     else if (line?.startsWith('diag live ')) {
       if (!this.#enabled) return this.#control('enable_required')
       const action = line.slice(10)
-      if (!['start', 'standard', 'voice', 'prompt', 'pitch', 'stop', 'warmup'].includes(action) || !this.platform.live)
+      if (
+        !['start', 'standard', 'voice', 'prompt', 'pitch', 'stop', 'warmup', 'backend'].includes(action) ||
+        !this.platform.live
+      )
         return this.#control('invalid_command')
       if (action !== 'stop' && this.#livePending) return this.#control('command_pending')
       if (action !== 'stop') this.#livePending = true

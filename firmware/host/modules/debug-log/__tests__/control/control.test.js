@@ -226,6 +226,35 @@ async function verifyLiveAPI() {
     throw new Error('Baseline defaults lost')
   await Debug.controlLive('stop')
   Debug.unregisterLive(owner)
+  let probePending,
+    probeActive = false,
+    probeCancelled = 0
+  const detachedOwner = {}
+  Debug.registerLive(detachedOwner, {
+    isActive: () => probeActive,
+    start: async () => true,
+    stop: async () => {
+      probeCancelled++
+      probeActive = false
+      probePending?.()
+    },
+    backend: () =>
+      new Promise((resolve) => {
+        probeActive = true
+        probePending = resolve
+      }),
+  })
+  const detached = Debug.controlLive('backend')
+  try {
+    await Debug.controlLive('backend')
+    throw new Error('Active detached probe was accepted')
+  } catch (error) {
+    if (error.code !== 'live_active') throw error
+  }
+  await Debug.stopControlledLive()
+  await detached
+  if (probeCancelled !== 1) throw new Error('Detached probe did not stop on diagnostic ownership loss')
+  Debug.unregisterLive(detachedOwner)
 }
 try {
   await verifyLiveAPI()

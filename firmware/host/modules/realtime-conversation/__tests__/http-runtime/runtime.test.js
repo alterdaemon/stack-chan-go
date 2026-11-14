@@ -5,7 +5,7 @@ const check = (value, message) => {
   if (!value) throw new Error(message)
 }
 const pause = () => new Promise((resolve) => Timer.set(resolve, 1))
-async function replay(split, chunked) {
+async function replay(split, chunked, large = false) {
   let socket,
     status,
     done = false,
@@ -77,25 +77,40 @@ async function replay(split, chunked) {
     for (let i = 0; !socket && i < 20; i++) await pause()
     check(socket, 'HTTP client did not connect')
     socket.options.onWritable(65536)
+    const payload = large ? 'event: response.completed\ndata: ' + 'x'.repeat(12000) + '\n\n' : 'OK'
     const header =
       'HTTP/1.1 200 OK\r\nX-Fixture: ' +
       'x'.repeat(1400) +
       '\r\n' +
-      (chunked ? 'Transfer-Encoding: chunked\r\n' : 'Content-Length: 2\r\n') +
+      (chunked ? 'Transfer-Encoding: chunked\r\n' : `Content-Length: ${payload.length}\r\n`) +
       '\r\n'
-    const body = chunked ? '2\r\nOK\r\n0\r\n\r\n' : 'OK'
+    let body = payload
+    if (chunked) {
+      body = ''
+      for (let at = 0; at < payload.length; at += 991) {
+        const chunk = payload.slice(at, at + 991)
+        body += chunk.length.toString(16) + '\r\n' + chunk + '\r\n'
+      }
+      body += '0\r\n\r\n'
+    }
     const bytes = new Uint8Array(ArrayBuffer.fromString(header + body))
     socket.feed(bytes.slice(0, split))
     await pause()
-    socket.feed(bytes.slice(split))
+    if (large) {
+      for (let at = split; at < bytes.length; at += 1369) {
+        socket.feed(bytes.slice(at, at + 1369))
+        await pause()
+      }
+    } else socket.feed(bytes.slice(split))
     for (let i = 0; !done && !error && i < 20; i++) await pause()
     check(!error, 'SDK HTTP parser failed')
     check(status === 200, `headers incomplete at split ${split}`)
-    check(done && output === 'OK', `response incomplete at split ${split}`)
+    check(done && output === payload, `response incomplete at split ${split}`)
   } finally {
     client.close()
   }
 }
 for (const chunked of [false, true])
   for (const split of [1, 7, 8, 9, 12, 13, 512, 1024, 1368, 1369, 1370, 1430]) await replay(split, chunked)
+for (const chunked of [false, true]) for (const split of [1369, 1461, 1462, 1463]) await replay(split, chunked, true)
 trace('@@STACKCHAN_TEST:PASS@@\n')

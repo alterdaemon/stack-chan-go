@@ -134,7 +134,7 @@ struct LiveAudio {
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
 	atomic_uint micLevel, cleanLevel, referenceLevel, playbackLevel;
-	atomic_uint sourceLevel, sourcePeak, playbackPeak;
+	atomic_uint sourceLevel, sourcePeak, sourceAbsPeak, playbackPeak;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
 	atomic_int error;
@@ -405,8 +405,13 @@ static void audioTask(void *ctx)
         volume = volume * atomic_load(&diagnosticSpeaker) / 1024;
         bool diagnosticLevels = stackchanDebugIsEnabled && stackchanDebugIsEnabled();
         if (diagnosticLevels) {
-            unsigned sourceLevel = 0;
-            for (int i = 0; i < BLOCK; i++) sourceLevel += abs(tx[i]);
+            unsigned sourceLevel = 0, sourceAbsPeak = 0;
+            for (int i = 0; i < BLOCK; i++) {
+                unsigned sample = abs(tx[i]);
+                sourceLevel += sample;
+                if (sample > sourceAbsPeak) sourceAbsPeak = sample;
+            }
+            if (sourceAbsPeak > atomic_load(&a->sourceAbsPeak)) atomic_store(&a->sourceAbsPeak, sourceAbsPeak);
             atomic_store(&a->sourceLevel, sourceLevel / BLOCK);
             if (sourceLevel / BLOCK > atomic_load(&a->sourcePeak)) atomic_store(&a->sourcePeak, sourceLevel / BLOCK);
         }
@@ -678,6 +683,7 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
     s->sourceLevel = atomic_load(&a->sourceLevel);
     s->volumeQ10 = atomic_load(&a->volume) * atomic_load(&diagnosticSpeaker) / 1024;
     s->sourcePeak = atomic_load(&a->sourcePeak);
+    s->sourceAbsPeak = atomic_load(&a->sourceAbsPeak);
     s->playbackPeak = atomic_load(&a->playbackPeak);
 }
 

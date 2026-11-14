@@ -132,6 +132,7 @@ export function onContextCreated(robot) {
       trialPreferences((domain, key) => Preference.get(domain, key), trials),
     )
   let changingMute = false,
+    backendProbe,
     liveButton,
     statusTimer
   let mouthTimer,
@@ -248,12 +249,13 @@ export function onContextCreated(robot) {
   })
   closeSession = () => {
     shuttingDown = true
+    backendProbe?.cancel()
     clearStatus()
     debug?.unregisterLive(session)
     return session.stop()
   }
   function startLive(interruption, stage, voice, trials) {
-    if (shuttingDown || session.active) return
+    if (shuttingDown || session.active || backendProbe) return
     session.settings = readSettings(trials)
     const apiTrial =
       trials?.connection === 'api-live' &&
@@ -266,10 +268,42 @@ export function onContextCreated(robot) {
     return session.start(interruption, stage, voice)
   }
   debug?.registerLive(session, {
-    isActive: () => shuttingDown || !!session.active,
+    isActive: () => shuttingDown || !!session.active || !!backendProbe,
     stats: () => session.active?.conversation?.stats,
     start: startLive,
-    stop: () => session.stop(),
+    stop: () => {
+      backendProbe?.cancel()
+      return session.stop()
+    },
+    async backend() {
+      if (shuttingDown || session.active || backendProbe)
+        throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
+      if (readSettings().auth !== 'chatgpt')
+        throw Object.assign(new Error('Select ChatGPT subscription'), { code: 'not_subscription' })
+      const auth = Modules.importNow('realtimeConversation/subscription')
+      const radio = power.acquireLowLatency()
+      let probe
+      try {
+        probe = Modules.importNow('device-debug/subscription-probes', true).detachedBackendProbe({
+          credentials: async () => {
+            const network = await robot.connectivity.network?.ready
+            if (network?.status !== 'connected')
+              throw Object.assign(new Error('Network unavailable'), { code: 'network_unavailable' })
+            if (!debug.enabled || shuttingDown || session.active)
+              throw Object.assign(new Error('Diagnostic session ended'), { code: 'cancelled' })
+            return auth.credentials()
+          },
+          fetch: Modules.importNow('realtimeConversation/http'),
+          random: () => Modules.importNow('rng').get(16),
+          diagnose: (event, fields) => debug.event('subscription', event, fields),
+        })
+        backendProbe = probe
+        await probe
+      } finally {
+        if (backendProbe === probe) backendProbe = undefined
+        radio.close()
+      }
+    },
     async warmup() {
       if (shuttingDown || session.active) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
       if (readSettings().auth !== 'chatgpt')

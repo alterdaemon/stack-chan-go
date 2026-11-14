@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createClosingClient, guardSocketCallbacks, httpResponseObservation, requestHttps } from '../http-core.js'
+import {
+  createClosingClient,
+  guardSocketCallbacks,
+  httpResponseObservation,
+  requestHttps,
+  tlsRecordObservation,
+} from '../http-core.js'
 import { httpFailureMetadata, normalizeRequest } from '../http-options.js'
 import { createHttpProxy } from '../http-proxy.js'
 import { createHttpQueue } from '../http-queue.js'
@@ -8,6 +14,29 @@ import { createSubscriptionStream } from '../subscription-stream.js'
 
 const encode = (text) => new TextEncoder().encode(text).buffer
 const decode = (buffer) => new TextDecoder().decode(buffer)
+
+test('TLS record observation identifies an incomplete record without keeping ciphertext', () => {
+  const statistics = {},
+    observe = tlsRecordObservation(statistics)
+  const record = Uint8Array.of(23, 3, 3, 0, 7, 11, 12, 13, 14, 15, 16, 17)
+  observe(record.subarray(0, 3))
+  assert.equal(statistics.tlsRecordExpected, 0)
+  observe(record.subarray(3, 8))
+  assert.equal(statistics.tlsRecordExpected, 12)
+  assert.equal(statistics.tlsRecordRead, 8)
+  assert.equal(statistics.tlsRecords, undefined)
+  observe(record.subarray(8))
+  assert.equal(statistics.tlsRecords, 1)
+  assert.equal(statistics.tlsRecordRead, 12)
+  observe(record)
+  assert.equal(statistics.tlsRecords, 2)
+  assert.deepEqual(Object.keys(statistics).sort(), [
+    'tlsRecordExpected',
+    'tlsRecordRead',
+    'tlsRecordType',
+    'tlsRecords',
+  ])
+})
 
 test('HTTP observation retains only validated status and bounded header byte boundaries', () => {
   const statistics = {},
@@ -485,7 +514,7 @@ test('socket observations count accepted bytes and expose the current buffered c
   assert.equal(socket.read().byteLength, 3)
   assert.equal(socket.read(new Uint8Array(2)), 2)
   assert.equal(socket.write(new ArrayBuffer(7)), 17)
-  assert.deepEqual({ ...statistics }, { socketReceived: 5, socketWritten: 7, socketBuffered: 9 })
+  assert.deepEqual([statistics.socketReceived, statistics.socketWritten, statistics.socketBuffered], [5, 7, 9])
   socket.readable = 0
   assert.equal(statistics.socketBuffered, 0)
 })

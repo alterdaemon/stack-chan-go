@@ -297,17 +297,25 @@ Startup history alone does not request speech. Transcript timing and native
 output counters do not establish subjective acoustic quality.
 
 While enabled, diagnostics retain an image-bound panic code address, core and
-exception category in 52 bytes of RTC RAM, then use the normal SDK panic handler.
+exception category and up to eight validated executable caller addresses in 84
+bytes of RTC RAM, then use the normal SDK panic handler.
 After a panic reboot, `diag status` reports a separate `debug/panic` record.
-Symbolize `panicPC` against that record's exact matching ELF with
+Symbolize `panicPC` and `panicCaller0`–`panicCaller7` against that record's exact matching ELF with
 `xtensa-esp-elf-addr2line -pfiaC -e <matching-ELF> <hex-PC>`. No stack, register,
 credential or flash dump is made. Off disarms capture; power loss clears RTC RAM.
 Audio snapshots are split under the existing USB line and queue limits. HTTPS
 byte counts distinguish raw TCP, decrypted TLS and consumed HTTP/SSE data.
 `diag set probe minimal` tests terminal inference with only required request
-fields and no configured reasoning/tool/history overrides. HTTP observations
+fields and no configured reasoning/tool/history overrides. `diag live backend`
+runs that fixed backend check while stopped, with no media/control socket, using
+the same grant/worker and low-latency Wi-Fi lease. Its45-second bound and Stop/Off
+cancellation apply without credential export or preference writes. TLS record
+counts distinguish incomplete encrypted records from stalled HTTP/SSE parsing;
+no record contents are logged. HTTP observations
 retain only a validated status and bounded header/line-ending byte counts,
-never header or body values.
+never header or body values. The first decoded boundary is retained once even
+if a later native failure prevents the final worker observation; no sampling
+timer is added.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 

@@ -13,6 +13,7 @@ type LiveControl = {
   start(interruption?: boolean, stage?: number, voice?: string, parameters?: Fields): Promise<boolean> | undefined
   stop(): Promise<unknown>
   warmup?(): Promise<void>
+  backend?(): Promise<void>
   isActive?(): boolean
   stats?(): Fields | undefined
 }
@@ -55,7 +56,9 @@ export default {
   releaseLive(owner: object): void {
     if (live?.owner === owner) live.controlled = false
   },
-  async controlLive(action: 'start' | 'standard' | 'voice' | 'prompt' | 'pitch' | 'stop' | 'warmup'): Promise<void> {
+  async controlLive(
+    action: 'start' | 'standard' | 'voice' | 'prompt' | 'pitch' | 'stop' | 'warmup' | 'backend',
+  ): Promise<void> {
     if (!recorder?.enabled || !live)
       throw Object.assign(new Error('LIVE control unavailable'), { code: 'live_unavailable' })
     const owner = live
@@ -76,6 +79,14 @@ export default {
       if (!(await started)) {
         owner.controlled = false
         throw Object.assign(new Error('LIVE did not connect'), { code: 'live_start_failed' })
+      }
+    } else if (action === 'backend' && owner.value.backend) {
+      if (owner.value.isActive?.() !== false) throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })
+      owner.controlled = true
+      try {
+        await owner.value.backend()
+      } finally {
+        if (owner.value.isActive?.() === false) owner.controlled = false
       }
     } else if (action === 'warmup' && owner.value.warmup) await owner.value.warmup()
     else throw Object.assign(new Error('Invalid LIVE action'), { code: 'invalid_parameter' })

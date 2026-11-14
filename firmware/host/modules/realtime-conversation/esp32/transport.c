@@ -655,6 +655,7 @@ void xs_live_transport_stats(xsMachine *the)
     STAT("sourceLevel", stats.sourceLevel);
     STAT("volumeQ10", stats.volumeQ10);
     STAT("sourcePeak", stats.sourcePeak);
+    STAT("sourceAbsPeak", stats.sourceAbsPeak);
     STAT("playbackPeak", stats.playbackPeak);
     STAT("interruptions", stats.interruptions);
     STAT("flushedInterruptions", stats.flushedInterruptions);

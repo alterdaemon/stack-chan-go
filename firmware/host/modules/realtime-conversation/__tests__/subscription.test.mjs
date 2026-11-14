@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createSubscriptionProbes, runApiLiveProbe } from '../../debug-log/subscription-probes.js'
+import { createSubscriptionProbes, detachedBackendProbe, runApiLiveProbe } from '../../debug-log/subscription-probes.js'
 import { SubscriptionAuth } from '../subscription-auth.js'
 import {
   parseSubscriptionCall,
@@ -11,6 +11,56 @@ import {
   subscriptionUpgradeError,
 } from '../subscription-live.js'
 import { createSubscriptionStream } from '../subscription-stream.js'
+
+test('detached USB backend probe uses one fixed minimal request and accepts only a terminal answer', async () => {
+  const requests = [],
+    diagnostics = []
+  await detachedBackendProbe({
+    credentials: async () => ({ accessToken: 'synthetic-grant', accountId: 'synthetic-account' }),
+    random: () => new ArrayBuffer(16),
+    fetch: async (url, options) => {
+      requests.push({ url, options })
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ answer: 'OK.', searched: false, sources: [] }),
+      }
+    },
+    diagnose: (event, fields) => diagnostics.push({ event, ...fields() }),
+  })
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].url, 'https://chatgpt.com/backend-api/codex/responses')
+  assert.deepEqual(Object.keys(JSON.parse(requests[0].options.body)), [
+    'model',
+    'instructions',
+    'input',
+    'store',
+    'stream',
+  ])
+  assert.equal(requests[0].options.timeoutMs, 45000)
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer synthetic-grant')
+  assert.deepEqual(diagnostics, [{ event: 'probe.detached', status: 200, accepted: true }])
+})
+
+test('detached backend cancellation prevents a late grant from starting HTTPS', async () => {
+  let grant,
+    calls = 0
+  const probe = detachedBackendProbe({
+    credentials: () =>
+      new Promise((resolve) => {
+        grant = resolve
+      }),
+    random: () => new ArrayBuffer(16),
+    fetch: () => {
+      calls++
+      throw new Error('Must not run')
+    },
+  })
+  probe.cancel()
+  grant({ accessToken: 'synthetic-grant', accountId: 'synthetic-account' })
+  await assert.rejects(probe, /session ended/)
+  assert.equal(calls, 0)
+})
 
 test('API Live diagnostic speech uses only fixed commentary input and rejects arbitrary commands', () => {
   const messages = []

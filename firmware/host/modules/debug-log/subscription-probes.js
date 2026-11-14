@@ -1,5 +1,55 @@
 // SPDX-License-Identifier: Apache-2.0
 // Fixed USB-only probes, loaded on demand outside the conversation implementation.
+export function detachedBackendProbe({ credentials, fetch, random, diagnose }) {
+  let cancelled = false,
+    request
+  const promise = (async () => {
+    const grant = await credentials()
+    if (cancelled) throw new Error('Diagnostic session ended')
+    const uuid = () => {
+      const bytes = new Uint8Array(random())
+      if (bytes.length !== 16) throw new Error('Invalid diagnostic identity')
+      bytes[6] = (bytes[6] & 15) | 64
+      bytes[8] = (bytes[8] & 63) | 128
+      const h = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+      return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+    }
+    request = fetch('https://chatgpt.com/backend-api/codex/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${grant.accessToken}`,
+        'ChatGPT-Account-ID': grant.accountId,
+        originator: 'stack-chan-go',
+        'session-id': uuid(),
+        'thread-id': uuid(),
+        'Content-Type': 'application/json',
+        'User-Agent': 'stack-chan-go/2.1.0-R5',
+        Accept: 'text/event-stream',
+      },
+      responseFormat: 'subscription-response',
+      timeoutMs: 45000,
+      body: JSON.stringify({
+        model: 'gpt-6.1-terra',
+        instructions: 'Answer briefly.',
+        input: [{ role: 'user', content: [{ type: 'input_text', text: 'Say OK.' }] }],
+        store: false,
+        stream: true,
+      }),
+    })
+    const response = await request
+    if (cancelled || !response.ok) throw new Error('Detached subscription probe failed')
+    const result = JSON.parse(await response.text())
+    if (cancelled || result.error || typeof result.answer !== 'string' || !/\bOK\b/i.test(result.answer))
+      throw new Error('Detached subscription probe failed')
+    diagnose?.('probe.detached', () => ({ status: response.status, accepted: true }))
+  })()
+  promise.cancel = () => {
+    cancelled = true
+    request?.cancel?.()
+  }
+  return promise
+}
+
 export function runApiLiveProbe(send, name, language) {
   if (name !== 'probe' || !['english', 'polish'].includes(language)) throw new RangeError('Invalid API Live probe')
   // Public Live dialect differs from Codex's private speakable append.

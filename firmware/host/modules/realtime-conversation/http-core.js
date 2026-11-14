@@ -256,6 +256,7 @@ export function guardSocketCallbacks(Socket, statistics) {
   }
   if (!statistics) return Guarded
   let socket
+  const observe = tlsRecordObservation(statistics)
   Object.defineProperty(statistics, 'socketBuffered', { enumerable: true, get: () => socket?.readable ?? 0 })
   return class extends Guarded {
     constructor(options) {
@@ -267,12 +268,53 @@ export function guardSocketCallbacks(Socket, statistics) {
       if (result !== undefined)
         statistics.socketReceived +=
           typeof result === 'number' ? (this.format === 'number' ? 1 : result) : result.byteLength
+      if (result !== undefined) {
+        if (this.format === 'number') observe(Uint8Array.of(result))
+        else if (typeof result !== 'number') observe(new Uint8Array(result))
+        else if (ArrayBuffer.isView(value)) observe(new Uint8Array(value.buffer, value.byteOffset, result))
+        else observe(new Uint8Array(value, 0, result))
+      }
       return result
     }
     write(value, options) {
       const result = super.write(value, options)
       statistics.socketWritten += value.byteLength
       return result
+    }
+  }
+}
+
+// TLS framing metadata only. Skip ciphertext in blocks; retain no byte values.
+export function tlsRecordObservation(statistics) {
+  let at = 0,
+    length = 0,
+    disabled = false
+  return (bytes) => {
+    for (let offset = 0; offset < bytes.length && !disabled; ) {
+      if (at < 5) {
+        const byte = bytes[offset++]
+        if (!at) {
+          statistics.tlsRecordType = byte >= 20 && byte <= 24 ? byte : 0
+          statistics.tlsRecordExpected = 0
+          length = 0
+        }
+        if (at === 3) length = byte << 8
+        else if (at === 4) {
+          length |= byte
+          if (!statistics.tlsRecordType || length > 32768) disabled = true
+          else statistics.tlsRecordExpected = length + 5
+        }
+        at++
+      } else {
+        const count = Math.min(bytes.length - offset, length + 5 - at)
+        offset += count
+        at += count
+      }
+      statistics.tlsRecordRead = at
+      if (at === length + 5) {
+        statistics.tlsRecords = (statistics.tlsRecords ?? 0) + 1
+        at = 0
+      }
     }
   }
 }
