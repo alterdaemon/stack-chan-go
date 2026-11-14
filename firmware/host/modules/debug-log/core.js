@@ -250,6 +250,7 @@ export class DebugRecorder {
   #dropped = 0
   #capture = 0
   #trialPending = false
+  #inspectionPending = false
   #livePending = false
   constructor(platform) {
     this.platform = platform
@@ -375,17 +376,24 @@ export class DebugRecorder {
                 'minimal',
                 'minimal-isolated',
                 'handoff',
+                'control',
+                'listen-english',
+                'listen-polish',
+                'listen-search',
+                'listen-followup',
               ].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')
         return
       }
-      if (this.#trialPending) {
+      const inspection = parameter === 'probe' && value === 'control'
+      if (inspection ? this.#inspectionPending : this.#trialPending) {
         this.#control('command_pending')
         return
       }
-      this.#trialPending = true
+      if (inspection) this.#inspectionPending = true
+      else this.#trialPending = true
       const capture = this.#capture
       const fields = { parameter, ...(typeof value === 'number' ? { value } : { setting: value }) }
       this.#control('set', { ...fields, phase: 'pending' })
@@ -405,7 +413,8 @@ export class DebugRecorder {
           },
         )
         .finally(() => {
-          this.#trialPending = false
+          if (inspection) this.#inspectionPending = false
+          else this.#trialPending = false
         })
     } else this.#control('invalid_command')
   }

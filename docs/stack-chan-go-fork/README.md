@@ -328,6 +328,21 @@ do not change the production protocol, saved settings or credentials.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 
+`diag set probe control` reads bounded numeric TCP/TLS counters on a ready
+subscription call, including while its backend job runs. Enable diagnostics
+before starting that call; a call created while Off has no observer counters.
+The snapshot includes byte counts and native queue presence, never headers,
+payloads, addresses or credentials. Use the same interactive capture owner.
+
+`diag set probe listen-english|listen-polish|listen-search|listen-followup`
+arms fixed transcript verdicts for synthetic microphone checks without sending
+text or starting a backend request. Only a fixed probe name and boolean verdict
+leave the device. A search acknowledgement is insufficient: wait for a validated
+terminal searched result and a subsequent matching spoken turn before follow-up.
+These checks do not establish physical acoustics or subjective naturalness.
+Reset/Off clears listening state and cancels diagnostic jobs while preserving
+ordinary delegated work in a manually owned session.
+
 On an active subscription call, `diag set probe reasoning|search` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.
 
 USB backend parameter trials use `diag set model gpt-6.1-terra|gpt-6-luna|saved` and `diag set effort none|low|medium|high|xhigh|max|saved` while LIVE is stopped. They affect only subscription backend fields in RAM. `--suite backend` runs one Terra/medium reasoning-and-cited-search baseline with interruption Off/On; explicit filters select targeted alternatives. Do not run the complete model/effort matrix. Native failures, capture loss, account limits and failed baselines stop the run. Verify effective `backend.start` settings and terminal validated results; a sent request is not a pass.

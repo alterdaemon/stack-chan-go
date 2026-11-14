@@ -63,11 +63,19 @@ export function runApiLiveProbe(send, name, language) {
   })
 }
 
-export function createSubscriptionProbes({ send, delegate, diagnose }) {
+export function createSubscriptionProbes({ send, delegate, diagnose, statistics }) {
   let speech
   return {
     async run(name, value) {
       if (name !== 'probe') throw new RangeError('Invalid subscription probe')
+      if (value === 'control') {
+        diagnose?.('control.stats', () => statistics?.() ?? {})
+        return
+      }
+      if (['listen-english', 'listen-polish', 'listen-search', 'listen-followup'].includes(value)) {
+        speech = value
+        return
+      }
       if (value === 'handoff') {
         // Codex methods_common.rs maps a text input to an unchanneled
         // session.context.append. Let the voice agent create the delegation.
@@ -131,12 +139,28 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
       if (!speech || turn.role !== 'assistant') return
       diagnose?.('probe.output', () => ({
         probe: speech,
-        accepted: (speech === 'english' ? /voice test/i : /test głosu/i).test(turn.transcript),
+        accepted: speech.startsWith('listen-')
+          ? matchesFixedInput(speech, turn.transcript)
+          : (speech === 'english' ? /voice test/i : /test głosu/i).test(turn.transcript),
       }))
-      speech = undefined
+      if (!speech.startsWith('listen-')) speech = undefined
     },
     reset() {
       speech = undefined
     },
   }
+}
+
+// Fixed synthetic microphone fixtures only. Export booleans, never transcripts.
+function matchesFixedInput(probe, transcript) {
+  if (typeof transcript !== 'string') return false
+  const text = transcript
+    .slice(0, 3000)
+    .toLowerCase()
+    .replace(/\s+dot\s+/g, '.')
+    .replace(/\s*\.\s*/g, '.')
+  if (probe === 'listen-english') return /\b(?:hello|hi)\b/.test(text)
+  if (probe === 'listen-polish') return /cześć|witaj/.test(text)
+  if (/status\.openai\.com/.test(text)) return true
+  return probe === 'listen-followup' && /openai/.test(text) && /status/.test(text)
 }

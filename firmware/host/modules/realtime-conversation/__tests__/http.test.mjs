@@ -551,6 +551,13 @@ test('diagnostic native queue observation consumes no bytes and distinguishes st
     throw new Error('closed')
   }
   assert.equal(statistics.socketPending, -1)
+  Object.defineProperty(socket, 'format', {
+    get() {
+      throw new Error('invalid host data')
+    },
+  })
+  assert.equal(statistics.socketPending, -1)
+  assert.equal(JSON.parse(JSON.stringify(statistics)).socketPending, -1)
 })
 
 test('fragmented responses preserve every byte up to the response limit', async () => {

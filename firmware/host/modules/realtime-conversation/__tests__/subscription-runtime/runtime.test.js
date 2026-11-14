@@ -129,6 +129,9 @@ class TCP {
   constructor(options) {
     this.options = options
   }
+  write() {
+    return 1024
+  }
 }
 let dnsRequest
 class ObservedDNS {
@@ -170,8 +173,13 @@ for (const character of 'HTTP/1.1 101 Switching Protocols\r\nprivate-header: syn
 }
 socket.options.onWritable(4096)
 const observedChannel = await observed
+equal(tcp.write(Uint8Array.of(1, 2, 3)), 1024)
+equal(observedChannel.statistics().socketWritten, 3)
+equal(observedChannel.statistics().socketPending, -1)
+assert(tls.options.diagnosticStatistics, 'the TLS observer shares the same gated numeric counters')
 socket.readableFrame(ArrayBuffer.fromString('{"type":"session.started"}'), false)
 observedChannel.close()
+equal(observedChannel.statistics(), undefined, 'closed control cannot inspect a released native socket')
 const closedEvents = networkEvents.length
 tls.options.onError(Object.assign(new Error('synthetic-sensitive-close'), { code: -3 }))
 equal(networkEvents.length, closedEvents, 'intentional close cannot become a new transport failure')

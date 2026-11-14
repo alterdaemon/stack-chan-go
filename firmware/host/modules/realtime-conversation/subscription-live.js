@@ -316,7 +316,10 @@ export class SubscriptionLive {
     this.#active = true
     this.debug?.registerTuner?.(this, {
       set: (name, value) => this.probe(name, value),
-      reset: async () => this.cancelJob(),
+      reset: async () => {
+        this.#probes?.reset()
+        if (this.#job?.diagnostic) this.cancelJob()
+      },
       snapshot: () => ({}),
     })
     const queued = this.#events
@@ -383,7 +386,7 @@ export class SubscriptionLive {
   }
 
   async probe(name, value) {
-    if (!this.debug?.enabled || !this.#ready || this.#closed || this.#job)
+    if (!this.debug?.enabled || !this.#ready || this.#closed || (this.#job && value !== 'control'))
       throw Object.assign(new Error('Subscription probe unavailable'), { code: 'not_connected' })
     this.#probes ??= this.createProbes?.({
       send: (message) => this.#channel.send(message),
@@ -394,6 +397,7 @@ export class SubscriptionLive {
           ['minimal', 'minimal-isolated'].includes(variant) ? variant : variant ? 'rejection' : true,
         ),
       diagnose: this.diagnose,
+      statistics: () => this.#channel.statistics?.(),
     })
     if (!this.#probes) throw new Error('Subscription diagnostics unavailable')
     return this.#probes.run(name, value)
@@ -401,7 +405,7 @@ export class SubscriptionLive {
 
   async #delegate(delegationId, text, probe = false) {
     const minimal = probe === 'minimal' || probe === 'minimal-isolated'
-    const job = { id: delegationId }
+    const job = { id: delegationId, diagnostic: Boolean(probe) }
     this.#job = job
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,

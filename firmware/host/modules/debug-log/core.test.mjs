@@ -338,3 +338,42 @@ test('USB LIVE accepts only explicit actions and Stop can cancel a pending Start
   for (let i = 0; i < 10; i++) await Promise.resolve()
   assert.deepEqual(calls, ['start', 'stop'], 'a stale queued start cannot run after Off')
 })
+
+test('one read-only control snapshot can inspect a pending probe without unlocking its mutation lane', async () => {
+  const f = fixture(),
+    calls = []
+  let finishProbe, finishInspection
+  f.recorder.platform.tune = (name, value) => {
+    calls.push([name, value])
+    return new Promise((resolve) => {
+      if (value === 'control') finishInspection = resolve
+      else finishProbe = resolve
+    })
+  }
+  const settled = () => new Promise(setImmediate)
+  f.recorder.command('diag on')
+  f.recorder.command('diag set probe minimal')
+  await settled()
+  f.recorder.command('diag set probe control')
+  await settled()
+  assert.deepEqual(calls, [
+    ['probe', 'minimal'],
+    ['probe', 'control'],
+  ])
+  f.recorder.command('diag set probe control')
+  assert.equal(f.lines.at(-1).action, 'command_pending')
+  finishInspection()
+  await settled()
+  f.recorder.command('diag set speaker 0')
+  assert.equal(f.lines.at(-1).action, 'command_pending')
+  finishProbe()
+  await settled()
+  f.recorder.command('diag set probe listen-english')
+  await settled()
+  assert.deepEqual(calls.at(-1), ['probe', 'listen-english'])
+  finishProbe()
+  await settled()
+  f.recorder.command('diag off')
+  f.recorder.command('diag set probe control')
+  assert.equal(f.lines.at(-1).action, 'enable_required')
+})

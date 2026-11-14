@@ -261,11 +261,11 @@ export function guardSocketCallbacks(Socket, statistics) {
   Object.defineProperty(statistics, 'socketPending', {
     enumerable: true,
     get() {
-      if (socket?.format !== 'buffer') return -1
       // Matching SDK lwIP xs_tcp_read returns undefined for an empty queue,
       // or rejects zero before copying/consuming when bytes are queued. Bypass
       // the observer so this diagnostic does not affect byte counts or TLS.
       try {
+        if (socket?.format !== 'buffer') return -1
         return Socket.prototype.read.call(socket, 0) === undefined ? 0 : -1
       } catch (error) {
         return error?.message === 'invalid' ? 1 : -1

@@ -1274,3 +1274,100 @@ test('Codex item completion is bounded, deduplicated and gated by terminal compl
     /exceeds limit/,
   )
 })
+
+test('passive microphone checks emit only fixed verdicts, keep listening, and reset without requests', async () => {
+  const events = []
+  const probes = createSubscriptionProbes({
+    send: () => assert.fail('passive checks cannot speak'),
+    delegate: () => assert.fail('passive checks cannot request a backend'),
+    diagnose: (event, fields) => events.push({ event, ...fields() }),
+    statistics: () => ({ socketPending: 1, tlsBuffered: 0 }),
+  })
+  for (const [name, text] of [
+    ['english', 'Hello, nice to hear from you.'],
+    ['polish', 'Cześć, miło cię słyszeć.'],
+    ['search', 'The page is status dot openai dot com.'],
+    ['followup', 'I checked OpenAI Status.'],
+  ]) {
+    await probes.run('probe', `listen-${name}`)
+    probes.output({ role: 'user', transcript: text })
+    probes.output({ role: 'assistant', transcript: 'An unrelated synthetic answer.' })
+    assert.equal(events.at(-1).accepted, false)
+    probes.output({ role: 'assistant', transcript: text })
+    assert.equal(events.at(-1).accepted, true)
+    assert.deepEqual(Object.keys(events.at(-1)), ['event', 'probe', 'accepted'])
+  }
+  const before = events.length
+  probes.reset()
+  probes.output({ role: 'assistant', transcript: 'OpenAI Status' })
+  assert.equal(events.length, before)
+  await probes.run('probe', 'control')
+  assert.deepEqual(events.at(-1), { event: 'control.stats', socketPending: 1, tlsBuffered: 0 })
+  assert.ok(!JSON.stringify(events).includes('synthetic answer'))
+})
+
+test('diagnostic reset preserves real delegation but cancels diagnostic work; control remains readable', async () => {
+  const f = liveFixture(),
+    events = []
+  let tuner,
+    samples = 0
+  f.live.debug = {
+    enabled: true,
+    registerTuner(_owner, value) {
+      tuner = value
+    },
+    unregisterTuner() {},
+  }
+  f.live.diagnose = (event, fields) => events.push({ event, ...(typeof fields === 'function' ? fields() : fields) })
+  f.live.openControl = async (_id, _headers, receive) => {
+    f.live.fixtureReceive = receive
+    return {
+      send: (message) => f.sent.push(message),
+      close() {},
+      statistics() {
+        samples++
+        return { socketPending: 1 }
+      },
+    }
+  }
+  await f.live.create(
+    'v=0 offer',
+    {},
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  f.live.fixtureReceive({ type: 'session.started' })
+  await tuner.set('probe', 'listen-followup')
+  f.live.fixtureReceive({
+    type: 'delegation.created',
+    item: {
+      id: 'real_request',
+      type: 'delegation',
+      target: 'client',
+      content: [{ type: 'input_text', text: 'A fixed test question.' }],
+    },
+  })
+  await tick()
+  await tuner.set('probe', 'control')
+  assert.equal(samples, 1)
+  assert.equal(events.at(-1).socketPending, 1)
+  await tuner.reset()
+  assert.equal(f.cancels, 0)
+  f.finish({ answer: 'The test answer.', searched: false })
+  await tick()
+  assert.ok(f.sent.some((message) => message.type === 'delegation.context.append'))
+  const before = events.filter((event) => event.event === 'probe.output').length
+  f.live.fixtureReceive({ type: 'turn.done', turn: { role: 'assistant', transcript: 'OpenAI Status' } })
+  assert.equal(events.filter((event) => event.event === 'probe.output').length, before)
+  const diagnostic = tuner.set('probe', 'minimal')
+  await tick()
+  await tuner.reset()
+  assert.equal(f.cancels, 1)
+  f.finish({ answer: 'OK', searched: false })
+  await assert.rejects(diagnostic, /probe failed/)
+  f.live.debug.enabled = false
+  await assert.rejects(tuner.set('probe', 'control'), /unavailable/)
+  assert.equal(samples, 1)
+  f.live.dispose()
+})

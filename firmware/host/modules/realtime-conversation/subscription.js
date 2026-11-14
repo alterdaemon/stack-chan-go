@@ -45,6 +45,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       phase = network.dns?.io ? 'dns' : 'connect',
       firstMessage = true
     const diagnose = (event, fields) => Debug.event('subscription', event, fields)
+    const statistics = Debug.enabled ? { socketReceived: 0, socketWritten: 0 } : undefined
     const DNS = network.dns?.io
     const CheckedDNS =
       typeof DNS === 'function'
@@ -69,7 +70,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
     const TCP = network.socket?.TCP?.io
     const CheckedTCP =
       typeof TCP === 'function'
-        ? class extends guardSocketCallbacks(TCP) {
+        ? class extends guardSocketCallbacks(TCP, statistics) {
             constructor(options) {
               let ready = false
               super({
@@ -105,6 +106,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
               let ready = false
               super({
                 ...options,
+                diagnosticStatistics: statistics,
                 onReadable(count) {
                   this.#readable = count
                   return options.onReadable?.call(this, count)
@@ -191,6 +193,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       }
     }
     const channel = {
+      statistics: () => (!closed && Debug.enabled && statistics ? { ...statistics } : undefined),
       send(message) {
         if (closed) throw new Error('Subscription control is closed')
         const data = ArrayBuffer.fromString(JSON.stringify(message))
@@ -202,6 +205,7 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
       },
       close() {
         if (closed) return
+        if (statistics) diagnose('control.stats', () => ({ ...statistics }))
         closed = true
         diagnose('control.closed', () => ({ accepted: opened, phase }))
         Timer.clear(deadline)
