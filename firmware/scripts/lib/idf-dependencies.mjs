@@ -85,7 +85,7 @@ export function prepareCoreS3IdfDependencies({
       const source = path.resolve(solutionDirectory, 'components', name)
       if (!existsSync(path.join(source, 'CMakeLists.txt'))) throw new Error(`Missing WebRTC component: ${name}`)
       const destination = path.join(componentDirectory, name)
-      if (name === 'esp_webrtc' || name === 'esp_peer') preparePeerImplementation(source, destination, name)
+      if (['esp_webrtc', 'esp_peer', 'av_render'].includes(name)) preparePeerImplementation(source, destination, name)
       else linkComponent(source, destination)
     }
     // Use ESP-IDF's project component discovery; never patch the SDK CMake project.
@@ -106,10 +106,11 @@ export function prepareCoreS3IdfDependencies({
   return manifestPath
 }
 
-// Honor the peer implementation and observe socket results in generated output
-// only. Preserve installed SDK sources/licenses and reject unsupported shapes.
+// Apply checked component fixes/observers only in generated output. Keep SDK
+// sources/licenses intact, and reject unsupported source shapes.
 function preparePeerImplementation(source, destination, name) {
-  const relative = name === 'esp_webrtc' ? 'src/esp_webrtc.c' : 'src/transport/udp.c'
+  const relative =
+    name === 'esp_webrtc' ? 'src/esp_webrtc.c' : name === 'av_render' ? 'src/av_render.c' : 'src/transport/udp.c'
   const original = readFileSync(path.join(source, relative), 'utf8')
   const before = 'esp_peer_open(&peer_cfg, esp_peer_get_default_impl(), &rtc->pc)'
   const after = 'esp_peer_open(&peer_cfg, rtc->rtc_cfg.peer_impl, &rtc->pc)'
@@ -121,10 +122,17 @@ function preparePeerImplementation(source, destination, name) {
   const patches =
     name === 'esp_webrtc'
       ? [[before, after]]
-      : [
-          [
-            '#define TAG "UDP"',
-            `extern void stackchanLiveDebugIce(unsigned, const uint8_t *, int, int, int) __attribute__((weak));
+      : name === 'av_render'
+        ? [
+            [
+              '    _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts',
+              '    if (wait_bits) _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts',
+            ],
+          ]
+        : [
+            [
+              '#define TAG "UDP"',
+              `extern void stackchanLiveDebugIce(unsigned, const uint8_t *, int, int, int) __attribute__((weak));
 static void stackchanObserveUdp(unsigned outgoing, const uint8_t *buf, int len, int result)
 {
     int saved_errno = errno;
@@ -132,18 +140,18 @@ static void stackchanObserveUdp(unsigned outgoing, const uint8_t *buf, int len, 
     errno = saved_errno;
 }
 #define TAG "UDP"`,
-          ],
-          ['measure_stop("sendto");', 'measure_stop("sendto");\n    stackchanObserveUdp(1, buf, len, ret);'],
-          [receive, `${receive}\n        stackchanObserveUdp(0, buf, ret, ret);`],
-          [
-            'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);',
-            'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);\n    stackchanObserveUdp(2, NULL, max_fd, ret);',
-          ],
-          [
-            'if (max_fd < 0) {\n        return -1;',
-            'if (max_fd < 0) {\n        stackchanObserveUdp(2, NULL, max_fd, -1);\n        return -1;',
-          ],
-        ]
+            ],
+            ['measure_stop("sendto");', 'measure_stop("sendto");\n    stackchanObserveUdp(1, buf, len, ret);'],
+            [receive, `${receive}\n        stackchanObserveUdp(0, buf, ret, ret);`],
+            [
+              'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);',
+              'int ret = select(max_fd + 1, &read_set, NULL, NULL, tv);\n    stackchanObserveUdp(2, NULL, max_fd, ret);',
+            ],
+            [
+              'if (max_fd < 0) {\n        return -1;',
+              'if (max_fd < 0) {\n        stackchanObserveUdp(2, NULL, max_fd, -1);\n        return -1;',
+            ],
+          ]
   const updates = [[relative, patchPeerSource(original, patches, source)]]
   if (name === 'esp_peer') {
     const tcp = 'src/transport/tcp.c'

@@ -233,7 +233,12 @@ int main(void) {
     start = continuousSpeech(&a, 180);
     for (unsigned i = start; i < cycles; i++) assert(played[i] == 0);
     assert(!atomic_load(&a.yieldOutput) && atomic_load(&a.quiesced));
-    atomic_store(&a.stopping, true);
+    unsigned finalFlushes = flushCalls;
+    liveAudioStop(&a);
+    assert(flushCalls == finalFlushes); // SDK disconnect may already have reset its tasks.
+    assert(atomic_load(&a.renderActive));
+    renderClose(&a);
+    assert(!atomic_load(&a.renderActive));
     pthread_mutex_lock(&mutex); pthread_cond_broadcast(&changed); pthread_mutex_unlock(&mutex);
     assert(!pthread_join(clock, NULL));
     assert(!liveAudioRequestInterrupt()); assert(!liveAudioFlushOutput(&a));

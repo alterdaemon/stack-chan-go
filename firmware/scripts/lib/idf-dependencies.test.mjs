@@ -150,6 +150,13 @@ test('discovers local WebRTC components without editing their sources and isolat
     const component = path.join(solutionDirectory, 'components', name)
     mkdirSync(component, { recursive: true })
     writeFileSync(path.join(component, 'CMakeLists.txt'), 'idf_component_register()\n')
+    if (name === 'av_render') {
+      mkdirSync(path.join(component, 'src'))
+      writeFileSync(
+        path.join(component, 'src/av_render.c'),
+        '/* SDK license */\n    _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts\n',
+      )
+    }
     if (name === 'esp_webrtc') {
       mkdirSync(path.join(component, 'src'))
       writeFileSync(
@@ -204,7 +211,7 @@ int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
     const manifestPath = prepareCoreS3IdfDependencies(options)
     const components = path.resolve(path.dirname(manifestPath), '../components')
     for (const name of names) {
-      if (name !== 'esp_webrtc' && name !== 'esp_peer')
+      if (!['esp_webrtc', 'esp_peer', 'av_render'].includes(name))
         assert.equal(
           realpathSync(path.join(components, name)),
           realpathSync(path.join(solutionDirectory, 'components', name)),
@@ -213,6 +220,7 @@ int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
     }
     const first = readFileSync(manifestPath, 'utf8')
     const patched = [
+      'av_render/src/av_render.c',
       'esp_webrtc/src/esp_webrtc.c',
       'esp_peer/src/transport/udp.c',
       'esp_peer/src/transport/tcp.c',
@@ -236,6 +244,12 @@ int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
       'only the generated call uses the supplied implementation and retains the SDK license',
     )
     assert.ok(original.includes('esp_peer_get_default_impl()'), 'external SDK remains unchanged')
+    const renderOriginal = readFileSync(path.join(solutionDirectory, 'components/av_render/src/av_render.c'), 'utf8')
+    assert.equal(
+      readFileSync(path.join(components, 'av_render/src/av_render.c'), 'utf8'),
+      renderOriginal.replace('    _WAIT_BITS', '    if (wait_bits) _WAIT_BITS'),
+      'only the generated empty-renderer wait is guarded; SDK source and license remain unchanged',
+    )
     const udp = readFileSync(path.join(components, 'esp_peer/src/transport/udp.c'), 'utf8')
     assert.ok(udp.includes('stackchanObserveUdp(1, buf, len, ret);'))
     assert.ok(udp.includes('stackchanObserveUdp(0, buf, ret, ret);'))

@@ -300,7 +300,10 @@ static int renderInfo(audio_render_handle_t h, av_render_audio_frame_info_t *inf
 	*info = (av_render_audio_frame_info_t){.sample_rate = LIVE_RATE, .channel = 1, .bits_per_sample = 16};
 	return 0;
 }
-static int renderClose(audio_render_handle_t h) { return 0; }
+static int renderClose(audio_render_handle_t h) {
+    atomic_store(&((LiveAudio *)h)->renderActive, false);
+    return 0;
+}
 static void renderDeinit(audio_render_handle_t h) {}
 
 static size_t pitchRead(void *context, int16_t *samples, size_t count)
@@ -588,13 +591,9 @@ void liveAudioStop(LiveAudio *a)
 	if (!a) return;
   bool first = !atomic_exchange(&a->stopping, true);
 	atomic_store(&a->reading, false);
-  // A renderer without a decoded frame has no render task to flush.
   if (first) stackchanDebugTransition(DEBUG_AUDIO_STOP, atomic_load(&a->interruptRequest), 0, 0);
-  if (first && a->player && atomic_load(&a->renderActive)) {
-      stackchanDebugTransition(DEBUG_FLUSH_BEGIN, atomic_load(&a->interruptRequest), 1, 0);
-      int flushResult = av_render_flush(a->player);
-      stackchanDebugTransition(DEBUG_FLUSH_END, atomic_load(&a->interruptRequest), 1, flushResult);
-  }
+  // esp_webrtc already resets the renderer on disconnect and during close.
+  // Unblock renderWrite here; do not flush the SDK's possibly reset threads.
 }
 void liveAudioClose(LiveAudio *a)
 {

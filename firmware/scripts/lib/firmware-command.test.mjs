@@ -70,7 +70,7 @@ test('default CoreS3 build includes GPT-Live and prepares native dependencies wi
       const component = path.join(solution, 'components', name)
       mkdirSync(component, { recursive: true })
       writeFileSync(path.join(component, 'CMakeLists.txt'), '# test component\n')
-      if (name === 'esp_webrtc' || name === 'esp_peer') writePeerFixture(component)
+      if (['esp_webrtc', 'esp_peer', 'av_render'].includes(name)) writePeerFixture(component)
     }
     const env = {
       ...process.env,
@@ -123,6 +123,8 @@ appendFileSync(process.env.STACKCHAN_TEST_COMMAND_LOG, JSON.stringify(['build-wi
         assert.ok(readFileSync(path.join(component, 'src/esp_webrtc.c'), 'utf8').includes('rtc->rtc_cfg.peer_impl'))
       else if (name === 'esp_peer')
         assert.ok(readFileSync(path.join(component, 'src/transport/udp.c'), 'utf8').includes('stackchanObserveUdp'))
+      else if (name === 'av_render')
+        assert.ok(readFileSync(path.join(component, 'src/av_render.c'), 'utf8').includes('if (wait_bits)'))
       else assert.equal(realpathSync(component), realpathSync(path.join(solution, 'components', name)))
     }
   } finally {
@@ -393,6 +395,7 @@ for (const name of ${JSON.stringify(webRtcComponents)}) {
   const link = path.join(project, 'components', name)
   if (realtime && name === 'esp_webrtc') assert.ok(readFileSync(path.join(link, 'src/esp_webrtc.c'), 'utf8').includes('rtc->rtc_cfg.peer_impl'))
   else if (realtime && name === 'esp_peer') assert.ok(readFileSync(path.join(link, 'src/transport/udp.c'), 'utf8').includes('stackchanObserveUdp'))
+  else if (realtime && name === 'av_render') assert.ok(readFileSync(path.join(link, 'src/av_render.c'), 'utf8').includes('if (wait_bits)'))
   else if (realtime) assert.equal(realpathSync(link), realpathSync(path.join(process.env.ESP_WEBRTC_SOLUTION, 'components', name)))
   else assert.equal(lstatSync(link, { throwIfNoEntry: false }), undefined, 'stale component link')
 }
@@ -473,7 +476,7 @@ function createFirmwareWrapperFixture(deviceName = 'm5stackchan_cores3', mode = 
     const directory = path.join(solutionDirectory, 'components', component)
     mkdirSync(directory, { recursive: true })
     writeFileSync(path.join(directory, 'CMakeLists.txt'), '# local test component\n')
-    if (component === 'esp_webrtc' || component === 'esp_peer') writePeerFixture(directory)
+    if (['esp_webrtc', 'esp_peer', 'av_render'].includes(component)) writePeerFixture(directory)
   }
   mkdirSync(fixtureWebEditor, { recursive: true })
   cpSync(
@@ -635,6 +638,14 @@ function count(source, value) {
 }
 
 function writePeerFixture(directory) {
+  if (path.basename(directory) === 'av_render') {
+    mkdirSync(path.join(directory, 'src'), { recursive: true })
+    writeFileSync(
+      path.join(directory, 'src/av_render.c'),
+      '    _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts\n',
+    )
+    return
+  }
   if (path.basename(directory) === 'esp_peer') {
     mkdirSync(path.join(directory, 'src/transport'), { recursive: true })
     writeFileSync(
