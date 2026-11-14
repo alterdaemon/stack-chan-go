@@ -16,6 +16,7 @@
     "realtimeConversation/web-search": "../../web-search",
     "realtimeConversation/transport": "./transport",
     "realtimeConversation/subscription": "../../subscription",
+    "device-debug/subscription-probes": "../../../debug-log/subscription-probes",
     "realtimeConversation/http": "./http",
     "realtimeConversation/subscription-store": "./store",
     "rng": "./rng",

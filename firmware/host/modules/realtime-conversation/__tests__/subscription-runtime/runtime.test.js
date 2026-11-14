@@ -5,9 +5,18 @@ import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive } from 'realtimeConversation/subscription-live'
 import { createSubscriptionStream } from 'realtimeConversation/subscription-stream'
 import Debug from 'device-debug'
+import Modules from 'modules'
 import { assert, equal } from 'testing/assert'
 import TextDecoder from 'text/decoder'
 import Timer from 'timer'
+
+const probeMessages = []
+const probes = Modules.importNow('device-debug/subscription-probes', true).createSubscriptionProbes({
+  send: (message) => probeMessages.push(message),
+})
+await probes.run('probe', 'english')
+equal(probeMessages[0].type, 'session.context.append', 'the lazy USB probe loads through the XS namespace')
+probes.reset()
 
 let socket
 class Socket {

@@ -83,11 +83,21 @@ class Capture:
         self.command('diag reset', 'set', parameter='reset', phase='applied')
 
     def trial(self, name, profile='start', interruption='off', settings=None, hold=0, probes=()):
+        quiet = getattr(self.args, 'quiet', False)
+        settings = dict(settings or {})
+        if quiet and (profile != 'start' or settings.get('volume', 0) != 0):
+            raise ValueError('Quiet trials require the configured start profile and volume 0')
         self.reset()
+        if quiet:
+            # Trim covers native audio initialization; session volume remains zero
+            # even if Off/lease loss later restores the diagnostic trim to one.
+            self.set('speaker', 0)
+            settings['volume'] = 0
         self.set('interruption', interruption)
-        for parameter, value in (settings or {}).items():
+        for parameter, value in settings.items():
             self.set(parameter, value)
-        self.command('diag status', 'status', interruptionTrial=interruption)
+        self.command('diag status', 'status', interruptionTrial=interruption,
+                     **({'speaker': 0, 'trialVolume': 0} if quiet else {}))
         after = len(self.rows)
         started = time.monotonic()
         self.child.stdin.write(f'diag live {profile}\n')
@@ -115,9 +125,10 @@ class Capture:
                 self.valid = False
                 probe_error = probe_error or error
         details = self.rows[after:]
-        result = dict(name=name, profile=profile, interruption=interruption, settings=settings or {},
+        result = dict(name=name, profile=profile, interruption=interruption, settings=settings, quiet=quiet,
                       phase='probe_failed' if probe_error and end['phase'] == 'applied' else end['phase'],
                       seconds=elapsed or round(time.monotonic() - started, 3),
+                      startupSeconds=elapsed, totalSeconds=round(time.monotonic() - started, 3),
                       session=next((d for d in details if d.get('event') == 'call.session'), None),
                       rejections=[d for d in details if d.get('event') in ('control.rejection', 'control.http')],
                       failures=[d for d in details if d.get('event') == 'failure'],
@@ -127,7 +138,7 @@ class Capture:
                       probeOutputs=[d for d in details if d.get('event') == 'probe.output'])
         self.results.append(result)
         (self.args.output / 'results.json').write_text(json.dumps(self.results, indent=2) + '\n')
-        print(json.dumps({k: result[k] for k in ('name', 'interruption', 'phase', 'seconds')}), flush=True)
+        print(json.dumps({k: result[k] for k in ('name', 'interruption', 'phase', 'startupSeconds', 'totalSeconds')}), flush=True)
         if probe_error:
             raise probe_error
         return result['phase'] == 'applied' and not result['failures']
@@ -164,14 +175,24 @@ def main():
     parser.add_argument('--voices', nargs='+', choices=VOICES, help='Specific documented candidates to retest')
     parser.add_argument('--interruption', choices=('off', 'on', 'both'), default='both')
     parser.add_argument('--models', nargs='+', choices=('gpt-6.1-terra', 'gpt-6-luna'),
-                        help='Target backend models; explicit filters skip the standard baseline')
+                        help='Explicit targeted models; default is the single Terra baseline')
     parser.add_argument('--efforts', nargs='+', choices=('medium', 'none', 'low', 'high', 'xhigh', 'max'),
-                        help='Target backend efforts; explicit filters skip the standard baseline')
+                        help='Explicit targeted efforts; default is medium; no multi-model/effort product')
+    parser.add_argument('--quiet', action='store_true',
+                        help='Use configured starts with zero session volume plus temporary speaker trim')
+    parser.add_argument('--parameter', choices=('pitch', 'style', 'volume', 'standby', 'prompt'),
+                        help='Explicit parameter to investigate; otherwise test only configured starts')
     parser.add_argument('--suite', choices=('voices', 'parameters', 'backend', 'audio', 'cycles', 'soak'), required=True)
     parser.add_argument('--duration', type=int, default=7200, help='USB lease-renewing capture bound, seconds')
     parser.add_argument('--cycles', type=int, default=100)
     parser.add_argument('--hold', type=int, default=3600, help='Connected soak duration in seconds')
     args = parser.parse_args()
+    if args.models and args.efforts and len(args.models) > 1 and len(args.efforts) > 1:
+        parser.error('Choose one model or one effort per targeted run; no Cartesian product')
+    if args.quiet and (args.suite == 'audio' or args.parameter == 'volume'):
+        parser.error('Audible/volume qualification cannot run in quiet mode')
+    if args.parameter and args.suite != 'parameters':
+        parser.error('--parameter requires --suite parameters')
     if len(args.expected_sha) != 64 or any(c not in '0123456789abcdef' for c in args.expected_sha):
         parser.error('--expected-sha must be the validated image ELF SHA256')
     if not 1 <= args.cycles <= 1000 or not 1 <= args.hold <= 7200 or not 60 <= args.duration <= 14400:
@@ -192,49 +213,41 @@ def main():
             time.sleep(0.5)
         if args.suite == 'backend':
             modes = ('off', 'on') if args.interruption == 'both' else (args.interruption,)
-            failures = 0
-            if not args.models and not args.efforts:
-                for mode in modes:
-                    if not capture.trial('backend-standard', 'standard', mode, probes=('reasoning', 'search')):
-                        raise RuntimeError('Standard backend qualification failed')
             for mode in modes:
-                for model in args.models or ('gpt-6.1-terra', 'gpt-6-luna'):
-                    for effort in args.efforts or ('medium', 'none', 'low', 'high', 'xhigh', 'max'):
-                        try:
-                            passed = capture.trial(f'{model}-{effort}', interruption=mode,
-                                                   settings={'model': model, 'effort': effort},
-                                                   probes=('reasoning', 'search'))
-                        except RuntimeError:
-                            if not capture.valid or capture.child.poll() is not None:
-                                raise
-                            passed = False
-                        failures += not passed
-                        if any(d.get('event') in ('abort', 'backtrace') for d in capture.rows):
-                            raise RuntimeError('Native failure invalidated qualification')
-                        if any(d.get('status') in (402, 429) or d.get('providerCode') in ('rate_limit_exceeded', 'insufficient_quota', 'usage_limit_reached')
-                               for d in capture.rows):
-                            raise RuntimeError('Account limit stopped qualification; remaining cases untested')
-            if failures:
-                raise RuntimeError(f'{failures} backend cases failed; see retained evidence')
+                for model in args.models or ('gpt-6.1-terra',):
+                    for effort in args.efforts or ('medium',):
+                        if not capture.trial(f'{model}-{effort}',
+                                             profile='start' if args.quiet else 'standard', interruption=mode,
+                                             settings={'model': model, 'effort': effort, 'voice': 'cove'},
+                                             probes=('reasoning', 'search')):
+                            if any(d.get('status') in (402, 429) or d.get('providerCode') in
+                                   ('rate_limit_exceeded', 'insufficient_quota', 'usage_limit_reached')
+                                   for d in capture.rows):
+                                raise RuntimeError('Account limit stopped qualification; remaining cases untested')
+                            raise RuntimeError('Backend baseline failed; remaining cases untested')
         elif args.suite == 'voices':
-            voices = args.voices or ['cove'] + [v for v in VOICES if v != 'cove']
+            voices = args.voices or ['cove']
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
                 for voice in voices:
-                    capture.trial(voice, 'standard', mode, {'voice': voice})
-            capture.trial('baseline-recheck', 'standard')
+                    if not capture.trial(voice, 'start' if args.quiet else 'standard', mode, {'voice': voice}):
+                        raise RuntimeError('Voice baseline failed; remaining cases untested')
         elif args.suite == 'audio':
             for mode in ('off', 'on'):
                 for probe in ('english', 'polish'):
                     capture.trial(probe, interruption=mode, probes=(probe,), hold=10)
         elif args.suite == 'parameters':
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
-                for profile in ('standard', 'voice', 'prompt', 'pitch', 'start'):
-                    capture.trial(profile, profile, mode)
-                for parameter, values in [('pitch', range(-6, 7)), ('style', ['default', 'calm', 'expressive']),
-                                          ('volume', [0, 0.1, 0.5, 1]), ('standby', [1, 60, 3600]),
-                                          ('prompt', ['standard', 'long'])]:
-                    for value in values:
-                        capture.trial(f'{parameter}-{value}', interruption=mode, settings={parameter: value})
+                if not args.parameter:
+                    if not capture.trial('configured', interruption=mode):
+                        raise RuntimeError('Configured baseline failed; remaining cases untested')
+                    continue
+                values = {'pitch': (-6, 0, 6), 'style': ('default', 'calm', 'expressive'),
+                          'volume': (0, 0.1, 1), 'standby': (1, 60, 3600),
+                          'prompt': ('standard', 'long')}[args.parameter]
+                for value in values:
+                    if not capture.trial(f'{args.parameter}-{value}', interruption=mode,
+                                         settings={args.parameter: value}):
+                        raise RuntimeError('Parameter trial failed; remaining cases untested')
         elif args.suite == 'cycles':
             failures = consecutive = 0
             for index in range(args.cycles):

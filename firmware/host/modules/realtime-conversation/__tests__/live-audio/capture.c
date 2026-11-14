@@ -20,6 +20,9 @@ static const unsigned uiPriority = 6, ioPriority = 20, sourcePriority = 15;
 static bool delayDsp, delayedPlayback, referencePause, interruptPlayback, interruptRecovery, restoreGain;
 static bool realtimeMode;
 static unsigned testCaptureTrim = 1024, testSpeakerTrim = 1024, lastNlp;
+static unsigned testVolume = 512;
+static bool diagnosticLevels, restoreQuietTrim;
+int stackchanDebugIsEnabled(void) { return diagnosticLevels; }
 int aec_set_nlp_level(const aec_handle_t *aec, unsigned value) {
     assert(pthread_equal(pthread_self(), consumer));
     assert(value <= 2); lastNlp = value; return value;
@@ -102,7 +105,7 @@ int i2s_channel_write(i2s_chan_handle_t channel, const void *data, size_t bytes,
 
     for (unsigned i = 0; i < BLOCK * 2; i++)
         assert(samples[i] == ((atomic_load(&session->quiesced) || atomic_load(&session->yieldOutput)) ? 0 :
-            playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 8000)) / (session->pitch ? 4 : 2) * testSpeakerTrim / 1024));
+            playbackAt(atomic_load(&blocks) * 160 + i / (LIVE_RATE / 8000)) / (session->pitch ? 2 : 1) * testVolume / 1024 * testSpeakerTrim / 1024));
     for (unsigned i = 0; i < 160; i++)
         atomic_store(&outputHistory[atomic_load(&blocks) * 160 + i], samples[i * (LIVE_RATE / 8000)]);
     pthread_mutex_lock(&lock);
@@ -119,6 +122,10 @@ int i2s_channel_read(i2s_chan_handle_t channel, void *data, size_t bytes,
     while (atomic_load(&blocks) >= permittedBlocks && !atomic_load(&session->stopping))
         pthread_cond_wait(&changed, &lock);
     unsigned block = atomic_fetch_add(&blocks, 1);
+    if (restoreQuietTrim && block == 10) {
+        assert(!stackchanAudioDebugSet(DEBUG_TUNE_RESET, 0));
+        testSpeakerTrim = 1024;
+    }
     for (unsigned i = 0; i < BLOCK; i++) {
         int16_t sample = 1000 + ((block * BLOCK + i) / (LIVE_RATE / 16000)) % 113;
         ((int16_t *)data)[i * 2] = ((int16_t *)data)[i * 2 + 1] = sample;
@@ -188,7 +195,7 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     assert(audio.buffers);
     memset(audio.buffers, 0, samples * sizeof(int16_t));
     if (interruption) audio.aecFrame = audio.buffers + BLOCK * (8 + DMA_BLOCKS) + audio.chunk * 2;
-    atomic_store(&audio.volume, 512);
+    atomic_store(&audio.volume, testVolume);
     atomic_store(&audio.muted, mute);
     session = &audio;
     activeAudio = &audio;
@@ -255,11 +262,20 @@ static void run(bool interruption, int semitones, bool mute, bool delay, bool qu
     assert(atomic_load(&audio.done) && !atomic_load(&audio.error));
     assert(!atomic_load(&audio.overruns));
     assert(atomic_load(&submitted) >= total && atomic_load(&audio.sourceSamples) == total);
-    if (interruption && !quiesce && (referencePause || (interruptPlayback && !mute)))
+    if (interruption && !quiesce && !testVolume)
+        assert(atomic_load(&dspCalls) == 7);
+    else if (interruption && !quiesce && (referencePause || (interruptPlayback && !mute)))
         assert(atomic_load(&dspCalls) > 0 && atomic_load(&dspCalls) < total / aec.count);
     else assert(atomic_load(&dspCalls) == (interruption && !quiesce ? total / aec.count : 0));
     assert(atomic_load(&priorityChanges) == atomic_load(&dspCalls) * 2);
     assert(delayedPlayback == (interruption && delay && !quiesce));
+    if (diagnosticLevels) {
+        LiveAudioStats stats;
+        liveAudioStats(&audio, &stats);
+        assert(stats.sourceLevel == (semitones ? 200 : 400));
+        assert(stats.volumeQ10 == testVolume * testSpeakerTrim / 1024);
+        assert(stats.playbackLevel == (testVolume ? 400 : 0));
+    } else assert(!atomic_load(&audio.sourceLevel));
     if (interruptRecovery && interruption) {
         assert(!atomic_load(&audio.yieldOutput));
         assert(!atomic_load(&outputHistory[75 * 160]));
@@ -316,6 +332,17 @@ int main(void) {
     referencePause = false;
     run(false, 0, false, false, false);
     realtimeMode = referencePause = restoreGain = false;
+    interruptPlayback = false;
+    diagnosticLevels = true;
+    testVolume = 1024;
+    run(false, 0, false, false, false);
+    testVolume = 0;
+    assert(!stackchanAudioDebugSet(DEBUG_TUNE_SPEAKER, 0)); testSpeakerTrim = 0;
+    restoreQuietTrim = true;
+    run(false, 0, false, false, false);
+    run(true, 0, false, false, false);
+    diagnosticLevels = restoreQuietTrim = false;
+    testVolume = 512;
     LiveEcho echo;
     int16_t quiet[512] = {0};
     liveEchoReset(&echo);

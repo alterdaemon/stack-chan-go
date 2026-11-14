@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createSubscriptionProbes } from '../../debug-log/subscription-probes.js'
 import { SubscriptionAuth } from '../subscription-auth.js'
 import {
   parseSubscriptionCall,
@@ -558,6 +559,7 @@ function liveFixture() {
   }
   const live = new SubscriptionLive({
     auth,
+    createProbes: createSubscriptionProbes,
     uuid: () => 'fixture-id',
     openControl: async (_id, _headers, cb) => {
       receive = cb
@@ -969,7 +971,13 @@ test('subscription errors retain only structured code and parameter, including H
 
 test('USB backend probes require enabled diagnostics and an active subscription and send no fake control events', async () => {
   const f = liveFixture()
-  let tuner, removed
+  let tuner,
+    removed,
+    probeLoads = 0
+  f.live.createProbes = (hooks) => {
+    probeLoads++
+    return createSubscriptionProbes(hooks)
+  }
   f.live.debug = {
     enabled: false,
     registerTuner(owner, value) {
@@ -992,6 +1000,7 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   f.live.debug.enabled = true
   await assert.rejects(tuner.set('probe', 'reasoning'), /unavailable/)
   f.receive({ type: 'session.started' })
+  assert.equal(probeLoads, 0)
   await assert.rejects(tuner.set('probe', 'arbitrary'), /Invalid/)
   const calculation = tuner.set('probe', 'reasoning')
   await tick()
@@ -1003,6 +1012,7 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   await tick()
   f.finish({ answer: 'Status checked.', searched: true, sources: [{ url: 'https://status.openai.com/' }] })
   await search
+  assert.equal(probeLoads, 1)
   assert.deepEqual(f.sent, [])
   await tuner.set('probe', 'english')
   assert.equal(f.sent[0].type, 'session.context.append')
@@ -1044,6 +1054,10 @@ test('subscription requests honor selected model and each effort without public 
       assert.equal(body.store, false)
       assert.equal(body.stream, true)
       assert.equal(f.requests.at(-1).options.headers.Accept, 'text/event-stream')
+      assert.equal(f.requests[0].options.headers['OpenAI-Alpha'], 'quicksilver=v2')
+      assert.equal(f.requests.at(-1).options.headers['OpenAI-Alpha'], undefined)
+      assert.equal(f.requests.at(-1).options.headers['session-id'], undefined)
+      assert.equal(f.requests.at(-1).options.headers['thread-id'], undefined)
       assert.deepEqual(body.tools, [{ type: 'web_search' }])
       f.finish({ answer: 'An answer', searched: false })
       await tick()

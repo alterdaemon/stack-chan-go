@@ -6,6 +6,99 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
+test('qualification defaults are bounded baselines and reject a model/effort Cartesian product', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      `
+import contextlib, importlib.util, io, sys, tempfile
+spec=importlib.util.spec_from_file_location('qualify_live',sys.argv[1])
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+runs=[]
+class Capture:
+    def __init__(self,args): self.rows=[]
+    def wait(self,*args,**kwargs): return dict(app_sha256='a'*64)
+    def command(self,*args,**kwargs): return dict(phase='applied')
+    def trial(self,*args,**kwargs): runs.append((args,kwargs)); return True
+    def close(self): pass
+module.Capture=Capture
+for suite in ('backend','voices','parameters'):
+    with tempfile.TemporaryDirectory() as directory:
+        runs.clear()
+        module.sys.argv=['qualify-live.py','--port','unused','--expected-sha','a'*64,
+                         '--suite',suite,'--output',directory]
+        module.main()
+        assert len(runs)==2, (suite,runs)
+        if suite=='backend':
+            assert all(r[1]['settings']['model']=='gpt-6.1-terra' and
+                       r[1]['settings']['effort']=='medium' for r in runs)
+        if suite=='voices': assert all(r[0][0]=='cove' for r in runs)
+with tempfile.TemporaryDirectory() as directory:
+    runs.clear()
+    module.sys.argv=['qualify-live.py','--port','unused','--expected-sha','a'*64,
+        '--suite','backend','--output',directory,'--models','gpt-6-luna','gpt-6.1-terra',
+        '--efforts','none','low']
+    with contextlib.redirect_stderr(io.StringIO()):
+        try: module.main(); raise AssertionError('Cartesian product accepted')
+        except SystemExit as error: assert error.code==2
+    assert not runs
+print('passed focused qualification defaults')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed focused qualification defaults/)
+})
+
+test('quiet qualification applies both silence controls before startup and rejects audible profiles', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      `
+import importlib.util, io, json, sys, tempfile
+from pathlib import Path
+from types import SimpleNamespace
+spec=importlib.util.spec_from_file_location('qualify_live',sys.argv[1])
+module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+with tempfile.TemporaryDirectory() as directory:
+    capture=object.__new__(module.Capture)
+    capture.args=SimpleNamespace(output=Path(directory),quiet=True)
+    capture.results=[]; capture.rows=[]; capture.valid=True
+    commands=[]
+    class Writer(io.StringIO):
+        def write(self,text): commands.append(text.strip()); return super().write(text)
+    capture.child=SimpleNamespace(stdin=Writer())
+    capture.reset=lambda: commands.append('reset')
+    capture.set=lambda parameter,value: commands.append((parameter,value))
+    def command(text,*args,**kwargs):
+        if text=='diag status': assert kwargs['speaker']==0 and kwargs['trialVolume']==0
+        commands.append(text)
+    capture.command=command
+    capture.wait=lambda *args,**kwargs: dict(phase='applied')
+    assert capture.trial('quiet')
+    assert commands.index(('speaker',0)) < commands.index('diag live start')
+    assert commands.index(('volume',0)) < commands.index('diag live start')
+    assert commands[-1]=='diag live stop'
+    row=json.loads((Path(directory)/'results.json').read_text())[0]
+    assert row['quiet'] and row['settings']['volume']==0
+    assert row['startupSeconds'] >= 0 and row['totalSeconds'] >= row['startupSeconds']
+    for profile,settings in [('standard',{}),('start',{'volume':1})]:
+        before=len(commands)
+        try: capture.trial('unsafe',profile=profile,settings=settings); raise AssertionError('Audible trial accepted')
+        except ValueError: pass
+        assert len(commands)==before
+print('passed quiet qualification controls')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed quiet qualification controls/)
+})
+
 test('USB capture retains record-loss maxima after Off resets device counters', () => {
   const directory = mkdtempSync(join(tmpdir(), 'stackchan-capture-'))
   try {
@@ -155,7 +248,7 @@ for status in (402,429,401):
         try: module.main(); raise AssertionError('Expected failed qualification')
         except RuntimeError as error:
             assert ('Account limit' in str(error)) == (status in (402,429))
-    assert len(runs)==(1 if status in (402,429) else 2)
+    assert len(runs)==1
     assert closed==[True]
 print('passed account limits')
 `,

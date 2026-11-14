@@ -8,6 +8,7 @@
   "modules": {
     "device-debug/core": "./core",
     "device-debug/service": "./service",
+    "device-debug/subscription-probes": "./subscription-probes",
     "*": ["./debug-log.c"]
   }
 }

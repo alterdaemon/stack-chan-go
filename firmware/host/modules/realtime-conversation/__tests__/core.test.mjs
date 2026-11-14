@@ -43,7 +43,8 @@ function harness(options = {}, createSubscription) {
     id = 0,
     disposed = 0,
     localMute = false
-  const starts = []
+  const starts = [],
+    cleanup = []
   let reply = async () => ({
     status: 201,
     ok: true,
@@ -74,6 +75,9 @@ function harness(options = {}, createSubscription) {
             starts.push(options)
           },
           setVolume() {},
+          quiesce() {
+            cleanup.push('quiesce')
+          },
           setMuted(v) {
             localMute = v
           },
@@ -84,6 +88,7 @@ function harness(options = {}, createSubscription) {
             sent.push(JSON.parse(text))
           },
           async close() {
+            cleanup.push('close')
             disposed++
           },
         }
@@ -107,6 +112,7 @@ function harness(options = {}, createSubscription) {
     requests,
     sent,
     starts,
+    cleanup,
     events,
     transcripts,
     errors,
@@ -410,6 +416,7 @@ await test('unexpected disconnect is not confirmed finalization', async () => {
   check(!result.finalized)
   equal(result.reason, 'connection_lost')
   equal(h.disposed, 1)
+  equal(h.cleanup, ['quiesce', 'close'])
 })
 await test('server-initiated close and duplicate events clean up once', async () => {
   const h = harness()

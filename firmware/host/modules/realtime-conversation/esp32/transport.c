@@ -652,6 +652,8 @@ void xs_live_transport_stats(xsMachine *the)
 	STAT("iceTcpReadErrors", atomic_load(&t->iceTcpReadErrors));
 	STAT("renderedSamples", stats.rendered);
     STAT("playbackLevel", stats.playbackLevel);
+    STAT("sourceLevel", stats.sourceLevel);
+    STAT("volumeQ10", stats.volumeQ10);
     STAT("interruptions", stats.interruptions);
     STAT("flushedInterruptions", stats.flushedInterruptions);
 	STAT("audibleMs", stats.audibleMs);

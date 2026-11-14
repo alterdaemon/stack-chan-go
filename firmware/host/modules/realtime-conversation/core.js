@@ -1071,6 +1071,7 @@ export default class Conversation {
     if (this.#platform.debug?.enabled)
       this.#diagnose('finish', { type: 'local.close', response: { status_details: { reason: result.reason } } })
     this.#finishing = true
+    if (this.#state !== 'closing') this.#transport?.quiesce?.()
     this.#platform.debug?.unregisterTuner?.(this)
     this.#rejectTrial(new ConversationError('Session ended', 'closed', 'tune'))
     this.#tools?.close()
@@ -1084,7 +1085,6 @@ export default class Conversation {
     this.#connection?.reject(new ConversationError('Session ended before startup', 'closed', 'connect'))
     const transport = this.#transport
     this.#transport = undefined
-    if (this.#realtime) transport?.quiesce?.()
     const hangup = this.#realtime && this.#callId ? this.#hangup(this.#callId, this.#key) : undefined
     // Keep silent media clocks running while the peer ends its stream. Live
     // already reaches teardown after session.closed or its grace deadline.
@@ -1175,6 +1175,7 @@ export default class Conversation {
       fields.model = this.#options.model
       fields.voice = this.#options.voice
       fields.pitch = this.#options.pitch
+      fields.volume = this.#volume
       fields.state = this.#state
       fields.bargeIn = this.#options.bargeIn
       fields.muted = this.#muted

@@ -169,10 +169,21 @@ export class SubscriptionLive {
   #outputId
   #cleared = false
   #context = []
-  #speechProbe
+  #probes
 
-  constructor({ auth, fetch, openControl, uuid, onLogout, wait = async () => {}, now = Date.now, diagnose, debug }) {
-    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose, debug })
+  constructor({
+    auth,
+    fetch,
+    openControl,
+    uuid,
+    onLogout,
+    wait = async () => {},
+    now = Date.now,
+    diagnose,
+    debug,
+    createProbes,
+  }) {
+    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose, debug, createProbes })
     this.#unsubscribe = auth.onLogout(() => {
       this.dispose()
       onLogout?.()
@@ -329,13 +340,7 @@ export class SubscriptionLive {
     if (message.type === 'session.started') this.#ready = true
     if (message.type === 'turn.done' && typeof message.turn?.transcript === 'string') {
       this.#remember(message.turn.role, message.turn.transcript)
-      if (this.#speechProbe && message.turn.role === 'assistant') {
-        this.diagnose?.('probe.output', () => ({
-          probe: this.#speechProbe,
-          accepted: (this.#speechProbe === 'english' ? /voice test/i : /test głosu/i).test(message.turn.transcript),
-        }))
-        this.#speechProbe = undefined
-      }
+      this.#probes?.output(message.turn)
     }
     if (message.type === 'output_transcript.added' && typeof message.item?.text === 'string') {
       const outputId = id(message.item.id) ? message.item.id : undefined
@@ -380,36 +385,13 @@ export class SubscriptionLive {
   async probe(name, value) {
     if (!this.debug?.enabled || !this.#ready || this.#closed || this.#job)
       throw Object.assign(new Error('Subscription probe unavailable'), { code: 'not_connected' })
-    if (name === 'probe' && ['english', 'polish'].includes(value)) {
-      this.#speechProbe = value
-      // Codex V3 send_conversation_item_create maps to session.context.append.
-      this.#channel.send({
-        type: 'session.context.append',
-        channel: 'final',
-        content: [
-          {
-            type: 'input_text',
-            text:
-              value === 'english'
-                ? 'For this diagnostic only, say exactly: Hello. This is a voice test.'
-                : 'Na potrzeby tego testu powiedz dokładnie: Cześć. To jest test głosu.',
-          },
-        ],
-      })
-      return
-    }
-    const prompts = {
-      reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',
-      search: 'Search the web for the official OpenAI status page. Report what it says and cite its URL.',
-    }
-    if (name !== 'probe' || !Object.hasOwn(prompts, value)) throw new RangeError('Invalid subscription probe')
-    const result = await this.#delegate(this.uuid(), prompts[value], true)
-    if (
-      !result ||
-      (value === 'reasoning' && !/\b323\b/.test(result.answer)) ||
-      (value === 'search' && result.searched !== true)
-    )
-      throw Object.assign(new Error('Subscription probe failed'), { code: 'subscription_backend_error' })
+    this.#probes ??= this.createProbes?.({
+      send: (message) => this.#channel.send(message),
+      delegate: (text) => this.#delegate(this.uuid(), text, true),
+      diagnose: this.diagnose,
+    })
+    if (!this.#probes) throw new Error('Subscription diagnostics unavailable')
+    return this.#probes.run(name, value)
   }
 
   async #delegate(delegationId, text, probe = false) {
@@ -425,8 +407,10 @@ export class SubscriptionLive {
       if (this.#job !== job || this.#closed) return
       if (credentials.accountId !== this.accountId) throw new Error('Subscription account changed')
       const headers = {
-        ...this.headers,
         Authorization: `Bearer ${credentials.accessToken}`,
+        'ChatGPT-Account-ID': credentials.accountId,
+        'Content-Type': 'application/json',
+        'User-Agent': this.headers['User-Agent'],
         Accept: 'text/event-stream',
       }
       job.request = this.fetch(BACKEND, {
@@ -511,7 +495,7 @@ export class SubscriptionLive {
   }
 
   cancelJob() {
-    this.#speechProbe = undefined
+    this.#probes?.reset()
     const job = this.#job
     this.#job = undefined
     job?.request?.cancel?.()
@@ -525,9 +509,10 @@ export class SubscriptionLive {
   dispose() {
     this.#closed = true
     this.#ready = false
-    this.#speechProbe = undefined
+    this.#probes?.reset()
     this.debug?.unregisterTuner?.(this)
     this.cancelJob()
+    this.#probes = undefined
     this.#request?.cancel?.()
     this.#channel?.close()
     this.#events = []

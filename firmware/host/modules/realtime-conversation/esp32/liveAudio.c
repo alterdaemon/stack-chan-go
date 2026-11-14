@@ -134,6 +134,7 @@ struct LiveAudio {
 	atomic_uint volume, captured, rendered, underruns, overruns, sourceSamples;
 	atomic_uint requestedRate, requestedChannels, sourceFrameBytes;
 	atomic_uint micLevel, cleanLevel, referenceLevel, playbackLevel;
+	atomic_uint sourceLevel;
 	atomic_uint outputIdleMs, silenceMs, maxSilenceMs;
 	atomic_uint audibleMs;
 	atomic_int error;
@@ -402,6 +403,11 @@ static void audioTask(void *ctx)
         }
 		unsigned volume = atomic_load(&a->volume);
         volume = volume * atomic_load(&diagnosticSpeaker) / 1024;
+        if (stackchanDebugIsEnabled && stackchanDebugIsEnabled()) {
+            unsigned sourceLevel = 0;
+            for (int i = 0; i < BLOCK; i++) sourceLevel += abs(tx[i]);
+            atomic_store(&a->sourceLevel, sourceLevel / BLOCK);
+        }
         unsigned playbackLevel = 0;
         bool quiesced = atomic_load(&a->quiesced) || atomic_load(&a->yieldOutput);
 		for (int i = BLOCK - 1; i >= 0; i--) {
@@ -665,6 +671,8 @@ void liveAudioStats(LiveAudio *a, LiveAudioStats *s)
     s->playbackLevel = atomic_load(&a->playbackLevel);
     s->interruptions = atomic_load(&a->interruptRequest);
     s->flushedInterruptions = atomic_load(&a->interruptFlushed);
+    s->sourceLevel = atomic_load(&a->sourceLevel);
+    s->volumeQ10 = atomic_load(&a->volume) * atomic_load(&diagnosticSpeaker) / 1024;
 }
 
 void xs_io_audio_levels(xsMachine *the) {

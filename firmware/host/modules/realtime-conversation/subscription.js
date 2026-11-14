@@ -5,6 +5,7 @@ import { SubscriptionLive, subscriptionUpgradeError } from 'realtimeConversation
 import store from 'realtimeConversation/subscription-store'
 import Base64 from 'base64'
 import Debug from 'device-debug'
+import Modules from 'modules'
 import RNG from 'rng'
 import TextDecoder from 'text/decoder'
 import Timer from 'timer'
@@ -292,6 +293,8 @@ export function createSubscription(options) {
     throw Object.assign(new Error('Subscription sign-in required'), { code: 'subscription_sign_in_required' })
   return new SubscriptionLive({
     debug: Debug,
+    createProbes: (hooks) =>
+      Modules.importNow('device-debug/subscription-probes', true).createSubscriptionProbes(hooks),
     auth,
     fetch,
     openControl: openSubscriptionControl,
