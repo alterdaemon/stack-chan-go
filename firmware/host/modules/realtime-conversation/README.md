@@ -47,7 +47,8 @@ A MOD opts in by calling `connect()`; no extra host profile or eager allocation 
 The integrated R5 MOD also selects an internal ChatGPT subscription adapter from
 its saved `openailive.auth` preference. The public API-key/signaling interface
 above is unchanged. Subscription bootstrap consumes raw SDP and a call ID;
-control uses one authenticated WSS connection. An actual session ID, if supplied,
+normal control uses the existing native WebRTC data channel. The authenticated
+WSS adapter remains isolated for diagnostic comparisons. An actual session ID, if supplied,
 is kept separately. Native media events do not duplicate control messages.
 Only final `turn.done` transcripts enter the MOD's bounded history; optional transcript
 deltas do not repeat that history. Local capture stays muted until control

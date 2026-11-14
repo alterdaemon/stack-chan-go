@@ -269,7 +269,13 @@ export function onContextCreated(robot) {
   }
   debug?.registerLive(session, {
     isActive: () => shuttingDown || !!session.active || !!backendProbe,
-    stats: () => session.active?.conversation?.stats,
+    stats: () => {
+      const stats = { ...session.active?.conversation?.stats }
+      try {
+        stats.amplifierVolume = globalThis.amp?.volume
+      } catch {}
+      return stats
+    },
     start: startLive,
     stop: () => {
       backendProbe?.cancel()

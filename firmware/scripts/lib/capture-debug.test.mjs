@@ -62,7 +62,7 @@ for suite in ('backend','voices','parameters','matched'):
         assert len(runs)==(4 if suite=='matched' else 2), (suite,runs)
         if suite=='matched':
             assert {r[1]['settings']['connection'] for r in runs}=={'api-live','chatgpt'}
-            assert all(r[1]['settings']['volume']==0.1 and r[1]['probes']==('english',) for r in runs)
+            assert all(r[1]['settings']['volume']==1 and r[1]['probes']==('english',) for r in runs)
         if suite=='backend':
             assert all(r[1]['settings']['model']=='gpt-6.1-terra' and
                        r[1]['settings']['effort']=='medium' for r in runs)

@@ -268,7 +268,7 @@ def main():
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
                 for connection in ('api-live', 'chatgpt') if args.connection == 'both' else (args.connection,):
                     if not capture.trial(f'{connection}-{args.language}', interruption=mode,
-                        settings={'connection': connection, 'volume': 0.1, 'pitch': 0, 'prompt': 'standard', 'standby': 300},
+                        settings={'connection': connection, 'volume': 1, 'pitch': 0, 'prompt': 'standard', 'standby': 300},
                         probes=(args.language,)):
                         raise RuntimeError('Matched baseline failed; remaining cases untested')
         elif args.suite == 'backend':
@@ -294,7 +294,7 @@ def main():
         elif args.suite == 'audio':
             for mode in ('off', 'on'):
                 for probe in ('english', 'polish'):
-                    if not capture.trial(probe, interruption=mode, settings={'volume': 0.1}, probes=(probe,)):
+                    if not capture.trial(probe, interruption=mode, settings={'volume': 1}, probes=(probe,)):
                         raise RuntimeError('Speech baseline failed; remaining cases untested')
         elif args.suite == 'parameters':
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
@@ -303,7 +303,7 @@ def main():
                         raise RuntimeError('Configured baseline failed; remaining cases untested')
                     continue
                 values = {'pitch': (-6, 0, 6), 'style': ('default', 'calm', 'expressive'),
-                          'volume': (0, 0.1, 1), 'standby': (1, 60, 3600),
+                          'volume': (0, 0.5, 1), 'standby': (1, 60, 3600),
                           'prompt': ('standard', 'long')}[args.parameter]
                 for value in values:
                     if not capture.trial(f'{args.parameter}-{value}', interruption=mode,

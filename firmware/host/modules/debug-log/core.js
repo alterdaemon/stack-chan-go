@@ -62,6 +62,7 @@ const NUMBER_FIELDS = new Set([
   'playbackLevel',
   'sourceLevel',
   'volumeQ10',
+  'amplifierVolume',
   'sourcePeak',
   'sourceAbsPeak',
   'playbackPeak',

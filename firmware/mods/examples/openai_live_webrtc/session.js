@@ -234,7 +234,7 @@ ${this.settings.instructions}`
       entry.conversation = conversation
       stage = 'audio'
       site = 'volume_set'
-      conversation.setVolume(entry.stage < 4 ? 0.1 : (this.settings.volume ?? 1))
+      conversation.setVolume(this.settings.volume ?? 1)
       stage = 'connect'
       site = 'connect_wait'
       await conversation.connect()

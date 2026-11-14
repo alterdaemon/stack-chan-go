@@ -831,7 +831,7 @@ for (const interruption of [false, true]) {
     assert.equal(options.input, undefined)
     assert.ok(!options.instructions.includes('Private'))
     assert.equal(options.instructions, '')
-    assert.equal(f.instances[0].volume, 0.1)
+    assert.equal(f.instances[0].volume, 0.7)
     assert.equal(settings.pitch, -3)
     await f.session.stop()
     await f.session.start()
@@ -891,4 +891,17 @@ test('subscription forwards independent backend model and effort without changin
   assert.equal(f.instances[0].options.reasoningEffort, 'low')
   assert.equal(f.instances[0].options.apiKey, undefined)
   await f.session.stop()
+})
+
+test('diagnostic profiles and configured starts honor full and adjusted session volume', async () => {
+  const f = fixture()
+  f.session.settings.auth = 'chatgpt'
+  for (const stage of [0, 4]) {
+    for (const volume of [1, 0.25]) {
+      f.session.settings.volume = volume
+      await f.session.start(false, stage)
+      assert.equal(f.instances.at(-1).volume, volume)
+      await f.session.stop()
+    }
+  }
 })

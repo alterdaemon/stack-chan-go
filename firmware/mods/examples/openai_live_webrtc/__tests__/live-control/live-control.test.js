@@ -12,8 +12,21 @@ import Timer from 'timer'
 const delay = () => new Promise((resolve) => Timer.set(resolve, 10))
 
 async function run() {
-  globalThis.amp = {}
-  Debug.install({ enabled: true, emit() {} })
+  let ampReads = 0
+  const diagnosticRows = []
+  const recorder = {
+    enabled: false,
+    emit(_component, _event, fields) {
+      diagnosticRows.push(fields)
+    },
+  }
+  globalThis.amp = {
+    get volume() {
+      ampReads++
+      return 250
+    },
+  }
+  Debug.install(recorder)
   const controller = createAppControllerApplication(
     { face: new SimpleFace({}), appBar: new ChatStatusBar() },
     { displayListLength: 4096 },
@@ -59,6 +72,13 @@ async function run() {
   assert(control.x < app.width / 2 && control.y > app.height / 2, 'control is in the bottom-left corner')
   equal(control.first.string, 'LIVE OFF', 'starts visibly off')
   equal(acquired, 0, 'adding the control does not start a conversation')
+  Debug.sampleLive()
+  equal(ampReads, 0, 'Off performs no amplifier I2C read')
+  recorder.enabled = true
+  Debug.sampleLive()
+  equal(ampReads, 1, 'enabled snapshot reads the actual amplifier setting once')
+  equal(diagnosticRows[0].amplifierVolume, 250)
+
   try {
     await Debug.controlLive('warmup')
     assert(false, 'API mode must not access a subscription grant')

@@ -275,18 +275,18 @@ instructions empty when comparing local Interruption Off and On.
 The reusable USB qualification tool is `firmware/scripts/mod/qualify-live.py` (prefix `codebase/` from the workspace root). Run with `--port`, the validated ELF `--expected-sha`, a new private `--output` directory, and `--suite voices|parameters|backend|audio|matched|cycles|soak`. It uses one capture child, sequential acknowledgements, image/loss checks and final Off. Defaults are representative checks: Cove for voices, Terra/medium for backend, configured starts for parameters, with interruption Off/On. Use `--voices`, `--models`, `--efforts` or `--parameter pitch|style|volume|standby|prompt` only for a concrete question. A multiple-model/multiple-effort Cartesian product is rejected; failed baselines stop the run. Source-backed voice catalogs do not require another live sweep. Results separate startup and total trial time. Saved settings remain unchanged; connection/soak checks do not establish audible quality.
 
 `--suite matched` performs one fixed English probe on API Live and subscription,
-with interruption Off/On, volume0.1, pitch0 and the same short system prompt.
+with interruption Off/On, volume1, pitch0 and the same short system prompt.
 Use `--connection chatgpt --language polish` for the corresponding Polish check.
 It waits for transcript evidence and rendered audio followed by native output
 idle, within60seconds; transcript arrival alone is not an audio pass. Private
 subscription probes also validate their fixed final transcript. Metrics report
 transcript arrival and the existing5-second native snapshot, not microphone EOT
-or calibrated acoustic latency. Use `--session-volume 0.1` for low-volume
-configured cycle/soak trials. Explicit volume qualification can use other bounded
+or calibrated acoustic latency. Configured and reduced profiles honor saved volume or an explicit RAM override;
+they never substitute0.1. Use `--session-volume` for a deliberate bounded override. Explicit volume qualification can use other bounded
 values; `--quiet` remains available for silent connection trials.
 
 For an explicit matched API-Live baseline, stop LIVE, run `diag reset`, then
-`diag set connection api-live`, `diag set volume 0.1`, `diag set pitch 0`,
+`diag set connection api-live`, `diag set volume 1`, `diag set pitch 0`,
 `diag set prompt standard` and `diag set interruption off` (or `on`). Start with
 `diag live start`; `diag set probe english` or `polish` requests a fixed speech
 sample using the selected connection's event dialect. Use `connection chatgpt`
@@ -305,6 +305,9 @@ and whether a spoken result includes the fixed search URL. Only boolean verdicts
 leave the device. Do not send a question as speakable result context to test
 voice instructions. `prompt saved`, reset, Off and lease loss restore saved-prompt use.
 The empty `standard` startup profile cannot qualify System prompt adherence.
+Enabled USB audio snapshots include the SDK amplifier-register volume in
+`amplifierVolume`; it uses hardware units, distinct from software volume0–1.
+This read changes no gain and does not run while diagnostics are Off.
 
 While enabled, diagnostics retain an image-bound panic code address, core and
 exception category and up to eight validated executable caller addresses in 84
