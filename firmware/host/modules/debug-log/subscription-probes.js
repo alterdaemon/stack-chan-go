@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // Fixed USB-only probes, loaded on demand outside the conversation implementation.
+export function runApiLiveProbe(send, name, language) {
+  if (name !== 'probe' || !['english', 'polish'].includes(language)) throw new RangeError('Invalid API Live probe')
+  // Public Live dialect differs from Codex's private speakable append.
+  send({
+    type: 'session.commentary.append',
+    delegation_id: null,
+    content:
+      language === 'english'
+        ? 'Say exactly: Hello. This is a voice test.'
+        : 'Powiedz dokładnie: Cześć. To jest test głosu.',
+  })
+}
+
 export function createSubscriptionProbes({ send, delegate, diagnose }) {
   let speech
   return {

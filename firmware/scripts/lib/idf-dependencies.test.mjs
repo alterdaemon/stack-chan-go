@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -212,7 +212,20 @@ int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
       assert.equal(readFileSync(path.join(components, name, 'CMakeLists.txt'), 'utf8'), 'idf_component_register()\n')
     }
     const first = readFileSync(manifestPath, 'utf8')
+    const patched = [
+      'esp_webrtc/src/esp_webrtc.c',
+      'esp_peer/src/transport/udp.c',
+      'esp_peer/src/transport/tcp.c',
+      'esp_peer/src/dtls_srtp_v6.c',
+    ]
+    for (const file of patched) utimesSync(path.join(components, file), 1000000000, 1000000000)
     prepareCoreS3IdfDependencies(options)
+    for (const file of patched)
+      assert.equal(
+        statSync(path.join(components, file)).mtimeMs,
+        1000000000000,
+        'unchanged generated source must not force native recompilation',
+      )
     assert.equal(readFileSync(manifestPath, 'utf8'), first)
     const relative = 'src/esp_webrtc.c'
     const original = readFileSync(path.join(solutionDirectory, 'components/esp_webrtc', relative), 'utf8')

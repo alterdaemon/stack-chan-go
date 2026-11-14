@@ -271,7 +271,39 @@ Diagnostic parameter profiles `diag live voice`, `diag live prompt` and
 `diag live start` restores the full configured session. Standard/voice keep
 instructions empty when comparing local Interruption Off and On.
 
-The reusable USB qualification tool is `firmware/scripts/mod/qualify-live.py` (prefix `codebase/` from the workspace root). Run with `--port`, the validated ELF `--expected-sha`, a new private `--output` directory, and `--suite voices|parameters|backend|audio|cycles|soak`. It uses one capture child, sequential acknowledgements, image/loss checks and final Off. Defaults are representative checks: Cove for voices, Terra/medium for backend, configured starts for parameters, with interruption Off/On. Use `--voices`, `--models`, `--efforts` or `--parameter pitch|style|volume|standby|prompt` only for a concrete question. A multiple-model/multiple-effort Cartesian product is rejected; failed baselines stop the run. Source-backed voice catalogs do not require another live sweep. Results separate startup and total trial time. Saved settings remain unchanged; connection/soak checks do not establish audible quality.
+The reusable USB qualification tool is `firmware/scripts/mod/qualify-live.py` (prefix `codebase/` from the workspace root). Run with `--port`, the validated ELF `--expected-sha`, a new private `--output` directory, and `--suite voices|parameters|backend|audio|matched|cycles|soak`. It uses one capture child, sequential acknowledgements, image/loss checks and final Off. Defaults are representative checks: Cove for voices, Terra/medium for backend, configured starts for parameters, with interruption Off/On. Use `--voices`, `--models`, `--efforts` or `--parameter pitch|style|volume|standby|prompt` only for a concrete question. A multiple-model/multiple-effort Cartesian product is rejected; failed baselines stop the run. Source-backed voice catalogs do not require another live sweep. Results separate startup and total trial time. Saved settings remain unchanged; connection/soak checks do not establish audible quality.
+
+`--suite matched` performs one fixed English probe on API Live and subscription,
+with interruption Off/On, volume0.1, pitch0 and the same short system prompt.
+Use `--connection chatgpt --language polish` for the corresponding Polish check.
+It waits for transcript evidence and rendered audio followed by native output
+idle, within60seconds; transcript arrival alone is not an audio pass. Private
+subscription probes also validate their fixed final transcript. Metrics report
+transcript arrival and the existing5-second native snapshot, not microphone EOT
+or calibrated acoustic latency. Use `--session-volume 0.1` for low-volume
+configured cycle/soak trials. Explicit volume qualification can use other bounded
+values; `--quiet` remains available for silent connection trials.
+
+For an explicit matched API-Live baseline, stop LIVE, run `diag reset`, then
+`diag set connection api-live`, `diag set volume 0.1`, `diag set pitch 0`,
+`diag set prompt standard` and `diag set interruption off` (or `on`). Start with
+`diag live start`; `diag set probe english` or `polish` requests a fixed speech
+sample using the selected connection's event dialect. Use `connection chatgpt`
+for the subscription comparison. Subscription-only voice/model/effort overrides
+and standard profiles are rejected for an API trial. `connection saved`, reset,
+Off, lease loss and reboot discard the override. Manual starts always reload the
+saved connection; trials never change preferences or export credentials.
+Startup history alone does not request speech. Transcript timing and native
+output counters do not establish subjective acoustic quality.
+
+While enabled, diagnostics retain an image-bound panic code address, core and
+exception category in 52 bytes of RTC RAM, then use the normal SDK panic handler.
+After a panic reboot, `diag status` reports a separate `debug/panic` record.
+Symbolize `panicPC` against that record's exact matching ELF with
+`xtensa-esp-elf-addr2line -pfiaC -e <matching-ELF> <hex-PC>`. No stack, register,
+credential or flash dump is made. Off disarms capture; power loss clears RTC RAM.
+Audio snapshots are split under the existing USB line and queue limits. HTTPS
+byte counts distinguish raw TCP, decrypted TLS and consumed HTTP/SSE data.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 

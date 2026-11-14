@@ -363,7 +363,9 @@ async function verifyTerminalAndTLS() {
     (callback, delay) => Timer.set(callback, delay),
     (timer) => Timer.clear(timer),
   )
+  const tlsStatistics = {}
   let drainingTLS = new DrainingTLS({
+    diagnosticStatistics: tlsStatistics,
     TCP: { io: RawTLS },
     onReadable() {
       equal(this, drainingTLS)
@@ -375,6 +377,9 @@ async function verifyTerminalAndTLS() {
   await new Promise((resolve) => Timer.set(resolve, 10))
   equal(tlsReads, 3)
   equal(tlsDelivered, 1)
+  equal(tlsStatistics.tlsReceived, 1)
+  equal(tlsStatistics.tlsRead, 1)
+  equal(tlsStatistics.tlsBuffered, 0)
   drainingTLS.close()
   tlsReads = tlsDelivered = 0
   drainingTLS = new DrainingTLS({

@@ -220,7 +220,7 @@ async function run() {
   Preference.set('openailive', 'auth', 'chatgpt')
   Debug.setLiveTrial('connection', 'api-live')
   Debug.setLiveTrial('volume', 0.1)
-  Debug.setLiveTrial('prompt', 'polish')
+  Debug.setLiveTrial('prompt', 'standard')
   let blocked = false
   try {
     await Debug.controlLive('standard')
@@ -229,8 +229,11 @@ async function run() {
   }
   assert(blocked, 'API trial rejects subscription-only standard profile')
   await Debug.controlLive('start')
-  const probe = JSON.parse(requests[requests.length - 1].init.body).session
-  assert(probe.input[0].content[0].text.includes('Cześć'), 'fixed startup input reaches actual signaling')
+  await Debug.tune('probe', 'polish')
+  const probe = transports[transports.length - 1].sent.slice(-1)[0]
+  equal(probe.type, 'session.commentary.append', 'public API uses documented Live commentary')
+  assert(probe.content.includes('Cześć'), 'fixed probe preserves Unicode')
+  equal(probe.delegation_id, null, 'commentary is session-wide')
   equal(Preference.get('openailive', 'auth'), 'chatgpt', 'USB selection never writes saved provider')
   equal(
     requests[requests.length - 1].init.headers.Authorization,

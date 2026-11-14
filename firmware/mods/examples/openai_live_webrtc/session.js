@@ -84,7 +84,7 @@ export class LiveSession {
     this.history = []
   }
 
-  start(interruption = this.settings.bargeIn === true, stage = 4, voice, input) {
+  start(interruption = this.settings.bargeIn === true, stage = 4, voice) {
     if (typeof interruption !== 'boolean') throw new TypeError('Invalid interruption trial')
     if (!Number.isInteger(stage) || stage < 0 || stage > 4) throw new TypeError('Invalid session profile')
     if (this.active) return this.active.starting
@@ -93,7 +93,6 @@ export class LiveSession {
       bargeIn: interruption,
       stage,
       voice,
-      input,
       backend: new Map(),
       idleMs: (this.settings.standbySeconds ?? 60) * 1000,
       inputUntil: 0,
@@ -163,14 +162,13 @@ ${this.settings.instructions}`
             ? `${instructions ?? ''}\nInterruption policy: When the user interrupts, stop speaking immediately and listen until they finish. If they say stop or wait, remain silent without an acknowledgment. Do not resume an answer they have replaced.`
             : instructions,
         input:
-          entry.input ??
-          (entry.stage === 4 && this.history.length
+          entry.stage === 4 && this.history.length
             ? this.history.map(({ role, text }) => ({
                 type: 'message',
                 role,
                 content: [{ type: role === 'user' ? 'input_text' : 'output_text', text }],
               }))
-            : undefined),
+            : undefined,
         delegation:
           this.settings.auth === 'chatgpt'
             ? undefined

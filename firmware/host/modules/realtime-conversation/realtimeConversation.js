@@ -14,6 +14,8 @@ export default class RealtimeConversation extends Conversation {
       debug: Debug,
       createTransport: (callback) => new Transport(callback, Debug),
       fetch,
+      apiLiveProbe: (send, name, value) =>
+        Modules.importNow('device-debug/subscription-probes', true).runApiLiveProbe(send, name, value),
       createSubscription: (options) => {
         if (!Modules.has('realtimeConversation/subscription'))
           throw new TypeError('Subscription unavailable on this build')

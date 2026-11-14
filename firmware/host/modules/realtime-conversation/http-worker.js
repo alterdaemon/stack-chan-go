@@ -33,6 +33,7 @@ const platform = {
       socket: {
         ...device.network.https.client.socket,
         io: drainTLS ? DrainingTLS : device.network.https.client.socket.io,
+        diagnosticStatistics: statistics,
         TCP: {
           ...device.network.https.client.socket.TCP,
           io: statistics ? guardSocketCallbacks(device.network.https.client.socket.TCP.io, statistics) : CheckedTCP,

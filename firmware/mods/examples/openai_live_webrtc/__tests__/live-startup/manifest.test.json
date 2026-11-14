@@ -8,6 +8,7 @@
   ],
   "modules": {
     "main": "./live-startup.test",
+    "device-debug/subscription-probes": "../../../../../host/modules/debug-log/subscription-probes",
     "openai-live-integrated": "../../mod",
     "openai-live-session": "../../session",
     "openai-live-feedback": "../../feedback",

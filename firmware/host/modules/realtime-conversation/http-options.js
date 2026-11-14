@@ -51,7 +51,7 @@ export function httpFailureMetadata(error) {
     metadata.reason = error.reason
   if (Number.isInteger(error?.code) && Math.abs(error.code) <= 2147483647) metadata.code = error.code
   if (Number.isInteger(error?.tlsDrains) && error.tlsDrains >= 0) metadata.tlsDrains = error.tlsDrains
-  for (const name of ['socketReceived', 'socketWritten', 'socketBuffered'])
+  for (const name of ['socketReceived', 'socketWritten', 'socketBuffered', 'tlsReceived', 'tlsRead', 'tlsBuffered'])
     if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
   if (Number.isSafeInteger(error?.sseEvents) && error.sseEvents >= 0) metadata.sseEvents = error.sseEvents
   for (const name of ['streamPending', 'streamAnswerBytes'])

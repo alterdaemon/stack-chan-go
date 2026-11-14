@@ -17,23 +17,3 @@ export function trialPreferences(getPreference, trials) {
     return getPreference(domain, key)
   }
 }
-
-export function trialInput(trials) {
-  const language = trials?.prompt
-  if (!['english', 'polish'].includes(language)) return undefined
-  return [
-    {
-      type: 'message',
-      role: 'user',
-      content: [
-        {
-          type: 'input_text',
-          text:
-            language === 'english'
-              ? 'Say exactly: Hello. This is a voice test.'
-              : 'Powiedz dokładnie: Cześć. To jest test głosu.',
-        },
-      ],
-    },
-  ]
-}

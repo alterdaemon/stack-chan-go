@@ -82,9 +82,39 @@ class Capture:
     def reset(self):
         self.command('diag reset', 'set', parameter='reset', phase='applied')
 
+    def speech(self, language, after, api=False):
+        """Observe text plus rendered output; these are not acoustic/EOT measurements."""
+        baseline = max((r.get('audibleMs', 0) for r in self.rows[:after]), default=0)
+        cursor, first, accepted, stats = after, None, api, {}
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            self.pump()
+            for row in self.rows[cursor:]:
+                cursor += 1
+                if row.get('event') == 'failure':
+                    raise RuntimeError('Speech failed: ' + str(row.get('errorCode')))
+                if row.get('event') == 'receive' and row.get('type') in ('output_transcript.added', 'session.output_transcript.delta'):
+                    first = row['ms'] if first is None else first
+                if row.get('event') == 'probe.output' and row.get('probe') == language:
+                    if row.get('accepted') is not True:
+                        raise RuntimeError('Speech transcript did not match the fixed probe')
+                    accepted = True
+                if row.get('component') == 'audio' and row.get('event') == 'snapshot':
+                    stats.update(row)
+                    if accepted and first is not None and row.get('outputIdleMs', 0) >= 1000 and stats.get('audibleMs', 0) > baseline:
+                        return dict(firstTranscriptMs=first, idleSnapshotMs=row['ms'],
+                                    sourcePeak=stats.get('sourcePeak'), playbackPeak=stats.get('playbackPeak'),
+                                    volumeQ10=stats.get('volumeQ10'), underruns=stats.get('underruns'), overruns=stats.get('overruns'))
+            if self.child.poll() is not None:
+                raise RuntimeError('USB capture ended during speech')
+            time.sleep(0.03)
+        raise RuntimeError('Speech completion timed out; remaining cases untested')
+
     def trial(self, name, profile='start', interruption='off', settings=None, hold=0, probes=()):
         quiet = getattr(self.args, 'quiet', False)
         settings = dict(settings or {})
+        if getattr(self.args, 'session_volume', None) is not None:
+            settings['volume'] = self.args.session_volume
         if quiet and (profile != 'start' or settings.get('volume', 0) != 0):
             raise ValueError('Quiet trials require the configured start profile and volume 0')
         self.reset()
@@ -105,13 +135,17 @@ class Capture:
         end = {'phase': 'failed'}
         elapsed = None
         probe_error = None
+        speech = []
         try:
             end = self.wait(lambda d: d.get('action') == 'live' and d.get('setting') == profile and
                             d.get('phase') in ('applied', 'failed'), after)
             elapsed = round(time.monotonic() - started, 3)
             if end['phase'] == 'applied':
                 for probe in probes:
+                    probe_after = len(self.rows)
                     self.set('probe', probe)
+                    if probe in ('english', 'polish'):
+                        speech.append(self.speech(probe, probe_after, api=settings.get('connection') == 'api-live'))
             until = time.monotonic() + hold if end['phase'] == 'applied' else 0
             while time.monotonic() < until:
                 self.pump()
@@ -136,6 +170,7 @@ class Capture:
                       transport=[d for d in details if d.get('component') == 'https'],
                       nativeFailures=[d for d in details if d.get('component') == 'native'],
                       probeOutputs=[d for d in details if d.get('event') == 'probe.output'])
+        result['speech'] = speech
         self.results.append(result)
         (self.args.output / 'results.json').write_text(json.dumps(self.results, indent=2) + '\n')
         print(json.dumps({k: result[k] for k in ('name', 'interruption', 'phase', 'startupSeconds', 'totalSeconds')}), flush=True)
@@ -182,17 +217,24 @@ def main():
                         help='Use configured starts with zero session volume plus temporary speaker trim')
     parser.add_argument('--parameter', choices=('pitch', 'style', 'volume', 'standby', 'prompt'),
                         help='Explicit parameter to investigate; otherwise test only configured starts')
-    parser.add_argument('--suite', choices=('voices', 'parameters', 'backend', 'audio', 'cycles', 'soak'), required=True)
+    parser.add_argument('--suite', choices=('voices', 'parameters', 'backend', 'audio', 'matched', 'cycles', 'soak'), required=True)
+    parser.add_argument('--connection', choices=('both', 'chatgpt', 'api-live'), default='both', help='Matched suite only; explicit RAM trial')
+    parser.add_argument('--language', choices=('english', 'polish'), default='english', help='Fixed matched speech probe')
+    parser.add_argument('--session-volume', type=float, help='Bounded RAM session volume for configured trials')
     parser.add_argument('--duration', type=int, default=7200, help='USB lease-renewing capture bound, seconds')
     parser.add_argument('--cycles', type=int, default=100)
     parser.add_argument('--hold', type=int, default=3600, help='Connected soak duration in seconds')
     args = parser.parse_args()
     if args.models and args.efforts and len(args.models) > 1 and len(args.efforts) > 1:
         parser.error('Choose one model or one effort per targeted run; no Cartesian product')
-    if args.quiet and (args.suite == 'audio' or args.parameter == 'volume'):
+    if args.quiet and (args.suite in ('audio', 'matched') or args.parameter == 'volume'):
         parser.error('Audible/volume qualification cannot run in quiet mode')
     if args.parameter and args.suite != 'parameters':
         parser.error('--parameter requires --suite parameters')
+    if args.connection != 'both' and args.suite != 'matched':
+        parser.error('--connection requires --suite matched')
+    if args.session_volume is not None and (not 0 <= args.session_volume <= 1 or args.parameter == 'volume'):
+        parser.error('Invalid or conflicting session volume')
     if len(args.expected_sha) != 64 or any(c not in '0123456789abcdef' for c in args.expected_sha):
         parser.error('--expected-sha must be the validated image ELF SHA256')
     if not 1 <= args.cycles <= 1000 or not 1 <= args.hold <= 7200 or not 60 <= args.duration <= 14400:
@@ -211,7 +253,14 @@ def main():
             if time.monotonic() >= ready_deadline:
                 raise RuntimeError('LIVE controls unavailable after startup; check the active MOD')
             time.sleep(0.5)
-        if args.suite == 'backend':
+        if args.suite == 'matched':
+            for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
+                for connection in ('api-live', 'chatgpt') if args.connection == 'both' else (args.connection,):
+                    if not capture.trial(f'{connection}-{args.language}', interruption=mode,
+                        settings={'connection': connection, 'volume': 0.1, 'pitch': 0, 'prompt': 'standard', 'standby': 300},
+                        probes=(args.language,)):
+                        raise RuntimeError('Matched baseline failed; remaining cases untested')
+        elif args.suite == 'backend':
             modes = ('off', 'on') if args.interruption == 'both' else (args.interruption,)
             for mode in modes:
                 for model in args.models or ('gpt-6.1-terra',):
@@ -234,7 +283,8 @@ def main():
         elif args.suite == 'audio':
             for mode in ('off', 'on'):
                 for probe in ('english', 'polish'):
-                    capture.trial(probe, interruption=mode, probes=(probe,), hold=10)
+                    if not capture.trial(probe, interruption=mode, settings={'volume': 0.1}, probes=(probe,)):
+                        raise RuntimeError('Speech baseline failed; remaining cases untested')
         elif args.suite == 'parameters':
             for mode in ('off', 'on') if args.interruption == 'both' else (args.interruption,):
                 if not args.parameter:

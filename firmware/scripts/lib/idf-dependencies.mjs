@@ -226,9 +226,22 @@ ${signature}
       readFileSync(path.join(destination, marker), 'utf8') !== `${source}\n`)
   )
     throw new Error(`Refusing to replace component directory: ${destination}`)
-  cpSync(source, destination, { recursive: true, preserveTimestamps: true })
-  for (const [file, generated] of updates) writeFileSync(path.join(destination, file), generated)
-  writeFileSync(path.join(destination, marker), `${source}\n`)
+  const unchanged = new Set(
+    updates
+      .filter(
+        ([file, generated]) =>
+          existsSync(path.join(destination, file)) && readFileSync(path.join(destination, file), 'utf8') === generated,
+      )
+      .map(([file]) => file),
+  )
+  cpSync(source, destination, {
+    recursive: true,
+    preserveTimestamps: true,
+    filter: (file) => !unchanged.has(path.relative(source, file)),
+  })
+  for (const [file, generated] of updates)
+    if (!unchanged.has(file)) writeFileSync(path.join(destination, file), generated)
+  if (!existsSync(path.join(destination, marker))) writeFileSync(path.join(destination, marker), `${source}\n`)
 }
 
 function patchPeerSource(original, patches, source) {

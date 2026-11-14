@@ -710,6 +710,16 @@ export default class Conversation {
             throw new ConversationError('Session ID mismatch', 'session_mismatch', 'events')
           this.#ready = true
           if (this.#subscription) this.#transport.setMuted(this.#muted)
+          else if (this.#platform.apiLiveProbe)
+            this.#platform.debug?.registerTuner?.(this, {
+              set: async (name, value) => {
+                if (!this.#platform.debug?.enabled || !this.#ready || this.#state !== 'connected')
+                  throw new Error('LIVE probe unavailable')
+                this.#platform.apiLiveProbe((message) => this.#send(message), name, value)
+              },
+              reset: async () => {},
+              snapshot: () => ({}),
+            })
           this.#cancelTimer(this.#connectTimer)
           if (this.#state === 'closing') this.#sendClose()
           else {

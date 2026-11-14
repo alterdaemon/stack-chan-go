@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createSubscriptionProbes } from '../../debug-log/subscription-probes.js'
+import { createSubscriptionProbes, runApiLiveProbe } from '../../debug-log/subscription-probes.js'
 import { SubscriptionAuth } from '../subscription-auth.js'
 import {
   parseSubscriptionCall,
@@ -11,6 +11,16 @@ import {
   subscriptionUpgradeError,
 } from '../subscription-live.js'
 import { createSubscriptionStream } from '../subscription-stream.js'
+
+test('API Live diagnostic speech uses only fixed commentary input and rejects arbitrary commands', () => {
+  const messages = []
+  runApiLiveProbe((value) => messages.push(value), 'probe', 'polish')
+  assert.equal(messages[0].type, 'session.commentary.append')
+  assert.equal(messages[0].delegation_id, null)
+  assert.match(messages[0].content, /Cześć/)
+  assert.throws(() => runApiLiveProbe(() => {}, 'probe', 'arbitrary private text'), RangeError)
+  assert.throws(() => runApiLiveProbe(() => {}, 'other', 'english'), RangeError)
+})
 
 const tick = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve()
@@ -1085,8 +1095,8 @@ test('subscription requests honor selected model and each effort without public 
       assert.equal(f.requests.at(-1).options.headers.originator, 'stack-chan-go')
       assert.equal(f.requests[0].options.headers['OpenAI-Alpha'], 'quicksilver=v2')
       assert.equal(f.requests.at(-1).options.headers['OpenAI-Alpha'], undefined)
-      assert.equal(f.requests.at(-1).options.headers['session-id'], undefined)
-      assert.equal(f.requests.at(-1).options.headers['thread-id'], undefined)
+      assert.equal(f.requests.at(-1).options.headers['session-id'], f.requests[0].options.headers['session-id'])
+      assert.equal(f.requests.at(-1).options.headers['thread-id'], f.requests[0].options.headers['thread-id'])
       assert.deepEqual(body.tools, [{ type: 'web_search' }])
       f.finish({ answer: 'An answer', searched: false })
       await tick()

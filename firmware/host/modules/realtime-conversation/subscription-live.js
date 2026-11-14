@@ -411,6 +411,8 @@ export class SubscriptionLive {
         Authorization: `Bearer ${probe === 'rejection' ? 'stackchan-diagnostic-invalid' : credentials.accessToken}`,
         'ChatGPT-Account-ID': credentials.accountId,
         originator: 'stack-chan-go',
+        'session-id': this.headers['session-id'],
+        'thread-id': this.headers['thread-id'],
         'Content-Type': 'application/json',
         'User-Agent': this.headers['User-Agent'],
         Accept: 'text/event-stream',

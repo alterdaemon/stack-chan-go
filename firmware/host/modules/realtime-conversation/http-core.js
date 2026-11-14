@@ -281,7 +281,7 @@ export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
   return class extends Socket {
     #state
     constructor(options) {
-      const state = { pending: 0, closed: false, timer: undefined }
+      const state = { pending: 0, closed: false, timer: undefined, statistics: options.diagnosticStatistics }
       function arm() {
         const tcp = state.tcp
         if (state.closed || state.pending || !tcp?.readable || state.timer !== undefined) return
@@ -317,6 +317,10 @@ export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
         TCP: { ...options.TCP, io: DrainingTCP },
         onReadable(count) {
           state.pending = count
+          if (state.statistics) {
+            state.statistics.tlsReceived = (state.statistics.tlsReceived ?? 0) + count
+            state.statistics.tlsBuffered = count
+          }
           return options.onReadable?.call(this, count)
         },
       })
@@ -325,11 +329,12 @@ export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
     read(count) {
       const result = count === undefined ? super.read() : super.read(count)
       if (result !== undefined) {
-        this.#state.pending = Math.max(
-          0,
-          this.#state.pending -
-            (this.format === 'number' ? 1 : typeof result === 'number' ? result : result.byteLength),
-        )
+        const consumed = this.format === 'number' ? 1 : typeof result === 'number' ? result : result.byteLength
+        this.#state.pending = Math.max(0, this.#state.pending - consumed)
+        if (this.#state.statistics) {
+          this.#state.statistics.tlsRead = (this.#state.statistics.tlsRead ?? 0) + consumed
+          this.#state.statistics.tlsBuffered = this.#state.pending
+        }
         // The SDK's own deferred read may encounter an empty record too.
         // One pending guard covers that path without polling or changing order.
         this.#state.arm()

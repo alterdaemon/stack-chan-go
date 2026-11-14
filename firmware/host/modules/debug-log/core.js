@@ -28,6 +28,9 @@ const NUMBER_FIELDS = new Set([
   'streamPending',
   'streamAnswerBytes',
   'tlsDrains',
+  'tlsReceived',
+  'tlsRead',
+  'tlsBuffered',
   'progressDropped',
   'result',
   'value',
@@ -37,6 +40,8 @@ const NUMBER_FIELDS = new Set([
   'end_ms',
   'capturedSamples',
   'renderedSamples',
+  'audibleMs',
+  'outputIdleMs',
   'underruns',
   'overruns',
   'micLevel',
@@ -330,7 +335,7 @@ export class DebugRecorder {
             (parameter === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) ||
             (parameter === 'standby' && Number.isInteger(value) && value >= 1 && value <= 3600) ||
             (parameter === 'style' && ['default', 'calm', 'expressive'].includes(value)) ||
-            (parameter === 'prompt' && ['standard', 'long', 'english', 'polish'].includes(value)) ||
+            (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
             (parameter === 'connection' && ['chatgpt', 'api-live'].includes(value)) ||
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||

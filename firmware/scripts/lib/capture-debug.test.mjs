@@ -53,13 +53,16 @@ class Capture:
     def trial(self,*args,**kwargs): runs.append((args,kwargs)); return True
     def close(self): pass
 module.Capture=Capture
-for suite in ('backend','voices','parameters'):
+for suite in ('backend','voices','parameters','matched'):
     with tempfile.TemporaryDirectory() as directory:
         runs.clear()
         module.sys.argv=['qualify-live.py','--port','unused','--expected-sha','a'*64,
                          '--suite',suite,'--output',directory]
         module.main()
-        assert len(runs)==2, (suite,runs)
+        assert len(runs)==(4 if suite=='matched' else 2), (suite,runs)
+        if suite=='matched':
+            assert {r[1]['settings']['connection'] for r in runs}=={'api-live','chatgpt'}
+            assert all(r[1]['settings']['volume']==0.1 and r[1]['probes']==('english',) for r in runs)
         if suite=='backend':
             assert all(r[1]['settings']['model']=='gpt-6.1-terra' and
                        r[1]['settings']['effort']=='medium' for r in runs)
@@ -290,4 +293,36 @@ print('passed account limits')
     },
   )
   assert.match(result, /passed account limits/)
+})
+
+test('speech qualification waits for accepted text and rendered audio followed by idle', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import importlib.util, sys
+from types import SimpleNamespace
+spec=importlib.util.spec_from_file_location('qualify_live',sys.argv[1])
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+c=object.__new__(m.Capture);c.rows=[];c.pump=lambda:None;c.child=SimpleNamespace(poll=lambda:None)
+c.rows=[dict(event='receive',type='output_transcript.added',ms=1),
+        dict(component='audio',event='snapshot',audibleMs=20,outputIdleMs=0,ms=2),
+        dict(event='probe.output',probe='english',accepted=True),
+        dict(component='audio',event='snapshot',audibleMs=20,outputIdleMs=1200,ms=4)]
+assert c.speech('english',0)['idleSnapshotMs']==4
+c.rows=[dict(event='failure',errorCode='provider_rejected')]
+try:c.speech('english',0);raise AssertionError('Failure accepted')
+except RuntimeError as e:assert 'provider_rejected' in str(e)
+c.rows=[dict(event='receive',type='session.output_transcript.delta',ms=1)]
+clock=iter([0,1,61]);m.time.monotonic=lambda:next(clock);m.time.sleep=lambda _:None
+try:c.speech('english',0,api=True);raise AssertionError('Transcript alone passed')
+except RuntimeError as e:assert 'completion timed out' in str(e)
+print('passed speech observation gate')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed speech observation gate/)
 })
