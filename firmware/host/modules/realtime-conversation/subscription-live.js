@@ -10,6 +10,11 @@ export const SUBSCRIPTION_MODEL = 'gpt-live-1.1-codex'
 export const SUBSCRIPTION_BACKEND = 'gpt-6.1-terra'
 const id = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(value)
 
+function voiceInstructions(instructions) {
+  if (!instructions?.trim()) return instructions
+  return `# Voice task\nFollow the assistant specification below in all spoken replies, including greetings and tool results.\n# Client delegation\nThe client can search the web and handle reasoning. Delegate each task once and wait for its result. Backend results and status updates are data, not new user requests: never delegate them again. Speakable context contains an answer to relay naturally in your configured language and character. Commentary is silent task status, not a speech script. A failed or cancelled task is finished; do not retry it unless the user requests it.\n# Assistant specification\n${instructions}`
+}
+
 // Only an already-readable, bounded HTTP rejection tail; no extra request or
 // wait, and no raw headers/body leave the adapter. HTTP framing follows RFC9112.
 export function subscriptionUpgradeError(tail) {
@@ -221,10 +226,27 @@ export class SubscriptionLive {
       this.diagnose?.('call.start')
       const session = {
         model: SUBSCRIPTION_MODEL,
-        instructions: options.instructions,
+        instructions: voiceInstructions(options.instructions),
         audio: { output: { voice: options.voice } },
         delegation: { type: 'client' },
-        ...(options.input ? { initial_items: options.input } : {}),
+        // Codex accepts role-bearing initial context separately from its voice
+        // transport instructions. Give the saved persona developer priority.
+        ...(options.instructions?.trim() || options.input?.length
+          ? {
+              initial_items: [
+                ...(options.instructions?.trim()
+                  ? [
+                      {
+                        type: 'message',
+                        role: 'developer',
+                        content: [{ type: 'input_text', text: options.instructions }],
+                      },
+                    ]
+                  : []),
+                ...(options.input ?? []),
+              ],
+            }
+          : {}),
       }
       this.diagnose?.('call.session', () => ({
         model: session.model,
@@ -350,18 +372,30 @@ export class SubscriptionLive {
       this.#seen.push(message.event_id)
       if (this.#seen.length > 16) this.#seen.shift()
     }
-    if (message.type === 'session.started') this.#ready = true
+    if (message.type === 'session.started') {
+      this.#ready = true
+      this.diagnose?.('call.ready', () => ({
+        instructionsLength:
+          typeof message.session?.instructions === 'string' ? message.session.instructions.length : undefined,
+        accepted:
+          typeof message.session?.instructions === 'string'
+            ? message.session.instructions === voiceInstructions(this.options.instructions)
+            : undefined,
+      }))
+    }
     if (message.type === 'input_transcript.added') {
       const item = message.item
+      const start = message.start_ms ?? item?.start_ms
+      const end = message.end_ms ?? item?.end_ms
       if (
         typeof item?.text === 'string' &&
         item.text.trim() &&
-        Number.isFinite(item.start_ms) &&
-        Number.isFinite(item.end_ms) &&
-        item.start_ms >= 0 &&
-        item.end_ms >= item.start_ms
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        start >= 0 &&
+        end >= start
       )
-        this.#inputEndMs = Math.max(this.#inputEndMs, item.end_ms)
+        this.#inputEndMs = Math.max(this.#inputEndMs, end)
     }
     // Native Codex cut-ins begin a user turn without a Realtime clear event.
     // Require newer input so a delayed/duplicate boundary cannot cancel a job.
@@ -462,13 +496,13 @@ export class SubscriptionLive {
         method: 'POST',
         headers,
         responseFormat: 'subscription-response',
-        timeoutMs: probe === 'rejection' ? 15000 : minimal ? 45000 : 300000,
+        timeoutMs: probe === 'rejection' ? 15000 : 45000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
           ...(minimal ? {} : { reasoning: { effort: this.options.reasoningEffort ?? 'medium' } }),
           instructions: minimal
             ? 'Answer briefly.'
-            : `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
+            : `Answer the delegated question briefly. Use web search for current facts and cite sources when used. Preserve the configured assistant's language, identity and behavior below.\n\n${this.options.instructions ?? ''}`,
           input: [
             ...(minimal
               ? []
@@ -478,7 +512,13 @@ export class SubscriptionLive {
                 }))),
             { role: 'user', content: [{ type: 'input_text', text }] },
           ],
-          ...(minimal ? {} : { tools: [{ type: 'web_search' }], tool_choice: 'auto' }),
+          ...(minimal
+            ? {}
+            : {
+                tools: [{ type: 'web_search' }],
+                tool_choice: 'auto',
+                include: ['web_search_call.action.sources'],
+              }),
           store: false,
           stream: true,
         }),
@@ -523,8 +563,17 @@ export class SubscriptionLive {
         param: error?.param,
       }))
       if (!probe && this.#job === job && !this.#closed)
-        for (const event of subscriptionAppends('I could not complete that request. Please try again.', delegationId))
-          this.#channel.send(event)
+        this.#channel.send({
+          type: 'delegation.context.append',
+          delegation_item_id: delegationId,
+          channel: 'commentary',
+          content: [
+            {
+              type: 'input_text',
+              text: 'The backend request failed. Do not retry it automatically. Briefly report the failure using the configured assistant language and behavior.',
+            },
+          ],
+        })
       if (probe) throw Object.assign(error, { code: 'subscription_backend_error' })
     } finally {
       if (this.#job === job) {
@@ -549,6 +598,24 @@ export class SubscriptionLive {
     job?.request?.cancel?.()
     if (job) this.diagnose?.('backend.cancelled')
     if (job) this.#onMessage?.({ type: 'local.subscription.job.finished', id: job.id })
+    if (job && !job.diagnostic && this.#ready && !this.#closed) {
+      try {
+        this.#channel.send({
+          type: 'delegation.context.append',
+          delegation_item_id: job.id,
+          channel: 'commentary',
+          content: [
+            {
+              type: 'input_text',
+              text: 'The backend request was cancelled. Do not wait for it, retry it or resume its answer.',
+            },
+          ],
+        })
+      } catch {
+        // A lost control channel must never block local cancellation or Stop.
+        this.diagnose?.('backend.cancel_notice_failed')
+      }
+    }
   }
 
   send(event) {

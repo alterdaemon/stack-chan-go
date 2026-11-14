@@ -28,11 +28,34 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     answer = '',
     answerBytes = 0,
     searched = false,
+    cited = false,
     sseEvents = 0,
     sseEvent = 'none',
     sseItem = 'none'
   const sources = [],
     items = new Set()
+  function addSource(source, citation = false) {
+    if (
+      typeof source?.url !== 'string' ||
+      !/^https?:\/\/[A-Za-z0-9][^\s]*$/.test(source.url) ||
+      source.url.length > 512
+    )
+      return
+    let url
+    try {
+      url = encodeURI(source.url)
+    } catch {
+      return
+    }
+    if (url.length > 512) return
+    // Prefer the answer's cited URLs over the larger set consulted by search.
+    if (citation && !cited) {
+      sources.length = 0
+      cited = true
+    }
+    if (sources.length >= 6 || sources.some((source) => source.url === url)) return
+    sources.push({ url, title: String(source.title ?? '').slice(0, 100) })
+  }
   function acceptOnce(item, index) {
     if (!item || typeof item !== 'object') throw new Error('Invalid subscription completion')
     const key = typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(item.id) ? item.id : index
@@ -47,6 +70,7 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     if (item.type === 'web_search_call') {
       if (item.status !== 'completed') throw new Error('Subscription search incomplete')
       searched = true
+      if (!cited) for (const source of item.action?.sources ?? []) if (source.type === 'url') addSource(source)
     }
     if (item.type !== 'message' || item.phase === 'commentary') return
     if (item.role !== undefined && item.role !== 'assistant') throw new Error('Invalid subscription completion')
@@ -63,23 +87,7 @@ export function createSubscriptionStream(decode, encode, observe = false) {
         }
       }
       for (const citation of part.annotations ?? []) {
-        if (sources.length >= 6) break
-        if (
-          citation.type !== 'url_citation' ||
-          typeof citation.url !== 'string' ||
-          !/^https?:\/\/[A-Za-z0-9][^\s]*$/.test(citation.url) ||
-          citation.url.length > 512 ||
-          sources.some((source) => source.url === citation.url)
-        )
-          continue
-        let url
-        try {
-          url = encodeURI(citation.url)
-        } catch {
-          continue
-        }
-        if (url.length > 512) continue
-        sources.push({ url, title: String(citation.title ?? '').slice(0, 100) })
+        if (citation.type === 'url_citation') addSource(citation, true)
       }
     }
   }

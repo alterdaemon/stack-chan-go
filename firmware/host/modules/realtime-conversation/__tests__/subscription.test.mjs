@@ -840,12 +840,23 @@ test('subscription uses its own bootstrap and backend, deduplicates jobs, drops 
   assert.ok(f.requests.every((x) => x.url.startsWith('https://chatgpt.com/backend-api/codex/')))
   assert.ok(f.requests.every((x) => x.options.headers.Authorization === 'Bearer subscription-only'))
   const backend = JSON.parse(f.requests[1].options.body)
+  const voice = JSON.parse(f.requests[0].options.body).session
+  assert.ok(voice.instructions.endsWith('Speak Polish.'))
+  assert.ok(voice.instructions.includes('Follow the assistant specification'))
+  assert.ok(voice.instructions.includes('never delegate them again'))
+  assert.equal(voice.instructions.split('Speak Polish.').length, 2)
+  assert.deepEqual(voice.initial_items, [
+    { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'Speak Polish.' }] },
+  ])
   assert.equal(backend.stream, true)
   assert.equal(backend.store, false)
   assert.equal(backend.input.length, 7)
   assert.equal(backend.input[0].content[0].text, 'Prior answer 2')
   assert.equal(backend.input.at(-1).content[0].text, 'Current weather?')
   assert.ok(Array.isArray(backend.input))
+  assert.deepEqual(backend.include, ['web_search_call.action.sources'])
+  assert.ok(backend.instructions.endsWith('Speak Polish.'))
+  assert.ok(!backend.instructions.includes('in its language'))
   assert.equal(f.requests[1].options.responseFormat, 'subscription-response')
   f.receive({ type: 'output_transcript.added', item: { id: 'output', text: 'Checking.' } })
   f.receive({ type: 'output_audio_buffer.cleared', item_id: 'old' })
@@ -873,7 +884,7 @@ test('a native Codex user turn cancels obsolete delegation without requiring an 
   f.live.activate()
   const receive = (message) => f.live.receiveControl(message)
   const input = (start_ms, end_ms) =>
-    receive({ type: 'input_transcript.added', item: { text: 'Synthetic input', start_ms, end_ms } })
+    receive({ type: 'input_transcript.added', start_ms, end_ms, item: { text: 'Synthetic input' } })
   const turn = { type: 'turn.created', turn: { role: 'user' } }
   const delegate = (id) =>
     receive({
@@ -912,6 +923,54 @@ test('a native Codex user turn cancels obsolete delegation without requiring an 
   assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 2)
   f.live.dispose()
 })
+test('ready delegation cancellation informs the voice agent once and failure never requests an automatic retry', async () => {
+  const f = liveFixture()
+  await f.live.create(
+    'v=0',
+    { instructions: 'Speak Polish.' },
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  f.receive({ type: 'session.started' })
+  const delegate = (id) =>
+    f.receive({
+      type: 'delegation.created',
+      item: {
+        id,
+        type: 'delegation',
+        target: 'client',
+        content: [{ type: 'input_text', text: 'Search current facts.' }],
+      },
+    })
+  delegate('cancelled')
+  await tick()
+  assert.equal(f.requests.at(-1).options.timeoutMs, 45000)
+  f.live.cancelJob()
+  f.live.cancelJob()
+  assert.equal(f.cancels, 1)
+  assert.equal(f.sent.length, 1)
+  assert.equal(f.sent[0].channel, 'commentary')
+  assert.equal(f.sent[0].delegation_item_id, 'cancelled')
+  f.finish({ answer: 'Obsolete answer.', searched: false, sources: [] })
+  await tick()
+  assert.equal(f.sent.length, 1, 'late completion cannot re-enter the voice session')
+  delegate('failed')
+  await tick()
+  f.finish({ error: 'search_missing_sources' })
+  await tick()
+  assert.equal(f.sent.at(-1).delegation_item_id, 'failed')
+  assert.equal(f.sent.at(-1).channel, 'commentary')
+  assert.match(f.sent.at(-1).content[0].text, /Do not retry it automatically/)
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 2)
+  delegate('fresh')
+  await tick()
+  f.finish({ answer: 'Fresh answer.', searched: false, sources: [] })
+  await tick()
+  assert.equal(f.sent.at(-1).channel, 'speakable')
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 3)
+  f.live.dispose()
+})
 test('a Codex cut-in during renewal prevents the obsolete delegation from starting HTTP', async () => {
   const f = liveFixture()
   await f.live.create(
@@ -933,6 +992,39 @@ test('a Codex cut-in during renewal prevents the obsolete delegation from starti
   await tick()
   assert.equal(f.requests.length, 1, 'only bootstrap may have run')
   assert.equal(f.sent.length, 0)
+  f.live.dispose()
+})
+test('lost native control cannot prevent local backend cancellation or finish', async () => {
+  const f = liveFixture()
+  f.live.control = {
+    send() {
+      throw new Error('Control closed')
+    },
+    close() {},
+  }
+  await f.live.create(
+    'v=0',
+    {},
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  f.live.receiveControl({ type: 'session.started' })
+  f.live.receiveControl({
+    type: 'delegation.created',
+    item: {
+      id: 'lost',
+      type: 'delegation',
+      target: 'client',
+      content: [{ type: 'input_text', text: 'Search.' }],
+    },
+  })
+  await tick()
+  assert.doesNotThrow(() => f.live.cancelJob())
+  assert.equal(f.cancels, 1)
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 1)
+  f.finish({ answer: 'Late answer.', searched: false, sources: [] })
+  await tick()
   f.live.dispose()
 })
 test('late bootstrap closes the orphan call without accepting SDP', async () => {
@@ -1355,6 +1447,48 @@ test('backend resource rejection preserves the grant and never substitutes crede
   f.live.dispose()
 })
 
+test('completed search sources survive absent answer annotations and yield to explicit citations', () => {
+  const decode = (bytes) => new TextDecoder().decode(bytes)
+  const source = (url) => ({ type: 'url', url })
+  const tool = {
+    id: 'search',
+    type: 'web_search_call',
+    status: 'completed',
+    action: {
+      sources: [source('javascript:bad'), ...Array.from({ length: 12 }, (_, i) => source(`https://example.test/${i}`))],
+    },
+  }
+  const message = (annotations = []) => ({
+    id: 'answer',
+    type: 'message',
+    content: [{ type: 'output_text', text: 'A verified answer.', annotations }],
+  })
+  const reduce = (output) => {
+    const stream = createSubscriptionStream(decode, (text) => new TextEncoder().encode(text).buffer)
+    stream.write(
+      new TextEncoder().encode(
+        `data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output } })}\n\n`,
+      ),
+    )
+    return JSON.parse(decode(stream.finish()))
+  }
+  const consulted = reduce([tool, message()])
+  assert.equal(consulted.searched, true)
+  assert.equal(consulted.sources.length, 6)
+  assert.equal(consulted.sources[0].url, 'https://example.test/0')
+  for (const output of [
+    [tool, message([{ type: 'url_citation', url: 'https://example.test/cited' }])],
+    [message([{ type: 'url_citation', url: 'https://example.test/cited' }]), tool],
+  ])
+    assert.deepEqual(reduce(output).sources, [{ url: 'https://example.test/cited', title: '' }])
+  assert.equal(reduce([message()]).searched, false)
+  assert.equal(
+    reduce([{ ...tool, action: { sources: [source('javascript:bad')] } }, message()]).error,
+    'search_missing_sources',
+  )
+  assert.throws(() => reduce([{ ...tool, status: 'in_progress' }, message()]), /search incomplete/)
+})
+
 test('Codex item completion is bounded, deduplicated and gated by terminal completion', () => {
   const encode = (s) => new TextEncoder().encode(s).buffer
   const decode = (b) => new TextDecoder('utf-8', { fatal: true }).decode(b)
@@ -1422,6 +1556,30 @@ test('Codex item completion is bounded, deduplicated and gated by terminal compl
       ),
     /exceeds limit/,
   )
+})
+
+test('persona checks separate backend identity from genuine microphone output without injecting questions', async () => {
+  const sent = [],
+    observations = []
+  const probes = createSubscriptionProbes({
+    send: (message) => sent.push(message),
+    delegate: async () => ({ answer: 'Tu Bursztyn. Jestem małym robotem.' }),
+    diagnose: (event, fields) => observations.push({ event, ...fields() }),
+  })
+  await probes.run('probe', 'persona')
+  assert.equal(sent.length, 0, 'a voice question must not be passed as an answer script')
+  assert.equal(observations.at(-1).accepted, true)
+  await probes.run('probe', 'listen-persona')
+  probes.output({ role: 'assistant', transcript: 'Tu Bursztyn. Cześć!' })
+  assert.equal(observations.at(-1).accepted, true)
+  assert.equal(observations.at(-1).searched, false)
+  probes.output({ role: 'assistant', transcript: 'Tu Bursztyn. Sprawdziłem status.openai.com.' })
+  assert.equal(observations.at(-1).accepted, true)
+  assert.equal(observations.at(-1).searched, true)
+  probes.reset()
+  const count = observations.length
+  probes.output({ role: 'assistant', transcript: 'Ignored.' })
+  assert.equal(observations.length, count)
 })
 
 test('passive microphone checks emit only fixed verdicts, keep listening, and reset without requests', async () => {

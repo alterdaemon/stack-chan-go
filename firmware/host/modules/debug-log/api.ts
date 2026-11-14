@@ -135,7 +135,7 @@ export default {
       (name === 'volume' && typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) ||
       (name === 'standby' && Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 3600) ||
       (name === 'style' && ['default', 'calm', 'expressive'].includes(String(value))) ||
-      (name === 'prompt' && ['standard', 'long'].includes(String(value))) ||
+      (name === 'prompt' && ['standard', 'long', 'persona'].includes(String(value))) ||
       (name === 'connection' && ['chatgpt', 'api-live'].includes(String(value))) ||
       (name === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(String(value))) ||
       (name === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(value)))

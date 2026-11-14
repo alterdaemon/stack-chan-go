@@ -12,8 +12,11 @@ export function trialPreferences(getPreference, trials) {
       if (['pitch', 'style', 'standby'].includes(name) && trials[name] !== undefined) return trials[name]
     }
     if (domain === 'tts' && key === 'volume' && trials.volume !== undefined) return trials.volume
-    if (domain === 'ai' && key === 'context' && trials.prompt !== undefined)
+    if (domain === 'ai' && key === 'context' && trials.prompt !== undefined) {
+      if (trials.prompt === 'persona')
+        return 'You are Bursztyn, a small robot. Begin every answer with "Tu Bursztyn." Speak only Polish, even when addressed in English. Answer in one short sentence.'
       return trials.prompt === 'long' ? 'Speak briefly and naturally. '.repeat(180) : 'Speak briefly and naturally.'
+    }
     return getPreference(domain, key)
   }
 }

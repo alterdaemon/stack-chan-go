@@ -41,3 +41,12 @@ test('explicit USB connection overlay is RAM only and leaves saved selection unc
   assert.equal(read('openailive', 'auth'), 'chatgpt')
   assert.equal(trialPreferences(read, { connection: 'invalid' })('openailive', 'auth'), 'chatgpt')
 })
+
+test('fixed persona trial exercises shared prompt without replacing saved text or volume', () => {
+  const saved = (domain, key) => `${domain}.${key}`
+  const get = trialPreferences(saved, { prompt: 'persona' })
+  assert.match(get('ai', 'context'), /Tu Bursztyn/)
+  assert.equal(get('tts', 'volume'), 'tts.volume')
+  assert.equal(saved('ai', 'context'), 'ai.context')
+  assert.equal(trialPreferences(saved)('ai', 'context'), 'ai.context')
+})

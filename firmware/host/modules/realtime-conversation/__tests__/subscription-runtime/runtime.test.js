@@ -298,6 +298,34 @@ for (const value of codexEvents) {
     codexStream.write(new Uint8Array(bytes.slice(index, index + 1)))
 }
 equal(JSON.parse(decoder.decode(codexStream.finish())).answer, 'Żółw 🌍')
+const searchStream = createSubscriptionStream(
+  (bytes) => decoder.decode(bytes),
+  (text) => ArrayBuffer.fromString(text),
+)
+searchStream.write(
+  new Uint8Array(
+    ArrayBuffer.fromString(
+      `data: ${JSON.stringify({
+        type: 'response.completed',
+        response: {
+          status: 'completed',
+          output: [
+            {
+              id: 'search_fixture',
+              type: 'web_search_call',
+              status: 'completed',
+              action: { sources: [{ type: 'url', url: 'https://example.test/' }] },
+            },
+            { id: 'answer_fixture', type: 'message', content: [{ type: 'output_text', text: 'Żółw 🌍' }] },
+          ],
+        },
+      })}\n\n`,
+    ),
+  ),
+)
+const searchResult = JSON.parse(decoder.decode(searchStream.finish()))
+equal(searchResult.searched, true)
+equal(searchResult.sources[0].url, 'https://example.test/')
 async function verifyTerminalAndTLS() {
   let terminalCallbacks,
     terminalCloses = 0
@@ -598,8 +626,27 @@ const conversation = new Conversation(
           sidebands++
           throw new Error('Unexpected active WSS')
         },
-        fetch: (url) => {
+        fetch: (url, request) => {
           requests.push(url)
+          if (url.includes('/realtime/calls')) {
+            const session = JSON.parse(request.body).session
+            const instructions = session.instructions
+            assert(
+              instructions.endsWith('Be brief.'),
+              'the private voice task preserves the saved assistant specification',
+            )
+            assert(instructions.includes('# Assistant specification'))
+            equal(session.initial_items[0].role, 'developer')
+            equal(session.initial_items[0].content[0].text, 'Be brief.')
+          } else {
+            const body = JSON.parse(request.body)
+            assert(
+              body.instructions.endsWith('Be brief.'),
+              'the configured prompt remains authoritative for delegated work',
+            )
+            equal(body.include[0], 'web_search_call.action.sources')
+            equal(request.timeoutMs, 45000)
+          }
           const response = {
             ok: true,
             status: 201,
@@ -648,7 +695,7 @@ await new Promise((resolve) => Timer.set(resolve, 10))
 assert(nativeSent.some((event) => event.channel === 'speakable'))
 equal(requests.length, 2)
 holdBackend = true
-nativeEvent({ type: 'input_transcript.added', item: { text: 'Old', start_ms: 0, end_ms: 200 } })
+nativeEvent({ type: 'input_transcript.added', start_ms: 0, end_ms: 200, item: { text: 'Old' } })
 nativeEvent({ type: 'turn.created', turn: { role: 'user' } })
 const nativeDelegation = (id) =>
   nativeEvent({
@@ -658,12 +705,14 @@ const nativeDelegation = (id) =>
 nativeDelegation('native-cancel')
 await new Promise((resolve) => Timer.set(resolve, 10))
 const sentBeforeCutIn = nativeSent.length
-nativeEvent({ type: 'input_transcript.added', item: { text: 'New', start_ms: 400, end_ms: 600 } })
+nativeEvent({ type: 'input_transcript.added', start_ms: 400, end_ms: 600, item: { text: 'New' } })
 nativeEvent({ type: 'turn.created', turn: { role: 'user' } })
 equal(nativeCancelled, 1, 'native user turn cancels the old backend through the real core')
+equal(nativeSent.length, sentBeforeCutIn + 1)
+equal(nativeSent[nativeSent.length - 1].channel, 'commentary', 'the voice agent receives quiet cancellation status')
 pendingNative()
 await new Promise((resolve) => Timer.set(resolve, 10))
-equal(nativeSent.length, sentBeforeCutIn, 'a late cancelled answer cannot enter playback')
+equal(nativeSent.length, sentBeforeCutIn + 1, 'a late cancelled answer cannot enter playback')
 holdBackend = false
 nativeDelegation('native-fresh')
 await new Promise((resolve) => Timer.set(resolve, 10))

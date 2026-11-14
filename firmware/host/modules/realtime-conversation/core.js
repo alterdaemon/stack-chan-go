@@ -33,7 +33,9 @@ const DIAGNOSTIC_EVENTS = new Set([
   'conversation.item.added',
   'conversation.item.done',
   'delegation.created',
+  'input_transcript.added',
   'output_transcript.added',
+  'turn.created',
   'turn.done',
   'session.input_transcript.delta',
   'session.output_transcript.delta',
@@ -1167,7 +1169,7 @@ export default class Conversation {
       fields.response_id = response?.id ?? message?.response_id
       fields.item_id = message?.item_id ?? message?.item?.id
       fields.previous_item_id = message?.previous_item_id
-      fields.itemRole = message?.item?.role
+      fields.itemRole = message?.turn?.role ?? message?.item?.role
       fields.itemType = message?.item?.type
       fields.call_id = message?.call_id ?? message?.item?.call_id
       fields.connection_id = this.#realtime ? this.#callId : this.#sessionId
@@ -1184,6 +1186,8 @@ export default class Conversation {
       fields.client_event_id = error?.event_id ?? message?.client_event_id
       fields.audio_start_ms = message?.audio_start_ms
       fields.audio_end_ms = message?.audio_end_ms
+      fields.start_ms = message?.start_ms ?? message?.item?.start_ms
+      fields.end_ms = message?.end_ms ?? message?.item?.end_ms
       fields.activeResponse = this.#activeResponse
       fields.playbackResponse = this.#playbackResponse
       fields.mode = this.#realtime ? 'realtime' : 'live'

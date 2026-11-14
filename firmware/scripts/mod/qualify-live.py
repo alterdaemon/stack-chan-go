@@ -76,7 +76,7 @@ class Capture:
         return result
 
     def set(self, parameter, value):
-        self.command(f'diag set {parameter} {value}', 'set', timeout=310 if parameter == 'probe' else 7,
+        self.command(f'diag set {parameter} {value}', 'set', timeout=55 if parameter == 'probe' else 7,
                      parameter=parameter, phase='applied')
 
     def reset(self):

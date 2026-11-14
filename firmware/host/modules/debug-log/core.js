@@ -363,7 +363,7 @@ export class DebugRecorder {
             (parameter === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) ||
             (parameter === 'standby' && Number.isInteger(value) && value >= 1 && value <= 3600) ||
             (parameter === 'style' && ['default', 'calm', 'expressive'].includes(value)) ||
-            (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
+            (parameter === 'prompt' && ['standard', 'long', 'persona'].includes(value)) ||
             (parameter === 'connection' && ['chatgpt', 'api-live'].includes(value)) ||
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
@@ -377,11 +377,13 @@ export class DebugRecorder {
                 'minimal',
                 'minimal-isolated',
                 'handoff',
+                'persona',
                 'control',
                 'listen-english',
                 'listen-polish',
                 'listen-search',
                 'listen-followup',
+                'listen-persona',
               ].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {

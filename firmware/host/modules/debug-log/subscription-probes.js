@@ -72,7 +72,7 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
         diagnose?.('control.stats', () => statistics?.() ?? {})
         return
       }
-      if (['listen-english', 'listen-polish', 'listen-search', 'listen-followup'].includes(value)) {
+      if (['listen-english', 'listen-polish', 'listen-search', 'listen-followup', 'listen-persona'].includes(value)) {
         speech = value
         return
       }
@@ -88,6 +88,13 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
             },
           ],
         })
+        return
+      }
+      if (value === 'persona') {
+        const result = await delegate('What is your name?')
+        const accepted = /tu bursztyn/i.test(result?.answer ?? '')
+        diagnose?.('probe.persona_backend', () => ({ accepted }))
+        if (!accepted) throw new Error('Configured backend persona did not match')
         return
       }
       if (value === 'english' || value === 'polish') {
@@ -139,6 +146,7 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
       if (!speech || turn.role !== 'assistant') return
       diagnose?.('probe.output', () => ({
         probe: speech,
+        ...(speech === 'listen-persona' ? { searched: matchesFixedInput('listen-search', turn.transcript) } : {}),
         accepted: speech.startsWith('listen-')
           ? matchesFixedInput(speech, turn.transcript)
           : (speech === 'english' ? /voice test/i : /test głosu/i).test(turn.transcript),
@@ -161,6 +169,7 @@ function matchesFixedInput(probe, transcript) {
     .replace(/\s*\.\s*/g, '.')
   if (probe === 'listen-english') return /\b(?:hello|hi)\b/.test(text)
   if (probe === 'listen-polish') return /cześć|witaj/.test(text)
+  if (probe === 'listen-persona') return /tu bursztyn/i.test(text)
   if (/status\.openai\.com/.test(text)) return true
   return probe === 'listen-followup' && /openai/.test(text) && /status/.test(text)
 }

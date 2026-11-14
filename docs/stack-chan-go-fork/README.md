@@ -297,6 +297,15 @@ saved connection; trials never change preferences or export credentials.
 Startup history alone does not request speech. Transcript timing and native
 output counters do not establish subjective acoustic quality.
 
+For the shared System prompt regression, use the configured `diag live start`
+profile. A stopped-session `diag set prompt persona` selects a fixed Polish
+Bursztyn persona in RAM. `diag set probe persona` checks backend identity;
+`diag set probe listen-persona` checks genuine microphone-driven voice replies
+and whether a spoken result includes the fixed search URL. Only boolean verdicts
+leave the device. Do not send a question as speakable result context to test
+voice instructions. `prompt saved`, reset, Off and lease loss restore saved-prompt use.
+The empty `standard` startup profile cannot qualify System prompt adherence.
+
 While enabled, diagnostics retain an image-bound panic code address, core and
 exception category and up to eight validated executable caller addresses in 84
 bytes of RTC RAM, then use the normal SDK panic handler.
