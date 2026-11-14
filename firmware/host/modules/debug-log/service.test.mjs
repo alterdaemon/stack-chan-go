@@ -48,6 +48,7 @@ test('USB status and snapshots report the running build configuration across rev
           'device-debug': { default: {
             install(value) { recorder = value },
             snapshot: () => ({ application: 'test' }),
+            sampleLive() {},
             tuningSnapshot: () => ({}),
             resetTuning: async () => {},
             stopControlledLive: async () => { stopped++ },

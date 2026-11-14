@@ -261,6 +261,7 @@ export function onContextCreated(robot) {
   }
   debug?.registerLive(session, {
     isActive: () => shuttingDown || !!session.active,
+    stats: () => session.active?.conversation?.stats,
     start: startLive,
     stop: () => session.stop(),
     async warmup() {

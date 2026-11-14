@@ -40,3 +40,34 @@ test('native recorder stays Off, bounds concurrent producers, counts loss and cl
     rmSync(work, { recursive: true, force: true })
   }
 })
+
+test('panic diagnostics export only image-bound code addresses and always forward to the SDK handler', () => {
+  const work = mkdtempSync(join(tmpdir(), 'stackchan-debug-panic-'))
+  try {
+    const headers = {
+      'esp_attr.h': '#define RTC_NOINIT_ATTR\n#define IRAM_ATTR\n',
+      'esp_system.h':
+        '#include <stdint.h>\n#include <stdbool.h>\n#define ESP_RST_PANIC 4\nstatic int testReset;\nstatic int esp_reset_reason(void) { return testReset; }\n',
+      'esp_private/panic_internal.h': 'typedef struct { int core, exception; void *addr; } panic_info_t;\n',
+      'soc/soc.h':
+        '#define SOC_IROM_LOW 0x42000000u\n#define SOC_IROM_HIGH 0x44000000u\n#define SOC_IRAM_LOW 0x40370000u\n#define SOC_IRAM_HIGH 0x403e0000u\n',
+    }
+    for (const [name, contents] of Object.entries(headers)) {
+      mkdirSync(dirname(join(work, name)), { recursive: true })
+      writeFileSync(join(work, name), contents)
+    }
+    const binary = join(work, 'panic')
+    execFileSync('cc', [
+      '-std=c11',
+      '-fsanitize=address,undefined',
+      '-I',
+      work,
+      fileURLToPath(new URL('./__tests__/native/panic.c', import.meta.url)),
+      '-o',
+      binary,
+    ])
+    execFileSync(binary, { timeout: 10000, env: { ...process.env, ASAN_OPTIONS: 'detect_leaks=0' } })
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
+})

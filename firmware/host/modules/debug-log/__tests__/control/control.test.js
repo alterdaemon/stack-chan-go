@@ -3,6 +3,82 @@ import { DebugRecorder } from 'device-debug/core'
 import Timer from 'timer'
 
 async function verifyLiveAPI() {
+  let sampled = 0
+  const snapshotLines = []
+  const boundedRecorder = new DebugRecorder({
+    now: () => 1,
+    stamp: () => ({ ms: 1, seq: 1 }),
+    info: () => ({}),
+    change() {},
+    snapshot() {},
+    write(line) {
+      snapshotLines.push(line)
+      return true
+    },
+  })
+  Debug.install(boundedRecorder)
+  const statsOwner = {}
+  Debug.registerLive(statsOwner, {
+    start: async () => true,
+    stop: async () => {},
+    stats() {
+      sampled++
+      return Object.fromEntries(
+        [
+          'capturedSamples',
+          'renderedSamples',
+          'sourcePeak',
+          'playbackPeak',
+          'sourceLevel',
+          'playbackLevel',
+          'volumeQ10',
+          'micLevel',
+          'cleanLevel',
+          'referenceLevel',
+          'freeHeap',
+          'freeInternalHeap',
+          'workerStackMinimum',
+          'iceSent',
+          'iceReceived',
+          'iceRejected',
+          'iceErrors',
+          'iceUdpSent',
+          'iceUdpReceived',
+          'icePolls',
+          'iceReady',
+          'icePollErrors',
+          'iceTcpStarted',
+          'iceTcpConnected',
+          'iceTcpErrors',
+          'iceTcpSent',
+          'iceTcpReceived',
+          'iceTcpPolls',
+          'iceTcpReady',
+          'iceTcpReadPolls',
+          'iceTcpReadReady',
+          'iceTcpReadErrors',
+          'underruns',
+          'overruns',
+          'queueBytes',
+          'queueEvents',
+          'queueCommands',
+        ].map((key) => [key, 4294967295]),
+      )
+    },
+  })
+  Debug.sampleLive()
+  if (sampled) throw new Error('Off sampled native statistics')
+  boundedRecorder.command('diag on')
+  Debug.sampleLive()
+  if (sampled !== 1 || boundedRecorder.dropped || snapshotLines.some((line) => line.length > 768))
+    throw new Error('Native snapshot exceeded bounded USB transport')
+  const merged = Object.assign(
+    {},
+    ...snapshotLines.filter((line) => line.includes('"component":"audio"')).map((line) => JSON.parse(line.slice(6))),
+  )
+  if (merged.iceTcpReadErrors !== 4294967295 || merged.sourcePeak !== 4294967295)
+    throw new Error('Snapshot counters were lost')
+  Debug.unregisterLive(statsOwner)
   // The production API owns only USB-started sessions. Ending diagnostics must
   // cancel an in-flight USB start without stopping a manually started session.
   let apiEnabled = false

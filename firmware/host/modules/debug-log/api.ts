@@ -14,6 +14,7 @@ type LiveControl = {
   stop(): Promise<unknown>
   warmup?(): Promise<void>
   isActive?(): boolean
+  stats?(): Fields | undefined
 }
 let live:
   | {
@@ -146,8 +147,31 @@ export default {
   },
   event(component: string, event: string, fields?: Fields | (() => Fields)): void {
     try {
+      if (!recorder?.enabled) return
+      if (component === 'audio' && event === 'snapshot') {
+        const stats = typeof fields === 'function' ? fields() : fields
+        if (!stats) return
+        let part: Fields = {},
+          count = 0
+        // Native snapshots contain many counters. Keep the existing USB line
+        // and queue bounds instead of silently losing one oversized record.
+        for (const key of Object.keys(stats)) {
+          if (typeof stats[key] !== 'number') continue
+          part[key] = stats[key]
+          if (++count === 10) {
+            recorder.emit(component, event, part)
+            part = {}
+            count = 0
+          }
+        }
+        if (count) recorder.emit(component, event, part)
+        return
+      }
       recorder?.emit(component, event, fields)
     } catch {}
+  },
+  sampleLive(): void {
+    if (recorder?.enabled) this.event('audio', 'snapshot', () => live?.value.stats?.() ?? {})
   },
   context(component: 'application' | 'network', state: string): void {
     context[component] = state

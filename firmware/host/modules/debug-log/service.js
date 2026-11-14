@@ -42,6 +42,7 @@ let serial,
 
 function snapshot() {
   recorder.emit('device', 'snapshot', { firmware: config.firmwareVersion, ...info(), ...Debug.snapshot() })
+  Debug.sampleLive()
 }
 function poll() {
   recorder.tick(serial.connected)

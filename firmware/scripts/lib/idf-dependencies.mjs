@@ -77,6 +77,10 @@ export function prepareCoreS3IdfDependencies({
       throw new Error('RealtimeConversation requires CoreS3 and ESP_WEBRTC_SOLUTION')
     const componentDirectory = path.join(mainDirectory, '..', 'components')
     mkdirSync(componentDirectory, { recursive: true })
+    linkComponent(
+      new URL('../../host/modules/debug-log/panic', import.meta.url).pathname,
+      path.join(componentDirectory, 'stackchan_debug_panic'),
+    )
     for (const name of webRtcComponents) {
       const source = path.resolve(solutionDirectory, 'components', name)
       if (!existsSync(path.join(source, 'CMakeLists.txt'))) throw new Error(`Missing WebRTC component: ${name}`)

@@ -17,6 +17,8 @@ static DebugEvent records[DEBUG_NATIVE_COUNT];
 static portMUX_TYPE debugLock = portMUX_INITIALIZER_UNLOCKED;
 static atomic_bool enabled;
 static unsigned head, count, sequence, dropped;
+extern void stackchanDebugPanicArm(bool, const uint8_t *) __attribute__((weak));
+extern void stackchanDebugPanicInfo(const uint8_t *, uint32_t *) __attribute__((weak));
 int stackchanDebugIsEnabled(void) { return atomic_load(&enabled); }
 
 void xs_device_debug_available(xsMachine *the) {
@@ -53,6 +55,7 @@ void xs_device_debug_tune(xsMachine *the) {
 }
 void xs_device_debug_enable(xsMachine *the) {
     bool value = xsmcToBoolean(xsArg(0));
+    if (stackchanDebugPanicArm) stackchanDebugPanicArm(value, esp_app_get_description()->app_elf_sha256);
     portENTER_CRITICAL(&debugLock);
     atomic_store(&enabled, value);
     head = count = 0;
@@ -105,6 +108,13 @@ void xs_device_debug_info(xsMachine *the) {
     xsmcSetString(xsVar(0), stackchanLiveDebugGet && stackchanLiveDebugGet(DEBUG_TUNE_DTLS) ? "actpass" : "active");
     xsmcSet(xsResult, xsID("dtlsRole"), xsVar(0));
     NUMBER("resetReason", esp_reset_reason());
+    if (stackchanDebugPanicInfo) {
+        uint32_t panic[3];
+        stackchanDebugPanicInfo(app->app_elf_sha256, panic);
+        if (panic[0]) {
+            NUMBER("panicPC", panic[0]); NUMBER("panicCore", panic[1]); NUMBER("panicException", panic[2]);
+        }
+    }
     portENTER_CRITICAL(&debugLock); unsigned lost = dropped; portEXIT_CRITICAL(&debugLock);
     NUMBER("nativeDropped", lost);
     if (stackchanAudioDebugGet) {
