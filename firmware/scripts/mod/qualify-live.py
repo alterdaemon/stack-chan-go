@@ -82,9 +82,19 @@ class Capture:
     def reset(self):
         self.command('diag reset', 'set', parameter='reset', phase='applied')
 
+    def audible_baseline(self, before):
+        for row in reversed(self.rows[:before]):
+            if row.get('component') == 'audio' and row.get('event') == 'snapshot':
+                return row.get('audibleMs', 0)
+            if (row.get('component') == 'debug' and row.get('action') == 'live' and
+                    row.get('phase') == 'applied' and
+                    row.get('setting') in ('start', 'standard', 'realtime')):
+                return 0
+        return 0
+
     def speech(self, language, after, api=False):
         """Observe text plus rendered output; these are not acoustic/EOT measurements."""
-        baseline = max((r.get('audibleMs', 0) for r in self.rows[:after]), default=0)
+        baseline = self.audible_baseline(after)
         cursor, first, accepted, stats = after, None, api, {}
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:

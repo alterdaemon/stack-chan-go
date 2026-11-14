@@ -311,6 +311,13 @@ c.rows=[dict(event='receive',type='output_transcript.added',ms=1),
         dict(event='probe.output',probe='english',accepted=True),
         dict(component='audio',event='snapshot',audibleMs=20,outputIdleMs=1200,ms=4)]
 assert c.speech('english',0)['idleSnapshotMs']==4
+c.rows=[dict(component='audio',event='snapshot',audibleMs=9000),
+        dict(component='debug',action='live',setting='start',phase='applied'),
+        dict(event='receive',type='output_transcript.added',ms=1),
+        dict(event='probe.output',probe='english',accepted=True),
+        dict(component='audio',event='snapshot',audibleMs=20,outputIdleMs=1200,ms=4)]
+assert c.speech('english',2)['idleSnapshotMs']==4, 'previous call cannot hide fresh audio'
+assert c.audible_baseline(5)==20
 c.rows=[dict(event='failure',errorCode='provider_rejected')]
 try:c.speech('english',0);raise AssertionError('Failure accepted')
 except RuntimeError as e:assert 'provider_rejected' in str(e)
