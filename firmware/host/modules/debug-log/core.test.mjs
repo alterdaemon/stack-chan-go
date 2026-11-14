@@ -37,6 +37,55 @@ function fixture() {
   }
 }
 
+test('status retains bounded image-bound panic metadata without overflowing the control line', () => {
+  const lines = []
+  const recorder = new DebugRecorder({
+    stamp: () => ({ ms: 123456.789, seq: 999 }),
+    info: () => ({
+      firmware: '2.1.0-R5',
+      app_sha256: 'a'.repeat(64),
+      sdk: 'v6.1',
+      panicPC: 0x42012345,
+      panicCore: 1,
+      panicException: 4,
+      trialConnection: 'api-live',
+      trialModel: 'gpt-6.1-terra',
+      trialEffort: 'medium',
+      trialPitch: 'saved',
+      trialVolume: 0.1,
+      trialStandby: 'saved',
+      trialStyle: 'saved',
+      trialPrompt: 'polish',
+      interruptionTrial: 'saved',
+      voiceTrial: 'saved',
+      freeHeap: 7000000,
+      freeInternalHeap: 150000,
+      minimumHeap: 6400000,
+      largestInternalBlock: 94000,
+      freePsram: 7200000,
+      tcp: 0,
+      stun: 0,
+      dtlsRole: 'active',
+      resetReason: 4,
+      nativeDropped: 0,
+      speaker: 1,
+      captureDb: 0,
+      nlp: 1,
+    }),
+    write(line) {
+      assert.ok(line.length <= 768)
+      lines.push(JSON.parse(line.slice(6)))
+      return true
+    },
+  })
+  recorder.command('diag status')
+  assert.equal(recorder.dropped, 0)
+  assert.equal(lines[0].event, 'panic')
+  assert.equal(lines[0].panicPC, 0x42012345)
+  assert.equal(lines[1].action, 'status')
+  assert.equal(lines[1].trialConnection, 'api-live')
+})
+
 test('Off skips payload construction; only USB on records; disable/reboot discard state', () => {
   const f = fixture()
   f.recorder.emit('device', 'event', () => {

@@ -216,6 +216,32 @@ async function run() {
   equal(targets[1].y, rotation.y, 'normal completion restores starting yaw')
   equal(targets[1].p, rotation.p, 'normal completion restores starting pitch')
   equal(torqueReleased, 1, 'settled speech releases torque once')
+  recorder.enabled = true
+  Preference.set('openailive', 'auth', 'chatgpt')
+  Debug.setLiveTrial('connection', 'api-live')
+  Debug.setLiveTrial('volume', 0.1)
+  Debug.setLiveTrial('prompt', 'polish')
+  let blocked = false
+  try {
+    await Debug.controlLive('standard')
+  } catch (error) {
+    blocked = error.code === 'not_subscription'
+  }
+  assert(blocked, 'API trial rejects subscription-only standard profile')
+  await Debug.controlLive('start')
+  const probe = JSON.parse(requests[requests.length - 1].init.body).session
+  assert(probe.input[0].content[0].text.includes('Cześć'), 'fixed startup input reaches actual signaling')
+  equal(Preference.get('openailive', 'auth'), 'chatgpt', 'USB selection never writes saved provider')
+  equal(
+    requests[requests.length - 1].init.headers.Authorization,
+    'Bearer test-key',
+    'explicit API baseline uses only API credential',
+  )
+  await Debug.controlLive('stop')
+  await Debug.resetTuning()
+  equal(Debug.tuningSnapshot().trialConnection, 'saved', 'reset discards connection trial')
+  Preference.set('openailive', 'auth', undefined)
+  recorder.enabled = false
   trace('@@STACKCHAN_TEST:PASS@@\n')
 }
 run().catch((error) => {

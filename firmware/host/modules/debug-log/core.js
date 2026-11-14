@@ -25,6 +25,8 @@ const NUMBER_FIELDS = new Set([
   'socketWritten',
   'socketBuffered',
   'sseEvents',
+  'streamPending',
+  'streamAnswerBytes',
   'tlsDrains',
   'progressDropped',
   'result',
@@ -111,6 +113,7 @@ const NUMBER_FIELDS = new Set([
 ])
 const STRING_FIELDS = new Set([
   'sseEvent',
+  'sseItem',
   'state',
   'phase',
   'mode',
@@ -158,6 +161,7 @@ const STRING_FIELDS = new Set([
   'trialStandby',
   'trialStyle',
   'trialPrompt',
+  'trialConnection',
   'voice',
   'param',
 ])
@@ -293,8 +297,18 @@ export class DebugRecorder {
       const parameter = line === 'diag reset' ? 'reset' : parts[2]
       const raw = parts[3]
       const value =
-        ['noise', 'dtls', 'interruption', 'voice', 'style', 'prompt', 'probe', 'model', 'effort'].includes(parameter) ||
-        raw === 'saved'
+        [
+          'noise',
+          'dtls',
+          'interruption',
+          'voice',
+          'style',
+          'prompt',
+          'probe',
+          'model',
+          'effort',
+          'connection',
+        ].includes(parameter) || raw === 'saved'
           ? raw
           : Number(raw)
       const valid =
@@ -310,13 +324,14 @@ export class DebugRecorder {
             (['tcp', 'stun'].includes(parameter) && [0, 1].includes(value)) ||
             (parameter === 'interruption' && ['on', 'off', 'saved'].includes(value)) ||
             (parameter === 'voice' && /^[a-z]{3,12}$/.test(value)) ||
-            (['pitch', 'volume', 'standby', 'style', 'prompt', 'model', 'effort'].includes(parameter) &&
+            (['pitch', 'volume', 'standby', 'style', 'prompt', 'model', 'effort', 'connection'].includes(parameter) &&
               value === 'saved') ||
             (parameter === 'pitch' && Number.isInteger(value) && value >= -6 && value <= 6) ||
             (parameter === 'volume' && Number.isFinite(value) && value >= 0 && value <= 1) ||
             (parameter === 'standby' && Number.isInteger(value) && value >= 1 && value <= 3600) ||
             (parameter === 'style' && ['default', 'calm', 'expressive'].includes(value)) ||
-            (parameter === 'prompt' && ['standard', 'long'].includes(value)) ||
+            (parameter === 'prompt' && ['standard', 'long', 'english', 'polish'].includes(value)) ||
+            (parameter === 'connection' && ['chatgpt', 'api-live'].includes(value)) ||
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
             (parameter === 'probe' && ['reasoning', 'search', 'english', 'polish', 'rejection'].includes(value)) ||
@@ -391,6 +406,27 @@ export class DebugRecorder {
     }
   }
   #control(action, fields) {
+    const values = safeFields(fields ?? this.platform.info())
+    if (values.panicPC !== undefined) {
+      const { panicPC, panicCore, panicException } = values
+      this.#enqueue(
+        {
+          ...this.platform.stamp(),
+          capture: this.#capture,
+          component: 'debug',
+          event: 'panic',
+          enabled: this.#enabled,
+          app_sha256: values.app_sha256,
+          panicPC,
+          panicCore,
+          panicException,
+        },
+        true,
+      )
+      delete values.panicPC
+      delete values.panicCore
+      delete values.panicException
+    }
     this.#enqueue(
       {
         ...this.platform.stamp(),
@@ -401,7 +437,7 @@ export class DebugRecorder {
         enabled: this.#enabled,
         dropped: this.#dropped,
         ...(this.#disableReason ? { reason: this.#disableReason } : {}),
-        ...safeFields(fields ?? this.platform.info()),
+        ...values,
       },
       true,
     )

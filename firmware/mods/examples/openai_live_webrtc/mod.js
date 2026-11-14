@@ -1,5 +1,5 @@
 import Modules from 'modules'
-import { trialPreferences } from 'openai-live-debug-trials'
+import { trialInput, trialPreferences } from 'openai-live-debug-trials'
 import { ConversationFeedback } from 'openai-live-feedback'
 import { diagnostic, formatLiveError, LiveSession, liveModelLabel } from 'openai-live-session'
 import { readLiveSettings } from 'openai-live-settings'
@@ -255,9 +255,15 @@ export function onContextCreated(robot) {
   function startLive(interruption, stage, voice, trials) {
     if (shuttingDown || session.active) return
     session.settings = readSettings(trials)
-    if ((trials !== undefined || stage < 4 || voice !== undefined) && session.settings.auth !== 'chatgpt')
+    const apiTrial =
+      trials?.connection === 'api-live' &&
+      stage === 4 &&
+      voice === undefined &&
+      trials.model === undefined &&
+      trials.effort === undefined
+    if ((trials !== undefined || stage < 4 || voice !== undefined) && session.settings.auth !== 'chatgpt' && !apiTrial)
       throw Object.assign(new Error('Select ChatGPT subscription'), { code: 'not_subscription' })
-    return session.start(interruption, stage, voice)
+    return session.start(interruption, stage, voice, trialInput(trials))
   }
   debug?.registerLive(session, {
     isActive: () => shuttingDown || !!session.active,

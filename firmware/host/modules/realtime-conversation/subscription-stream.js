@@ -29,7 +29,8 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     answerBytes = 0,
     searched = false,
     sseEvents = 0,
-    sseEvent = 'none'
+    sseEvent = 'none',
+    sseItem = 'none'
   const sources = [],
     items = new Set()
   function acceptOnce(item, index) {
@@ -93,6 +94,8 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     if (observe) {
       const type = typeof value.type === 'string' ? value.type : ''
       sseEvents++
+      if (value.item)
+        sseItem = ['reasoning', 'message', 'web_search_call'].includes(value.item.type) ? value.item.type : 'other'
       sseEvent = [
         'response.created',
         'response.in_progress',
@@ -145,7 +148,9 @@ export function createSubscriptionStream(decode, encode, observe = false) {
   }
   return {
     get observation() {
-      return observe ? { sseEvents, sseEvent } : undefined
+      return observe
+        ? { sseEvents, sseEvent, sseItem, streamPending: pending.length, streamAnswerBytes: answerBytes }
+        : undefined
     },
     get complete() {
       return terminal

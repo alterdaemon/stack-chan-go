@@ -1,5 +1,5 @@
 import fetch from 'realtimeConversation/http'
-import { closingDNS, guardSocketCallbacks } from 'realtimeConversation/http-core'
+import { closingDNS, drainTLSSocket, guardSocketCallbacks } from 'realtimeConversation/http-core'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
 import { SubscriptionLive, subscriptionUpgradeError } from 'realtimeConversation/subscription-live'
 import store from 'realtimeConversation/subscription-store'
@@ -87,9 +87,18 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
           }
         : TCP
     const Socket = network.socket?.io
+    const ControlSocket =
+      typeof Socket === 'function' && typeof TCP === 'function'
+        ? drainTLSSocket(
+            Socket,
+            (callback, delay) => Timer.set(callback, delay),
+            (timer) => Timer.clear(timer),
+            () => diagnose('control.tls.drain'),
+          )
+        : Socket
     const CheckedSocket =
       typeof Socket === 'function'
-        ? class extends guardSocketCallbacks(Socket) {
+        ? class extends guardSocketCallbacks(ControlSocket) {
             #statusLine = ''
             #readable = 0
             constructor(options) {

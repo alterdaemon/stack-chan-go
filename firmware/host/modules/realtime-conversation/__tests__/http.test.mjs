@@ -85,6 +85,12 @@ test('stream observations export only fixed event categories while preserving co
     assert.equal(stream.observation.sseEvent, category)
   }
   assert.equal(stream.observation.sseEvents, 4)
+  const sensitive = JSON.stringify({ type: 'response.output_item.added', item: { type: 'private-secret' } })
+  stream.write(new Uint8Array(encode(`data: ${sensitive}\n\n`)))
+  assert.equal(stream.observation.sseItem, 'other')
+  stream.write(new Uint8Array(encode('data: {"type":"response.completed","private":"sensitive')))
+  assert.ok(stream.observation.streamPending > 0)
+  assert.equal(stream.observation.streamAnswerBytes, 0)
   assert.equal(createSubscriptionStream(decode, encode).observation, undefined)
   assert.ok(!JSON.stringify(stream.observation).includes('private'))
 })

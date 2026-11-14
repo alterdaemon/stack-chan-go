@@ -157,6 +157,7 @@ tcp.options.onWritable(100)
 tcp.options.onWritable(100)
 equal(writableCount, 200)
 const tls = new socket.options.socket.io({
+  TCP: socket.options.socket.TCP,
   onWritable(count) {
     writableCount += count
   },
@@ -387,6 +388,27 @@ async function verifyTerminalAndTLS() {
   await new Promise((resolve) => Timer.set(resolve, 10))
   equal(tlsReads, 1, 'close cancels queued TLS draining')
   equal(tlsDelivered, 0)
+  const previousNetwork = device.network.wss
+  device.network.wss = { io: Socket, socket: { io: BufferedTLS, TCP: { io: RawTLS } } }
+  const joining = openSubscriptionControl('rtc_drain_fixture', {}, () => {})
+  const webSocket = socket
+  tlsReads = tlsDelivered = 0
+  const controlTLS = new webSocket.options.socket.io({
+    TCP: webSocket.options.socket.TCP,
+    onReadable() {
+      equal(this.read(), 42)
+      tlsDelivered++
+    },
+  })
+  rawTLS.options.onReadable.call(rawTLS, 3)
+  await new Promise((resolve) => Timer.set(resolve, 10))
+  equal(tlsReads, 3, 'actual WSS socket composition drains empty TLS records')
+  equal(tlsDelivered, 1)
+  webSocket.options.onWritable(4096)
+  const control = await joining
+  control.close()
+  controlTLS.close()
+  device.network.wss = previousNetwork
 }
 await verifyTerminalAndTLS()
 async function verifySDKErrorOrder() {

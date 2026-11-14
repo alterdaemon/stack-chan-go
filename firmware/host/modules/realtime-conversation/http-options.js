@@ -54,6 +54,10 @@ export function httpFailureMetadata(error) {
   for (const name of ['socketReceived', 'socketWritten', 'socketBuffered'])
     if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
   if (Number.isSafeInteger(error?.sseEvents) && error.sseEvents >= 0) metadata.sseEvents = error.sseEvents
+  for (const name of ['streamPending', 'streamAnswerBytes'])
+    if (Number.isSafeInteger(error?.[name]) && error[name] >= 0 && error[name] <= 32768) metadata[name] = error[name]
+  if (['none', 'reasoning', 'message', 'web_search_call', 'other'].includes(error?.sseItem))
+    metadata.sseItem = error.sseItem
   if (
     [
       'none',
