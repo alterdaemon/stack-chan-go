@@ -100,6 +100,8 @@ def main():
         deadline = started + (args.duration if args.command == 'capture' else 5)
         next_keepalive = started + 10
         stdin_open = args.interactive
+        stdin_pending = bytearray()
+        stdin_oversized = False
         while time.monotonic() < deadline:
             now = time.monotonic()
             if not acknowledged and now - started > 5:
@@ -111,14 +113,28 @@ def main():
                 next_keepalive = now + 10
             ready = select.select([fd] + ([sys.stdin] if stdin_open else []), [], [], 0.2)[0]
             if sys.stdin in ready:
-                line = sys.stdin.readline()
-                if not line:
+                # TextIO.readline can prefetch the next command. select then
+                # cannot see those buffered bytes, leaving it stuck until the
+                # host writes again. Read only bytes made ready by the pipe.
+                chunk = os.read(sys.stdin.fileno(), 4096)
+                if not chunk:
                     stdin_open = False
-                else:
-                    command = line.strip()
-                    if len(command) <= 128 and command.isascii() and command.startswith('diag '):
-                        send(command)
-                        requested_off = command == 'diag off'
+                for byte in chunk:
+                    if byte == 10:
+                        if not stdin_oversized:
+                            command = stdin_pending.strip()
+                            if command.isascii() and command.startswith(b'diag '):
+                                command = command.decode('ascii')
+                                send(command)
+                                requested_off = command == 'diag off'
+                        stdin_pending.clear()
+                        stdin_oversized = False
+                    elif not stdin_oversized:
+                        if len(stdin_pending) == 128:
+                            stdin_pending.clear()
+                            stdin_oversized = True
+                        else:
+                            stdin_pending.append(byte)
             if fd not in ready:
                 continue
             try:

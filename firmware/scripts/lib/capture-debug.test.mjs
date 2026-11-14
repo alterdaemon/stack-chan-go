@@ -371,3 +371,62 @@ print('passed progress and inactivity qualification')
   )
   assert.match(result, /passed progress and inactivity qualification/)
 })
+
+test('interactive USB capture drains command bursts and partial lines without blocking records', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import json, os, pty, select, subprocess, sys, tempfile, time
+master, slave = pty.openpty()
+with tempfile.TemporaryDirectory() as directory:
+    trace=os.path.join(directory,'trace.jsonl')
+    child=subprocess.Popen([sys.executable,sys.argv[1],'--port',os.ttyname(slave),
+        '--interactive','--duration','5','--output',trace],stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    pending=b''; commands=[]
+    def pump(until):
+        global pending
+        deadline=time.monotonic()+1
+        while not until():
+            assert time.monotonic()<deadline, ('command stalled',commands)
+            if not select.select([master],[],[],.02)[0]: continue
+            pending+=os.read(master,4096)
+            while b'\n' in pending:
+                command,_,pending=pending.partition(b'\n'); command=command.strip()
+                commands.append(command)
+                if command in (b'diag on',b'diag status',b'diag off'):
+                    action=command.split()[1].decode()
+                    os.write(master,('@diag '+json.dumps(dict(component='debug',event='control',
+                        action=action,enabled=action!='off',dropped=0))+'\n').encode())
+    try:
+        pump(lambda:b'diag on' in commands)
+        child.stdin.write(b'diag status\ndiag tcp rows\n');child.stdin.flush()
+        pump(lambda:b'diag tcp rows' in commands)
+        assert commands.count(b'diag status')==1
+        child.stdin.write(b'diag sta');child.stdin.flush()
+        os.write(master,b'@diag {"component":"measurement","event":"partial_input"}\n')
+        limit=time.monotonic()+1
+        while not os.path.exists(trace) or 'partial_input' not in open(trace).read():
+            assert time.monotonic()<limit, 'partial command blocked USB records'
+            time.sleep(.01)
+        child.stdin.write(b'tus\ndiag '+b'x'*5000+b'\ninvalid\ndiag \xff\ndiag status\n');child.stdin.flush()
+        pump(lambda:commands.count(b'diag status')==3)
+        assert all(len(command)<=128 and command.isascii() and command.startswith(b'diag ') for command in commands)
+        child.stdin.write(b'diag off\n');child.stdin.flush()
+        pump(lambda:b'diag off' in commands)
+        child.stdin.close();child.stdin=None
+        stdout,stderr=child.communicate(timeout=2)
+        assert child.returncode==0,(stdout,stderr)
+    finally:
+        if child.poll() is None:child.kill();child.communicate()
+        os.close(master);os.close(slave)
+print('passed interactive command bursts')
+`,
+      fileURLToPath(new URL('../mod/capture-debug.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', timeout: 6000 },
+  )
+  assert.match(result, /passed interactive command bursts/)
+})
