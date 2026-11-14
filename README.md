@@ -66,15 +66,6 @@ The retained [upstream release notes](docs/release-notes/) and
 project. The [upstream browser tools](https://stack-chan.github.io/stack-chan/web/)
 and installer serve upstream firmware. Use this fork's guide for Community images.
 
-## Technical details
-
-Fork base: upstream 2.0.1, commit `6a8f7553610e5d91770901e76fd93a0c50cfd970`.
-The current 2.1.0 series also incorporates upstream 2.1.0.
-
-- **Voice modes:** API-key connections offer GPT-Live 1, Realtime Mini and GPT-Realtime 2.1. The ChatGPT subscription connection has its own voice choices. Advanced settings include the reasoning model and Thinking effort; these are separate from the voice model. The robot never switches connections automatically. [See the settings guide](docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).
-- **Secure storage:** First-time setup requires confirmation before permanently using **BLOCK_KEY5**, unless a compatible protected key already exists. This encrypts ChatGPT account sign-in; existing API-key storage remains unchanged and unencrypted. [Read the key-slot notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup).
-- **Developer tools:** USB diagnostics start Off. Temporary tests preserve saved settings and use the configured volume. [See the USB guide](docs/stack-chan-go-fork/README.md#usb-development-diagnostics).
-
 ## License and attribution
 
 Fork modifications: Copyright © 2026 [alterdaemon](https://github.com/alterdaemon).

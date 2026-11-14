@@ -16,22 +16,8 @@ Publication extracts the section headed `### <product-version>` for the requeste
 ### 2.1.0-R5
 
 - **ChatGPT support:** Choose an OpenAI API key or a ChatGPT subscription in the same Settings form. Share one System prompt across both, while keeping separate voice and reasoning settings. Fix ignored instructions and searches that continued after cancellation.
-- **Stay signed in securely:** Keep your ChatGPT account signed in after restarts, with encrypted storage on the robot. Set it up in the separate Security section, then sign in from the robot's Wi-Fi Settings.
+- **Stay signed in securely:** Keep your ChatGPT account signed in after restarts with encrypted storage. Read the [permanent-key setup notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup), set up Security, then sign in through Wi-Fi Settings.
 - **Clearer search and troubleshooting:** Fix weather and other tool answers being rejected. Report a failed lookup without claiming that all tools are unavailable. Check the installed firmware version at startup and in Settings; improved USB tools help investigate connection and search problems.
-
-#### Technical details
-
-Release impact: minor.
-
-First-time secure-storage setup requires confirmation before permanently using
-**BLOCK_KEY5**, or reuses an existing compatible protected key. Installation and
-ordinary Save do not program hardware keys. Existing API-key storage remains
-unchanged and unencrypted. Read the [key-slot notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup)
-before setup.
-
-USB diagnostics start Off. Test adjustments are temporary, preserve saved settings
-and honor the configured volume. API-key and subscription connections retain
-separate credentials and settings; failures never switch to the other connection.
 
 ### 2.1.0-R4
 
