@@ -31,6 +31,12 @@ const NUMBER_FIELDS = new Set([
   'tlsReceived',
   'tlsRead',
   'tlsBuffered',
+  'httpStatus',
+  'httpHeaderBytes',
+  'httpHeaderScan',
+  'httpHeaderLfBytes',
+  'httpCrCount',
+  'httpLfCount',
   'progressDropped',
   'result',
   'value',
@@ -119,6 +125,7 @@ const NUMBER_FIELDS = new Set([
 const STRING_FIELDS = new Set([
   'sseEvent',
   'sseItem',
+  'httpPrefix',
   'state',
   'phase',
   'mode',
@@ -339,7 +346,8 @@ export class DebugRecorder {
             (parameter === 'connection' && ['chatgpt', 'api-live'].includes(value)) ||
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
-            (parameter === 'probe' && ['reasoning', 'search', 'english', 'polish', 'rejection'].includes(value)) ||
+            (parameter === 'probe' &&
+              ['reasoning', 'search', 'english', 'polish', 'rejection', 'minimal'].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

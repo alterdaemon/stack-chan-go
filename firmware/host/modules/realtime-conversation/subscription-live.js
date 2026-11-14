@@ -387,7 +387,8 @@ export class SubscriptionLive {
       throw Object.assign(new Error('Subscription probe unavailable'), { code: 'not_connected' })
     this.#probes ??= this.createProbes?.({
       send: (message) => this.#channel.send(message),
-      delegate: (text, rejection) => this.#delegate(this.uuid(), text, rejection ? 'rejection' : true),
+      delegate: (text, variant) =>
+        this.#delegate(this.uuid(), text, variant === 'minimal' ? 'minimal' : variant ? 'rejection' : true),
       diagnose: this.diagnose,
     })
     if (!this.#probes) throw new Error('Subscription diagnostics unavailable')
@@ -400,7 +401,7 @@ export class SubscriptionLive {
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
       effort: this.options.reasoningEffort ?? 'medium',
-      probe: probe === 'rejection' ? 'rejection' : probe ? 'diagnostic' : undefined,
+      probe: ['rejection', 'minimal'].includes(probe) ? probe : probe ? 'diagnostic' : undefined,
     }))
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
@@ -424,17 +425,21 @@ export class SubscriptionLive {
         timeoutMs: probe === 'rejection' ? 15000 : 300000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
-          reasoning: { effort: this.options.reasoningEffort ?? 'medium' },
-          instructions: `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
+          ...(probe === 'minimal' ? {} : { reasoning: { effort: this.options.reasoningEffort ?? 'medium' } }),
+          instructions:
+            probe === 'minimal'
+              ? 'Answer briefly.'
+              : `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
           input: [
-            ...this.#context.map((item) => ({
-              role: item.role,
-              content: [{ type: item.role === 'user' ? 'input_text' : 'output_text', text: item.text }],
-            })),
+            ...(probe === 'minimal'
+              ? []
+              : this.#context.map((item) => ({
+                  role: item.role,
+                  content: [{ type: item.role === 'user' ? 'input_text' : 'output_text', text: item.text }],
+                }))),
             { role: 'user', content: [{ type: 'input_text', text }] },
           ],
-          tools: [{ type: 'web_search' }],
-          tool_choice: 'auto',
+          ...(probe === 'minimal' ? {} : { tools: [{ type: 'web_search' }], tool_choice: 'auto' }),
           store: false,
           stream: true,
         }),

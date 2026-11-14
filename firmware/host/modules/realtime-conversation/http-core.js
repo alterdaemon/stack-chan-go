@@ -276,12 +276,48 @@ export function guardSocketCallbacks(Socket, statistics) {
   }
 }
 
+// Observe only validated status and byte boundaries, never header/body values.
+export function httpResponseObservation(statistics) {
+  let count = 0,
+    valid = true,
+    status = 0,
+    delimiter = 0,
+    lineFeed = false
+  const prefix = 'HTTP/1.'
+  return (byte) => {
+    if (statistics.httpHeaderLfBytes || count >= 8192) return
+    if (count < 7) valid &&= byte === prefix.charCodeAt(count)
+    else if (count === 7) valid &&= byte === 48 || byte === 49
+    else if (count === 8 || count === 12) valid &&= byte === 32
+    else if (count < 12) {
+      valid &&= byte >= 48 && byte <= 57
+      status = status * 10 + byte - 48
+    }
+    count++
+    statistics.httpHeaderScan = count
+    if (byte === 13) statistics.httpCrCount = (statistics.httpCrCount ?? 0) + 1
+    if (byte === 10) {
+      statistics.httpLfCount = (statistics.httpLfCount ?? 0) + 1
+      if (lineFeed) statistics.httpHeaderLfBytes = count
+      lineFeed = true
+    } else if (byte !== 13) lineFeed = false
+    if (count === 13) {
+      statistics.httpPrefix = valid ? 'http1' : 'other'
+      if (valid && status >= 100 && status <= 599) statistics.httpStatus = status
+    }
+    const expected = delimiter % 2 ? 10 : 13
+    delimiter = byte === expected ? delimiter + 1 : byte === 13 ? 1 : 0
+    if (delimiter === 4) statistics.httpHeaderBytes = count
+  }
+}
+
 // Resume buffered TLS records only after progress; no polling or protocol change.
 export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
   return class extends Socket {
     #state
     constructor(options) {
       const state = { pending: 0, closed: false, timer: undefined, statistics: options.diagnosticStatistics }
+      state.observe = state.statistics ? httpResponseObservation(state.statistics) : undefined
       function arm() {
         const tcp = state.tcp
         if (state.closed || state.pending || !tcp?.readable || state.timer !== undefined) return
@@ -329,6 +365,20 @@ export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
     read(count) {
       const result = count === undefined ? super.read() : super.read(count)
       if (result !== undefined) {
+        if (this.#state.observe) {
+          if (this.format === 'number') this.#state.observe(result)
+          else {
+            const bytes =
+              typeof result === 'number'
+                ? ArrayBuffer.isView(count)
+                  ? new Uint8Array(count.buffer, count.byteOffset, result)
+                  : new Uint8Array(count, 0, result)
+                : new Uint8Array(result)
+            for (const byte of bytes) this.#state.observe(byte)
+          }
+          if (this.#state.statistics.httpHeaderLfBytes || this.#state.statistics.httpHeaderScan >= 8192)
+            this.#state.observe = undefined
+        }
         const consumed = this.format === 'number' ? 1 : typeof result === 'number' ? result : result.byteLength
         this.#state.pending = Math.max(0, this.#state.pending - consumed)
         if (this.#state.statistics) {

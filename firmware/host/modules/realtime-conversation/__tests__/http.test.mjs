@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createClosingClient, guardSocketCallbacks, requestHttps } from '../http-core.js'
+import { createClosingClient, guardSocketCallbacks, httpResponseObservation, requestHttps } from '../http-core.js'
 import { httpFailureMetadata, normalizeRequest } from '../http-options.js'
 import { createHttpProxy } from '../http-proxy.js'
 import { createHttpQueue } from '../http-queue.js'
@@ -8,6 +8,33 @@ import { createSubscriptionStream } from '../subscription-stream.js'
 
 const encode = (text) => new TextEncoder().encode(text).buffer
 const decode = (buffer) => new TextDecoder().decode(buffer)
+
+test('HTTP observation retains only validated status and bounded header byte boundaries', () => {
+  const statistics = {},
+    observe = httpResponseObservation(statistics)
+  const header = 'HTTP/1.1 200 OK\r\nSet-Cookie: sensitive-private\r\n\r\n'
+  for (const byte of new TextEncoder().encode(header)) observe(byte)
+  assert.equal(statistics.httpStatus, 200)
+  assert.equal(statistics.httpPrefix, 'http1')
+  assert.equal(statistics.httpHeaderBytes, header.length)
+  assert.equal(statistics.httpHeaderLfBytes, header.length)
+  for (let index = 0; index < 20000; index++) observe(65)
+  assert.equal(statistics.httpHeaderScan, header.length)
+  assert.ok(!JSON.stringify(statistics).includes('private'))
+  const invalid = {},
+    input = httpResponseObservation(invalid)
+  for (let index = 0; index < 20000; index++) input(65)
+  assert.equal(invalid.httpPrefix, 'other')
+  assert.equal(invalid.httpStatus, undefined)
+  assert.equal(invalid.httpHeaderScan, 8192)
+  const lf = {},
+    lfOnly = httpResponseObservation(lf)
+  for (const byte of new TextEncoder().encode('HTTP/1.1 200 OK\nX-Fixture: value\n\n')) lfOnly(byte)
+  assert.equal(lf.httpStatus, 200)
+  assert.equal(lf.httpHeaderBytes, undefined)
+  assert.equal(lf.httpLfCount, 3)
+  assert.ok(lf.httpHeaderLfBytes > 0)
+})
 const normalize = (url, options) => normalizeRequest(url, options, encode, (pem) => encode(pem))
 const post = (options = {}) => normalize('https://service.test:8443/path?x=1', { method: 'POST', ...options })
 

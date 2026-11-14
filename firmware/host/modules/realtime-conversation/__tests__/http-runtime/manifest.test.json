@@ -1,0 +1,8 @@
+{
+  "include": ["$(MODDABLE)/examples/manifest_base.json"],
+  "modules": {
+    "main": "./runtime.test",
+    "sdk-http": "$(MODDABLE)/modules/embedded/network/http/client/httpclient"
+  },
+  "defines": { "main": { "async": 1 } }
+}

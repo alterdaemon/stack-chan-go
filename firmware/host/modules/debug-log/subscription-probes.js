@@ -28,8 +28,8 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
               type: 'input_text',
               text:
                 value === 'english'
-                  ? 'For this diagnostic only, say exactly: Hello. This is a voice test.'
-                  : 'Na potrzeby tego testu powiedz dokładnie: Cześć. To jest test głosu.',
+                  ? 'Say exactly: Hello. This is a voice test.'
+                  : 'Powiedz dokładnie: Cześć. To jest test głosu.',
             },
           ],
         })
@@ -44,6 +44,11 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
           return
         }
         throw new Error('Invalid diagnostic token was not rejected')
+      }
+      if (value === 'minimal') {
+        const result = await delegate('Say OK.', 'minimal')
+        if (!result || !/\bOK\b/i.test(result.answer)) throw new Error('Minimal subscription probe failed')
+        return
       }
       const prompts = {
         reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',

@@ -304,6 +304,10 @@ Symbolize `panicPC` against that record's exact matching ELF with
 credential or flash dump is made. Off disarms capture; power loss clears RTC RAM.
 Audio snapshots are split under the existing USB line and queue limits. HTTPS
 byte counts distinguish raw TCP, decrypted TLS and consumed HTTP/SSE data.
+`diag set probe minimal` tests terminal inference with only required request
+fields and no configured reasoning/tool/history overrides. HTTP observations
+retain only a validated status and bounded header/line-ending byte counts,
+never header or body values.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 

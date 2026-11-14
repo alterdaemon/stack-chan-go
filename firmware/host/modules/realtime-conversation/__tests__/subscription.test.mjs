@@ -1018,6 +1018,14 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   await assert.rejects(tuner.set('probe', 'search'), /unavailable/)
   f.finish({ answer: '323', searched: false })
   await calculation
+  const minimal = tuner.set('probe', 'minimal')
+  await tick()
+  const minimalBody = JSON.parse(f.requests.at(-1).options.body)
+  assert.deepEqual(Object.keys(minimalBody).sort(), ['input', 'instructions', 'model', 'store', 'stream'])
+  assert.equal(minimalBody.input.length, 1)
+  assert.equal(minimalBody.input[0].content[0].text, 'Say OK.')
+  f.finish({ answer: 'OK', searched: false })
+  await minimal
   const search = tuner.set('probe', 'search')
   await tick()
   f.finish({ answer: 'Status checked.', searched: true, sources: [{ url: 'https://status.openai.com/' }] })
