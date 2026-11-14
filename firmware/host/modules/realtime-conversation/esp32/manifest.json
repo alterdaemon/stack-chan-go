@@ -34,6 +34,9 @@
   },
   "dependencies": [
     {
+      "idf": "stackchan_debug_panic"
+    },
+    {
       "idf": "efuse",
       "includes": ["esp32s3/include"]
     },
