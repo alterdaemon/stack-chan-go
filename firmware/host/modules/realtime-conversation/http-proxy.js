@@ -37,6 +37,10 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
       const job = pending.get(message.id)
       if (!job) return
       if (message.progress) {
+        if (message.progress.streaming && job.streamIdleTimeoutMs) {
+          cancel(job.timer)
+          job.timer = schedule(() => job.timeout(), job.streamIdleTimeoutMs)
+        }
         job.progress = message.progress
         diagnose?.('job.progress', () => ({ request: message.id, ...message.progress }))
         return
@@ -87,7 +91,7 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
             : 'other'
       const activeWorker = getWorker()
       const started = now()
-      const job = { resolve, reject }
+      const job = { resolve, reject, streamIdleTimeoutMs: request.streamIdleTimeoutMs }
       cancelRequest = (message = 'HTTPS request cancelled') => {
         if (!pending.delete(id)) return
         cancel(job.timer)
@@ -110,8 +114,9 @@ export function createHttpProxy({ createWorker, releaseWorker, normalize, decode
         }))
         releaseIdle(activeWorker)
       }
+      job.timeout = () => cancelRequest('HTTPS request timed out')
       try {
-        job.timer = schedule(() => cancelRequest('HTTPS request timed out'), request.timeoutMs)
+        job.timer = schedule(job.timeout, request.timeoutMs)
         pending.set(id, job)
         activeWorker.postMessage({ id, started, request })
         diagnose?.('job.posted', () => ({ request: id, kind }))

@@ -350,7 +350,7 @@ export class SubscriptionLive {
       set: (name, value) => this.probe(name, value),
       reset: async () => {
         this.#probes?.reset()
-        if (this.#job?.diagnostic) this.cancelJob()
+        if (this.#job?.diagnostic) this.cancelJob('diagnostics')
       },
       snapshot: () => ({}),
     })
@@ -405,7 +405,7 @@ export class SubscriptionLive {
       this.#job &&
       this.#inputEndMs > this.#job.inputEndMs
     )
-      this.cancelJob()
+      this.cancelJob('new_input')
     if (message.type === 'turn.done' && typeof message.turn?.transcript === 'string') {
       this.#remember(message.turn.role, message.turn.transcript)
       this.#probes?.output(message.turn)
@@ -420,7 +420,7 @@ export class SubscriptionLive {
       const output = message.item_id ?? message.response_id
       if (this.#cleared || (output && output !== this.#outputId)) return
       this.#cleared = true
-      this.cancelJob()
+      this.cancelJob('audio_clear')
     }
     if (message.type === 'delegation.created') {
       const item = message.item
@@ -459,7 +459,11 @@ export class SubscriptionLive {
         this.#delegate(
           this.uuid(),
           text,
-          ['minimal', 'minimal-isolated'].includes(variant) ? variant : variant ? 'rejection' : true,
+          ['minimal', 'minimal-isolated', 'timeout-short', 'timeout-long'].includes(variant)
+            ? variant
+            : variant
+              ? 'rejection'
+              : true,
         ),
       diagnose: this.diagnose,
       statistics: () => this.#channel.statistics?.(),
@@ -475,7 +479,11 @@ export class SubscriptionLive {
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
       effort: this.options.reasoningEffort ?? 'medium',
-      probe: ['rejection', 'minimal', 'minimal-isolated'].includes(probe) ? probe : probe ? 'diagnostic' : undefined,
+      probe: ['rejection', 'minimal', 'minimal-isolated', 'timeout-short', 'timeout-long'].includes(probe)
+        ? probe
+        : probe
+          ? 'diagnostic'
+          : undefined,
     }))
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
@@ -497,6 +505,7 @@ export class SubscriptionLive {
         headers,
         responseFormat: 'subscription-response',
         timeoutMs: probe === 'rejection' ? 15000 : 45000,
+        streamIdleTimeoutMs: probe === 'timeout-short' ? 5000 : probe === 'timeout-long' ? 75000 : 300000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
           ...(minimal ? {} : { reasoning: { effort: this.options.reasoningEffort ?? 'medium' } }),
@@ -565,21 +574,15 @@ export class SubscriptionLive {
         providerCode: error?.providerCode,
         param: error?.param,
       }))
-      if (!probe && this.#job === job && !this.#closed)
-        this.#channel.send({
-          type: 'delegation.context.append',
-          delegation_item_id: delegationId,
-          channel: 'commentary',
-          content: [
-            {
-              type: 'input_text',
-              text:
-                error?.errorCode === 'search_missing_sources'
-                  ? 'This lookup returned no verifiable source. Report only that this lookup could not be verified. New user requests can still use the tools. Do not retry it automatically. Use the configured assistant language and behavior.'
-                  : 'The current backend request failed. New user requests can still use the tools. Do not retry it automatically. Briefly report this request failure using the configured assistant language and behavior.',
-            },
-          ],
-        })
+      if (!probe && this.#job === job && !this.#closed) {
+        // Commentary is nonterminal status in the reference Codex protocol.
+        // A failed task needs a final answer just like a successful one.
+        const answer =
+          error?.errorCode === 'search_missing_sources'
+            ? 'I could not verify a source for this request.'
+            : 'I could not complete this request.'
+        for (const event of subscriptionAppends(answer, delegationId)) this.#channel.send(event)
+      }
       if (probe) throw Object.assign(error, { code: 'subscription_backend_error' })
     } finally {
       if (this.#job === job) {
@@ -597,12 +600,12 @@ export class SubscriptionLive {
       this.#context.shift()
   }
 
-  cancelJob() {
+  cancelJob(reason = 'client') {
     this.#probes?.reset()
     const job = this.#job
     this.#job = undefined
     job?.request?.cancel?.()
-    if (job) this.diagnose?.('backend.cancelled')
+    if (job) this.diagnose?.('backend.cancelled', () => ({ reason }))
     if (job) this.#onMessage?.({ type: 'local.subscription.job.finished', id: job.id })
     if (job && !job.diagnostic && this.#ready && !this.#closed) {
       try {

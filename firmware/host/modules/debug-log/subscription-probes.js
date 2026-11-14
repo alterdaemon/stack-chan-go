@@ -134,13 +134,25 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
           'Check the current weather in London, United Kingdom, using hosted search and report the result and its source.',
         reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',
         search: 'Search the web for the official OpenAI status page. Report what it says and cite its URL.',
+        'weather-local':
+          'Check the current weather in Kramsk, Poland, using hosted search and report the result and its source.',
+        'reasoning-long':
+          'Compute the sum of the squares of every integer from 1 through 100 inclusive. Derive the formula, substitute the numbers, and independently check the result. Explain the steps in no more than six sentences. Do not use web search.',
+        sources:
+          'Open http://example.com and https://www.iana.org/domains/reserved. Explain in three sentences why example domains are reserved and cite the sources you checked.',
+        'timeout-short':
+          'Check the current weather in Kramsk, Poland, using hosted search and report the result and its source.',
+        'timeout-long':
+          'Check the current weather in Kramsk, Poland, using hosted search and report the result and its source.',
       }
       if (!Object.hasOwn(prompts, value)) throw new RangeError('Invalid subscription probe')
-      const result = await delegate(prompts[value])
+      const result = await delegate(prompts[value], value.startsWith('timeout-') ? value : undefined)
       if (
         !result ||
         (value === 'reasoning' && !/\b323\b/.test(result.answer)) ||
-        (['search', 'weather'].includes(value) && result.searched !== true)
+        (value === 'reasoning-long' && !/\b338[ ,]?350\b/.test(result.answer)) ||
+        (['search', 'weather', 'weather-local', 'sources', 'timeout-short', 'timeout-long'].includes(value) &&
+          result.searched !== true)
       )
         throw Object.assign(new Error('Subscription probe failed'), { code: 'subscription_backend_error' })
     },

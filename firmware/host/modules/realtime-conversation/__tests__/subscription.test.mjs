@@ -1005,8 +1005,8 @@ test('ready delegation cancellation informs the voice agent once and failure nev
   f.finish({ error: 'search_missing_sources' })
   await tick()
   assert.equal(f.sent.at(-1).delegation_item_id, 'failed')
-  assert.equal(f.sent.at(-1).channel, 'commentary')
-  assert.match(f.sent.at(-1).content[0].text, /Do not retry it automatically/)
+  assert.equal(f.sent.at(-1).channel, 'speakable')
+  assert.equal(f.sent.at(-1).content[0].text, 'I could not verify a source for this request.')
   assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 2)
   delegate('fresh')
   await tick()
@@ -1835,8 +1835,8 @@ test('named API attribution reaches voice, while source failure leaves a fresh t
   await tick()
   f.finish({ error: 'search_missing_sources' })
   await tick()
-  assert.match(f.sent.at(-1).content[0].text, /New user requests can still use the tools/)
-  assert.match(f.sent.at(-1).content[0].text, /this lookup could not be verified/)
+  assert.equal(f.sent.at(-1).channel, 'speakable')
+  assert.equal(f.sent.at(-1).content[0].text, 'I could not verify a source for this request.')
   delegate('feed')
   await tick()
   f.finish({ answer: 'Weather checked.', searched: true, sources: [{ type: 'api', name: 'oai-weather' }] })
@@ -1863,4 +1863,91 @@ test('the USB weather probe is fixed and accepts a completed named feed result',
   assert.equal(queries.length, 1)
   assert.match(queries[0], /London/)
   await assert.rejects(probes.run('probe', 'weather private query'), RangeError)
+})
+
+test('USB idle-timeout trials preserve the normal five-minute stream inactivity policy', async () => {
+  const f = liveFixture()
+  f.live.debug = { enabled: true }
+  await f.live.create(
+    'v=0',
+    {},
+    () => {},
+    () => true,
+  )
+  f.live.activate()
+  f.receive({ type: 'session.started' })
+  for (const [name, idleMs] of [
+    ['timeout-short', 5000],
+    ['timeout-long', 75000],
+    ['weather-local', 300000],
+  ]) {
+    const probe = f.live.probe('probe', name)
+    await tick()
+    const request = f.requests.at(-1)
+    assert.equal(request.options.timeoutMs, 45000)
+    assert.equal(request.options.streamIdleTimeoutMs, idleMs)
+    assert.equal(request.options.headers.Authorization, 'Bearer subscription-only')
+    assert.equal(JSON.parse(request.options.body).model, 'gpt-6.1-terra')
+    f.finish({ answer: 'Checked.', searched: true, sources: [{ type: 'api', name: 'oai-weather' }] })
+    await probe
+  }
+  f.live.dispose()
+})
+
+test('every backend failure produces a final result and permits fresh same-call work', async () => {
+  const f = liveFixture()
+  await f.live.create(
+    'v=0',
+    {},
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  const originalFetch = f.live.fetch
+  let id = 0
+  const delegate = () => {
+    const current = String(++id)
+    f.receive({
+      type: 'delegation.created',
+      item: {
+        id: current,
+        type: 'delegation',
+        target: 'client',
+        content: [{ type: 'input_text', text: 'Check current facts.' }],
+      },
+    })
+    return current
+  }
+  for (const error of [
+    { errorCode: 'https_timeout' },
+    { errorCode: 'https_connection' },
+    { errorCode: 'https_transport' },
+    { errorCode: 'https_short_read' },
+    { errorCode: 'subscription_stream_incomplete' },
+    { errorCode: 'subscription_event_json' },
+    { errorCode: 'subscription_incomplete' },
+  ]) {
+    f.live.fetch = () => Promise.reject(Object.assign(new Error('synthetic transport failure'), error))
+    const failed = delegate()
+    await tick()
+    assert.deepEqual(f.sent.at(-1), {
+      type: 'delegation.context.append',
+      delegation_item_id: failed,
+      channel: 'speakable',
+      content: [{ type: 'input_text', text: 'I could not complete this request.' }],
+    })
+    f.live.fetch = originalFetch
+    const next = delegate()
+    await tick()
+    assert.equal(f.requests.at(-1).options.headers.Authorization, 'Bearer subscription-only')
+    assert.equal(f.requests.at(-1).options.streamIdleTimeoutMs, 300000)
+    f.finish({ answer: 'New request completed.', searched: true, sources: [{ type: 'api', name: 'oai-weather' }] })
+    await tick()
+    assert.equal(f.sent.at(-1).delegation_item_id, next)
+    assert.equal(f.sent.at(-1).channel, 'speakable')
+    assert.match(f.sent.at(-1).content[0].text, /New request completed/)
+  }
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.started').length, 14)
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 14)
+  f.live.dispose()
 })

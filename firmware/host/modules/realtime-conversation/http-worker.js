@@ -12,6 +12,7 @@ import Timer from 'timer'
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
 const CheckedTCP = guardSocketCallbacks(device.network.https.client.socket.TCP.io)
+const clock = { now: () => Time.ticks, elapsed: (start) => Time.delta(start, Time.ticks) }
 let tlsDrains = 0
 const DrainingTLS = drainTLSSocket(
   device.network.https.client.socket.io,
@@ -20,6 +21,7 @@ const DrainingTLS = drainTLSSocket(
   () => tlsDrains++,
 )
 const platform = {
+  clock,
   createSubscriptionStream: (observe) =>
     createSubscriptionStream(
       (bytes) => decoder.decode(bytes),
@@ -37,7 +39,9 @@ const platform = {
         diagnosticObservation: onObservation,
         TCP: {
           ...device.network.https.client.socket.TCP,
-          io: statistics ? guardSocketCallbacks(device.network.https.client.socket.TCP.io, statistics) : CheckedTCP,
+          io: statistics
+            ? guardSocketCallbacks(device.network.https.client.socket.TCP.io, statistics, clock)
+            : CheckedTCP,
         },
         tls: { ...device.network.https.client.socket.tls, ...(certificate ? { ca: certificate } : {}) },
       },

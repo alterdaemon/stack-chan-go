@@ -66,8 +66,14 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
     queued++
     const job = { cancelled: false }
     jobs.set(id, job)
-    let idleID, observation
-    const remaining = () => (job.cancelled ? 0 : request.timeoutMs - elapsed(started))
+    let idleID, observation, streamActivity, replyStarted
+    const remaining = () => {
+      if (job.cancelled) return 0
+      const current = elapsed(started)
+      if (replyStarted !== undefined) return request.timeoutMs - (current - replyStarted)
+      if (streamActivity !== undefined) return request.streamIdleTimeoutMs - (current - streamActivity)
+      return request.timeoutMs - current
+    }
     tail = tail.then(async () => {
       try {
         const timeoutMs = remaining()
@@ -82,8 +88,9 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
                 job.cancel = cancelRequest
                 if (job.cancelled) cancelRequest()
               },
-              request.diagnostics
+              request.diagnostics || request.streamIdleTimeoutMs
                 ? (progress) => {
+                    if (progress.streaming) streamActivity = elapsed(started)
                     try {
                       post({ id, progress })
                     } catch {
@@ -96,6 +103,9 @@ export function createHttpQueue({ execute, post, schedule, elapsed, onIdle }) {
         } catch (error) {
           message = { id, error: String(error), ...httpFailureMetadata(error) }
         }
+        // Delivery retries are bounded independently of the completed stream's
+        // duration. A valid long response must not expire before IPC delivery.
+        if (streamActivity !== undefined) replyStarted = elapsed(started)
         if (request.diagnostics) {
           observation = httpFailureMetadata(message)
           if (message.errorCode) observation.errorCode = message.errorCode

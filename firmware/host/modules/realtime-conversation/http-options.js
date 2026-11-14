@@ -51,6 +51,8 @@ export function httpFailureMetadata(error) {
     metadata.reason = error.reason
   if (Number.isInteger(error?.code) && Math.abs(error.code) <= 2147483647) metadata.code = error.code
   if (Number.isInteger(error?.tlsDrains) && error.tlsDrains >= 0) metadata.tlsDrains = error.tlsDrains
+  for (const name of ['bodyReadIdleMs', 'socketReadIdleMs'])
+    if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
   for (const name of ['socketReceived', 'socketWritten', 'socketBuffered', 'tlsReceived', 'tlsRead', 'tlsBuffered'])
     if (Number.isSafeInteger(error?.[name]) && error[name] >= 0) metadata[name] = error[name]
   if ([-1, 0, 1].includes(error?.socketPending)) metadata.socketPending = error.socketPending
@@ -112,6 +114,9 @@ export function normalizeRequest(url, options, encode, decodeCertificate) {
     throw new RangeError('Live HTTPS request exceeds limit')
   const requested = Number(options.timeoutMs ?? 45000)
   if (!Number.isFinite(requested)) throw new RangeError('Invalid Live HTTPS deadline')
+  const streaming = options.responseFormat === 'subscription-response'
+  const idle = Number(options.streamIdleTimeoutMs ?? 300000)
+  if (streaming && !Number.isFinite(idle)) throw new RangeError('Invalid Live HTTPS idle timeout')
   return {
     host: endpoint[1],
     port: +(endpoint[2] ?? 443),
@@ -122,6 +127,7 @@ export function normalizeRequest(url, options, encode, decodeCertificate) {
     responseFormat: ['web-search', 'subscription-response'].includes(options.responseFormat)
       ? options.responseFormat
       : undefined,
-    timeoutMs: Math.max(1000, Math.min(options.responseFormat === 'subscription-response' ? 300000 : 45000, requested)),
+    timeoutMs: Math.max(1000, Math.min(45000, requested)),
+    ...(streaming ? { streamIdleTimeoutMs: Math.max(1000, Math.min(300000, idle)) } : {}),
   }
 }

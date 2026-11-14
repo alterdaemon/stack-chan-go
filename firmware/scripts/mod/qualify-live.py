@@ -49,26 +49,30 @@ class Capture:
                     self.valid = False
                     raise RuntimeError('Lost diagnostic records; qualification is invalid')
 
-    def wait(self, predicate, after=0, seconds=35):
+    def wait(self, predicate, after=0, seconds=35, activity=None):
         deadline = time.monotonic() + seconds
+        cursor = after
         while time.monotonic() < deadline:
             self.pump()
-            for row in self.rows[after:]:
+            for row in self.rows[cursor:]:
+                cursor += 1
                 if predicate(row):
                     return row
+                if activity and activity(row):
+                    deadline = time.monotonic() + seconds
             if self.child.poll() is not None:
                 raise RuntimeError('USB capture ended')
             time.sleep(0.03)
         raise RuntimeError('USB control acknowledgement timed out')
 
-    def command(self, text, action, timeout=7, allow_unavailable=False, **fields):
+    def command(self, text, action, timeout=7, allow_unavailable=False, activity=None, **fields):
         self.pump()
         after = len(self.rows)
         self.child.stdin.write(text + '\n')
         self.child.stdin.flush()
         result = self.wait(lambda d: d.get('component') == 'debug' and d.get('action') == action and
                            all((d.get(k) in ('applied', 'failed') if k == 'phase' and v == 'applied'
-                                else d.get(k) == v) for k, v in fields.items()), after, seconds=timeout)
+                                else d.get(k) == v) for k, v in fields.items()), after, seconds=timeout, activity=activity)
         if result.get('phase') == 'failed':
             if allow_unavailable and result.get('errorCode') == 'live_unavailable':
                 return result
@@ -76,7 +80,9 @@ class Capture:
         return result
 
     def set(self, parameter, value):
-        self.command(f'diag set {parameter} {value}', 'set', timeout=55 if parameter == 'probe' else 7,
+        self.command(f'diag set {parameter} {value}', 'set', timeout=315 if parameter == 'probe' else 7,
+                     activity=(lambda d: d.get('component') == 'https' and d.get('event') == 'job.progress' and
+                               d.get('phase') == 'read' and d.get('received', 0) > 0) if parameter == 'probe' else None,
                      parameter=parameter, phase='applied')
 
     def reset(self):

@@ -25,6 +25,8 @@ const NUMBER_FIELDS = new Set([
   'socketWritten',
   'socketBuffered',
   'socketPending',
+  'socketReadIdleMs',
+  'bodyReadIdleMs',
   'dataMessages',
   'sseEvents',
   'streamPending',
@@ -388,6 +390,11 @@ export class DebugRecorder {
                 'listen-search',
                 'listen-followup',
                 'listen-persona',
+                'weather-local',
+                'reasoning-long',
+                'sources',
+                'timeout-short',
+                'timeout-long',
               ].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {

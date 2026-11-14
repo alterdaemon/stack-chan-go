@@ -9,6 +9,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       buffer,
       offset = 0,
       received = 0,
+      reported = 0,
       status,
       location,
       responseHeaders,
@@ -17,6 +18,27 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
       finished = false
     let body = request.body
     const statistics = request.diagnostics ? { socketReceived: 0, socketWritten: 0 } : undefined
+    let lastRead
+    if (statistics && platform.clock)
+      Object.defineProperty(statistics, 'bodyReadIdleMs', {
+        enumerable: true,
+        get: () => (lastRead === undefined ? undefined : Math.round(platform.clock.elapsed(lastRead))),
+      })
+    function observeRead() {
+      if (!statistics || received - reported < 4096) return
+      reported = received
+      progress?.({ phase, status, received, ...statistics, ...stream?.observation })
+    }
+    function streamActivity() {
+      platform.cancel(timer)
+      timer = platform.schedule(
+        () => finish(new Error('HTTPS request timed out')),
+        request.streamIdleTimeoutMs ?? 300000,
+      )
+      // This is lifecycle IPC, including with diagnostics Off. Both VM owners
+      // must use stream inactivity rather than an elapsed job deadline.
+      progress?.({ streaming: true, phase, status, received })
+    }
     function transportFailure(message, cause) {
       const error = new Error(message)
       const tlsReasons = {
@@ -123,18 +145,13 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
             const header = incomingHeaders.get(name)
             if (typeof header === 'string' && header.length <= 4096) responseHeaders[name] = header
           }
-          progress?.({ phase, status, received })
           if (request.responseFormat === 'subscription-response' && code >= 200 && code < 300) {
             // Codex consumes the SSE body without requiring a Content-Type
             // header. Completion and answer validation remain authoritative.
             stream = platform.createSubscriptionStream(request.diagnostics)
-            // Codex permits five minutes of stream inactivity. The caller
-            // still bounds this entire job; connection/header wait stays 45s.
-            if (request.timeoutMs > 45000) {
-              platform.cancel(timer)
-              timer = platform.schedule(() => finish(new Error('HTTPS request timed out')), request.timeoutMs)
-            }
+            streamActivity()
           }
+          progress?.({ phase, status, received })
           if (Number(incomingHeaders.get('content-length')) > (stream ? 2097152 : 131072))
             finish(new Error('HTTPS response exceeds limit'))
         },
@@ -170,11 +187,14 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
                 if (this.read(view) !== view.length) throw new Error('HTTPS short read')
                 const first = received === 0
                 received += view.length
+                if (statistics && platform.clock) lastRead = platform.clock.now()
                 if (first) progress?.({ phase, status, received })
                 stream.write(view)
+                observeRead()
                 if (stream.complete) return finish()
                 count -= view.length
               }
+              streamActivity()
               return
             }
             if (end > 131072) throw new Error('HTTPS response exceeds limit')
@@ -239,7 +259,7 @@ export function closingDNS(DNS, isClosed) {
 }
 
 // TLS authentication failures must reach HTTP onError, not escape an I/O callback.
-export function guardSocketCallbacks(Socket, statistics) {
+export function guardSocketCallbacks(Socket, statistics, clock) {
   const Guarded = class extends Socket {
     constructor(options) {
       const guarded = { ...options }
@@ -255,8 +275,13 @@ export function guardSocketCallbacks(Socket, statistics) {
     }
   }
   if (!statistics) return Guarded
-  let socket
+  let socket, lastRead
   const observe = tlsRecordObservation(statistics)
+  if (clock)
+    Object.defineProperty(statistics, 'socketReadIdleMs', {
+      enumerable: true,
+      get: () => (lastRead === undefined ? undefined : Math.round(clock.elapsed(lastRead))),
+    })
   Object.defineProperty(statistics, 'socketBuffered', { enumerable: true, get: () => socket?.readable ?? 0 })
   Object.defineProperty(statistics, 'socketPending', {
     enumerable: true,
@@ -283,6 +308,7 @@ export function guardSocketCallbacks(Socket, statistics) {
         statistics.socketReceived +=
           typeof result === 'number' ? (this.format === 'number' ? 1 : result) : result.byteLength
       if (result !== undefined) {
+        if (clock) lastRead = clock.now()
         if (this.format === 'number') observe(Uint8Array.of(result))
         else if (typeof result !== 'number') observe(new Uint8Array(result))
         else if (ArrayBuffer.isView(value)) observe(new Uint8Array(value.buffer, value.byteOffset, result))

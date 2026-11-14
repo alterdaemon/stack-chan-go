@@ -333,3 +333,41 @@ print('passed speech observation gate')
   )
   assert.match(result, /passed speech observation gate/)
 })
+
+test('USB backend qualification waits for progressing work and times out actual inactivity', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`
+import importlib.util, sys
+spec=importlib.util.spec_from_file_location('q',sys.argv[1]);q=importlib.util.module_from_spec(spec);spec.loader.exec_module(q)
+class Clock:
+    now=0
+    def monotonic(self): return self.now
+    def sleep(self,seconds): self.now+=1
+clock=Clock();q.time=clock
+c=q.Capture.__new__(q.Capture);c.rows=[]
+c.child=type('Child',(),{'poll':lambda self:None})()
+events=[(200,dict(component='https',event='job.progress',phase='read',received=1)),
+        (400,dict(component='https',event='job.progress',phase='read',received=2)),
+        (600,dict(component='https',event='job.progress',phase='read',received=3)),
+        (800,dict(done=True))]
+def pump():
+    while events and events[0][0]<=clock.now: c.rows.append(events.pop(0)[1])
+c.pump=pump
+activity=lambda d:d.get('event')=='job.progress' and d.get('phase')=='read'
+assert c.wait(lambda d:d.get('done'),seconds=315,activity=activity)['done']
+assert clock.now==800
+began=clock.now
+try: c.wait(lambda d:False,after=len(c.rows),seconds=315,activity=activity);raise AssertionError('Inactivity never timed out')
+except RuntimeError as e: assert 'timed out' in str(e)
+assert clock.now-began==315, 'old records cannot renew a new wait'
+print('passed progress and inactivity qualification')
+`,
+      fileURLToPath(new URL('../mod/qualify-live.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed progress and inactivity qualification/)
+})

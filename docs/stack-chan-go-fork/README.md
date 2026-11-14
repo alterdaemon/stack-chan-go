@@ -225,6 +225,20 @@ Use the same process throughout, without opening a second serial connection.
 See the [qualification tool](../../firmware/scripts/mod/qualify-live.py) `--help`
 for automated connection and audio checks.
 
+Subscription tool responses can take longer than 45 seconds. After response headers
+arrive, ongoing body data keeps the request alive; 300 seconds without body data
+ends a stalled stream. Other HTTPS requests retain their 45-second limit. A failed
+lookup produces a final answer so another request can use the same conversation.
+
+With an active subscription call, fixed USB probes `diag set probe weather-local`,
+`diag set probe sources` and `diag set probe reasoning-long` exercise weather,
+HTTP/HTTPS sources and longer reasoning. `timeout-short` and `timeout-long` use
+5/75-second inactivity limits for focused deadline checks. Keep the capture open
+and wait for the terminal `set` acknowledgement. Body progress renews the host's
+315-second inactivity wait. A timeout is a failed request, not evidence of lost
+account access. Diagnostic milestones and final worker byte/read-idle counters
+help distinguish progress from a stalled stream without recording its contents.
+
 ## Branches and tags
 
 | Branch | Purpose |

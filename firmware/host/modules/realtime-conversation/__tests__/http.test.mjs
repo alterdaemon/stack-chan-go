@@ -87,10 +87,17 @@ test('HTTPS request bounds and header validation happen before IPC', () => {
   assert.deepEqual(request.headers, [['authorization', 'Bearer test']])
 })
 
-test('only subscription response streams accept a bounded five-minute job deadline', async () => {
+test('subscription streams use an idle timeout and retain the connection deadline', async () => {
   assert.equal(post({ timeoutMs: 300000 }).timeoutMs, 45000)
   assert.equal(post({ timeoutMs: 300000, responseFormat: 'web-search' }).timeoutMs, 45000)
-  assert.equal(post({ timeoutMs: 900000, responseFormat: 'subscription-response' }).timeoutMs, 300000)
+  assert.equal(post({ timeoutMs: 900000, responseFormat: 'subscription-response' }).timeoutMs, 45000)
+  assert.equal(post({ responseFormat: 'subscription-response' }).streamIdleTimeoutMs, 300000)
+  assert.equal(
+    post({ responseFormat: 'subscription-response', streamIdleTimeoutMs: 900000 }).streamIdleTimeoutMs,
+    300000,
+  )
+  assert.equal(post({ streamIdleTimeoutMs: 900000 }).streamIdleTimeoutMs, undefined)
+  assert.throws(() => post({ responseFormat: 'subscription-response', streamIdleTimeoutMs: NaN }), RangeError)
   let callbacks, stop
   const timers = []
   const request = requestHttps(
@@ -901,7 +908,7 @@ test('Codex terminal events settle and close HTTPS without waiting for HTTP EOF'
         event.type === 'response.completed' ? '323' : 'unsupported_value',
       )
       assert.equal(closes, 1)
-      assert.equal(cancelled, 1)
+      assert.equal(cancelled, 2, 'connection and stream timers are cleared')
       callbacks.onDone(new Error('late close'))
       connection.onError(new Error('late socket'))
       assert.equal(closes, 1)
@@ -923,6 +930,134 @@ test('HTTP progress is bounded metadata and caller deadlines retain the last obs
     (error) =>
       error.errorCode === 'https_timeout' && error.status === 200 && error.phase === 'read' && error.received === 1024,
   )
+})
+
+test('stream progress follows received bytes and reports the idle time without retaining response text', async () => {
+  let callbacks,
+    expire,
+    ticks = 0
+  const milestones = []
+  const request = requestHttps(
+    { ...post({ responseFormat: 'subscription-response' }), diagnostics: true },
+    {
+      clock: { now: () => ticks, elapsed: (at) => ticks - at },
+      createClient: () => ({ request: (value) => (callbacks = value), close() {} }),
+      createSubscriptionStream: (observe) => createSubscriptionStream(decode, encode, observe),
+      schedule: (fn, ms) => {
+        if (ms) {
+          expire = fn
+          return 1
+        }
+        return queueMicrotask(fn)
+      },
+      cancel() {},
+    },
+    undefined,
+    (value) => milestones.push(value),
+  )
+  callbacks.onHeaders(200, new Map())
+  const bytes = new Uint8Array(
+    encode(`data: ${JSON.stringify({ type: 'response.output_text.delta', delta: 'private-fixture'.repeat(750) })}\n\n`),
+  )
+  let offset = 0
+  for (let at = 0; at < bytes.length; at += 1024) {
+    ticks += 10
+    callbacks.onReadable.call(
+      {
+        read(view) {
+          view.set(bytes.subarray(offset, offset + view.length))
+          offset += view.length
+          return view.length
+        },
+      },
+      Math.min(1024, bytes.length - at),
+    )
+  }
+  assert.deepEqual(
+    milestones.filter((value) => !value.streaming && value.received >= 4096).map((value) => value.received),
+    [4096, 8192],
+  )
+  assert.equal(
+    milestones.filter((value) => value.sseEvent).at(-1).sseEvent,
+    'none',
+    'an unfinished event is not reported as parsed',
+  )
+  assert.ok(!JSON.stringify(milestones).includes('private-fixture'))
+  ticks += 1200
+  expire()
+  await assert.rejects(request, (error) => {
+    const safe = httpFailureMetadata(error)
+    assert.equal(safe.received, bytes.length)
+    assert.equal(safe.bodyReadIdleMs, 1200)
+    assert.equal(safe.sseEvents, 1)
+    return true
+  })
+})
+
+test('Off HTTPS diagnostics do not sample the read clock', async () => {
+  let callbacks
+  const request = requestHttps(post({ responseFormat: 'subscription-response' }), {
+    clock: { now: () => assert.fail('Off clock read'), elapsed: () => assert.fail('Off clock elapsed') },
+    createClient: () => ({ request: (value) => (callbacks = value), close() {} }),
+    createSubscriptionStream: (observe) => createSubscriptionStream(decode, encode, observe),
+    schedule: (fn, ms) => (ms ? 1 : queueMicrotask(fn)),
+    cancel() {},
+  })
+  callbacks.onHeaders(200, new Map())
+  const bytes = new Uint8Array(
+    encode(
+      'data: {"type":"response.completed","response":{"output":[{"type":"message","content":[{"type":"output_text","text":"OK"}]}]}}\n\n',
+    ),
+  )
+  callbacks.onReadable.call(
+    {
+      read(view) {
+        view.set(bytes)
+        return bytes.length
+      },
+    },
+    bytes.length,
+  )
+  assert.equal(JSON.parse(decode((await request).body)).answer, 'OK')
+  let options
+  const Guarded = guardSocketCallbacks(
+    class {
+      constructor(value) {
+        options = value
+      }
+    },
+    undefined,
+    {
+      now: () => assert.fail('Off socket clock read'),
+      elapsed: () => assert.fail('Off socket elapsed'),
+    },
+  )
+  new Guarded({ onReadable: () => 7 })
+  assert.equal(options.onReadable(1), 7)
+})
+
+test('socket read idle observation advances only after actual reads', () => {
+  let ticks = 10
+  const statistics = { socketReceived: 0, socketWritten: 0 }
+  const Observed = guardSocketCallbacks(
+    class {
+      read(value) {
+        return value?.byteLength
+      }
+    },
+    statistics,
+    {
+      now: () => ticks,
+      elapsed: (at) => ticks - at,
+    },
+  )
+  const socket = new Observed({})
+  assert.equal(statistics.socketReadIdleMs, undefined)
+  socket.read(new Uint8Array(2))
+  ticks += 1400
+  assert.equal(httpFailureMetadata(statistics).socketReadIdleMs, 1400)
+  socket.read()
+  assert.equal(statistics.socketReadIdleMs, 1400)
 })
 
 test('HTTP milestones distinguish a partial request from a fully sent body without exposing data', async () => {
@@ -964,4 +1099,85 @@ test('HTTP milestones distinguish a partial request from a fully sent body witho
     { phase: 'read', status: 200, received: 2 },
   ])
   assert.ok(!JSON.stringify(milestones).includes('synthetic-private'))
+})
+
+test('stream body activity renews both VM deadlines with diagnostics Off', async () => {
+  const f = proxyFixture()
+  const request = f.post({ responseFormat: 'subscription-response' })
+  const id = f.sent[0].id
+  f.worker.onmessage({ id, progress: { streaming: true, phase: 'headers', status: 200, received: 0 } })
+  assert.equal(f.timers[0].cancelled, true)
+  assert.equal(f.timers.at(-1).ms, 300000)
+  const firstIdle = f.timers.at(-1)
+  f.worker.onmessage({ id, progress: { streaming: true, phase: 'read', status: 200, received: 15000 } })
+  assert.equal(firstIdle.cancelled, true)
+  f.worker.onmessage({ id, status: 200, body: encode('completed') })
+  assert.equal(await (await request).text(), 'completed')
+  assert.ok(f.timers.every((timer) => timer.cancelled))
+
+  const stalled = f.post({ responseFormat: 'subscription-response' })
+  const nextId = f.sent.at(-1).id
+  f.worker.onmessage({ id: nextId, progress: { streaming: true, phase: 'read', status: 200, received: 12 } })
+  f.timers.at(-1).callback()
+  await assert.rejects(stalled, (error) => error.errorCode === 'https_timeout' && error.received === 12)
+  assert.deepEqual(f.sent.at(-1), { id: nextId, cancel: true })
+})
+
+test('a progressing stream may exceed five minutes total and still deliver its result', async () => {
+  let now = 0,
+    callbacks,
+    final,
+    finish,
+    closed = 0
+  const timers = new Set()
+  const schedule = (callback, ms) => {
+    const timer = { callback, at: now + ms }
+    timers.add(timer)
+    return timer
+  }
+  const cancel = (timer) => timers.delete(timer)
+  const advance = async (ms) => {
+    now += ms
+    for (const timer of [...timers]) if (timer.at <= now && timers.delete(timer)) timer.callback()
+    await new Promise(setImmediate)
+  }
+  const queue = createHttpQueue({
+    elapsed: (started) => now - started,
+    schedule,
+    post: (message) => {
+      if (!message.progress) final = message
+    },
+    execute: (request, setCancel, progress) =>
+      requestHttps(
+        request,
+        {
+          createClient: () => ({
+            request: (value) => {
+              callbacks = value
+            },
+            close: () => closed++,
+          }),
+          createSubscriptionStream: () => ({ write() {}, finish: () => encode('complete') }),
+          schedule,
+          cancel,
+        },
+        setCancel,
+        progress,
+      ),
+  })
+  finish = queue({ id: 1, started: 0, request: post({ responseFormat: 'subscription-response' }) })
+  await new Promise(setImmediate)
+  callbacks.onHeaders(200, new Map())
+  for (let i = 0; i < 4; i++) {
+    await advance(200000)
+    callbacks.onReadable.call({ read: (view) => view.length }, 1)
+  }
+  assert.equal(closed, 0, 'eight hundred seconds of progressing work are allowed')
+  callbacks.onDone()
+  await advance(0)
+  await finish
+  assert.equal(final.status, 200)
+  assert.equal(decode(final.body), 'complete')
+  assert.equal(closed, 1)
+  assert.equal(timers.size, 0)
 })
