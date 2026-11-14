@@ -11,6 +11,7 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
     ['self', 'device', '__httpWorkerDeadline'].map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]),
   )
   const state = { ticks: 1000, executed: [], replies: [], pending: [] }
+  const originalEncode = Object.getOwnPropertyDescriptor(ArrayBuffer, 'fromString')
   function modulePackage(name, exports, sources) {
     const target = path.join(directory, 'node_modules', name)
     mkdirSync(target, { recursive: true })
@@ -27,10 +28,12 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
         './http-queue': './http-queue.js',
         './web-search': './web-search.js',
         './subscription-stream': './subscription-stream.js',
+        './subscription-response-socket': './subscription-response-socket.js',
       },
       {
         'http-core.js': `
         export const createClosingClient = (Client, options) => new Client(options)
+        export const closingDNS = (DNS) => DNS
         export const guardSocketCallbacks = (Socket) => Socket
         export const drainTLSSocket = (Socket) => Socket
         export function requestHttps(request) {
@@ -45,6 +48,10 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
     copyFileSync(new URL('../http-queue.js', import.meta.url), path.join(realtime, 'http-queue.js'))
     copyFileSync(new URL('../http-options.js', import.meta.url), path.join(realtime, 'http-options.js'))
     copyFileSync(new URL('../subscription-stream.js', import.meta.url), path.join(realtime, 'subscription-stream.js'))
+    copyFileSync(
+      new URL('../subscription-response-socket.js', import.meta.url),
+      path.join(realtime, 'subscription-response-socket.js'),
+    )
     copyFileSync(new URL('../web-search.js', import.meta.url), path.join(realtime, 'web-search.js'))
     modulePackage('text', { './decoder': './decoder.js' }, { 'decoder.js': 'export default TextDecoder' })
     modulePackage('time', './index.js', {
@@ -66,7 +73,12 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
     )
     globalThis.__httpWorkerDeadline = state
     globalThis.self = { postMessage: (message) => state.replies.push(message) }
-    globalThis.device = { network: { https: { client: { io: class {}, socket: { TCP: { io: class {} } } } } } }
+    class TLS {
+      read() {
+        return state.prefix.shift()
+      }
+    }
+    globalThis.device = { network: { https: { client: { io: class {}, socket: { io: TLS, TCP: { io: class {} } } } } } }
     const worker = path.join(directory, 'http-worker.js')
     // Copy only to give the real modules an isolated platform-resolution root;
     // the Worker and queue execute unchanged, with no source-text assertions.
@@ -90,7 +102,51 @@ test('the actual HTTP Worker drops a request that expires while waiting behind a
     )
     assert.deepEqual(state.replies.at(-1), { idle: 2 }, 'expired work also reaches a releasable idle state')
     assert.equal(state.executed[0].timeoutMs, 1000, 'the first request retains its available deadline')
+    ArrayBuffer.fromString = (text) => new TextEncoder().encode(text).buffer
+    let closed = 0
+    device.network.wss = {
+      dns: { io: class {} },
+      socket: {},
+      io: class {
+        constructor(options) {
+          const socket = new options.socket.io({})
+          socket.format = 'number'
+          for (let index = 0; index < 13; index++) socket.read()
+          queueMicrotask(() => options.onError())
+        }
+        close() {
+          closed++
+        }
+      },
+    }
+    for (const [id, status] of [
+      [3, 401],
+      [4, 403],
+    ]) {
+      state.prefix = [...`HTTP/1.1 ${status} Rejected\r\n`].map((c) => c.charCodeAt(0))
+      await self.onmessage({
+        id,
+        started: state.ticks,
+        request: {
+          host: 'fixture',
+          port: 443,
+          path: '/responses',
+          timeoutMs: 1000,
+          responseFormat: 'subscription-response',
+          headers: [],
+          body: ArrayBuffer.fromString('{}'),
+        },
+      })
+      const reply = state.replies.find((reply) => reply.id === id)
+      assert.equal(reply.status, status, 'the real worker preserves the rejected upgrade status')
+      assert.equal(reply.phase, 'upgrade')
+      assert.equal(state.replies.at(-1).idle, id)
+    }
+    assert.equal(closed, 2)
+    assert.equal(state.executed.length, 1, 'subscription failures never fall back to API HTTPS')
   } finally {
+    if (originalEncode) Object.defineProperty(ArrayBuffer, 'fromString', originalEncode)
+    else delete ArrayBuffer.fromString
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor)
       else delete globalThis[name]

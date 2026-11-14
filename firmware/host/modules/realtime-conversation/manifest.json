@@ -17,7 +17,8 @@
     "realtimeConversation/http-core": "./http-core",
     "realtimeConversation/http-worker": "./http-worker",
     "realtimeConversation/http-queue": "./http-queue",
-    "realtimeConversation/subscription": "./subscription"
+    "realtimeConversation/subscription": "./subscription",
+    "realtimeConversation/subscription-response-socket": "./subscription-response-socket"
   },
   "platforms": {
     "...": {

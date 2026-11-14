@@ -25,7 +25,8 @@ export function httpFailureMetadata(error) {
         ? 'subscription_event_json'
         : 'https_local',
   }
-  if (['connect', 'write', 'sent', 'headers', 'read', 'finish'].includes(error?.phase)) metadata.phase = error.phase
+  if (['connect', 'upgrade', 'write', 'sent', 'headers', 'read', 'finish'].includes(error?.phase))
+    metadata.phase = error.phase
   for (const name of ['written', 'expected'])
     if (Number.isInteger(error?.[name]) && error[name] >= 0 && error[name] <= 131072) metadata[name] = error[name]
   if (Number.isInteger(error?.status) && error.status >= 100 && error.status <= 599) metadata.status = error.status

@@ -25,7 +25,7 @@ const result = await conversation.close()
 
 公開型は`realtimeConversation.d.ts`。`apiKey`と`signaling`は排他的に指定する。認証・短期トークンの取得・エージェント設定・具体的なツール・履歴保存の方針は利用側で実装する。プロンプト、委譲先モデル、検索ツールは呼び出し側が指定し、hostでは追加しない。`tools`を直接登録する場合はResponses用の`delegation`設定も渡す。
 
-HTTPS POST uses the standard Moddable ECMA-419 HTTPS client in a dedicated Worker, with direct messages from the caller VM. It retains the eight-request limit, deadline including queue time, 128 KiB response limit, certificate verification, and redirect prohibition. The SDK manages TLS session caching; custom-CA requests clear the cache before and after use to isolate trust settings. The Worker is created on the first valid request, with priority 3 and a 6 KiB native stack. It is retired after pending callers and its actual request queue drain, then recreated on demand. Caller timeout alone does not terminate ongoing TLS cleanup. An asynchronous hangup can finish after conversation closure. Merely importing or constructing a conversation starts no HTTPS Worker or native transport.
+HTTPS POST uses the standard Moddable ECMA-419 HTTPS client in a dedicated Worker, with direct messages from the caller VM. It retains the eight-request limit, deadline including queue time, 128 KiB response limit, certificate verification, and redirect prohibition. The SDK manages TLS session caching; custom-CA requests clear the cache before and after use to isolate trust settings. The Worker is created on the first valid request, with priority 7 and a 6 KiB native stack. It is retired after pending callers and its actual request queue drain, then recreated on demand. Caller timeout alone does not terminate ongoing TLS cleanup. An asynchronous hangup can finish after conversation closure. Merely importing or constructing a conversation starts no HTTPS Worker or native transport.
 
 A MOD opts in by calling `connect()`; no extra host profile or eager allocation flag is required. Use its optional `onClose` hook to await the same session shutdown used by the stop action. The host runs this hook before closing its audio runtime, including cleanup after `onContextCreated` fails. The Live example delegates it to `LiveSession.stop()`. MOD replacement still restarts the host; this hook does not add hot unloading. Keep shared codec registrations and USB resources under their existing owners. Linked static data and the compiled ESP-IDF heap policy remain even when a MOD never connects; see [memory acceptance](../../../../docs/operations/cores3-webrtc-acceptance.md).
 
@@ -48,7 +48,7 @@ The integrated R5 MOD also selects an internal ChatGPT subscription adapter from
 its saved `openailive.auth` preference. The public API-key/signaling interface
 above is unchanged. Subscription bootstrap consumes raw SDP and a call ID;
 normal control uses the existing native WebRTC data channel. The authenticated
-WSS adapter remains isolated for diagnostic comparisons. An actual session ID, if supplied,
+Realtime WSS control adapter remains isolated for diagnostic comparisons. An actual session ID, if supplied,
 is kept separately. Native media events do not duplicate control messages.
 Only final `turn.done` transcripts enter the MOD's bounded history; optional transcript
 deltas do not repeat that history. Local capture stays muted until control
@@ -78,3 +78,15 @@ named API feeds such as weather, sports and finance; feeds keep their provider
 names without fabricated links. Streamed/final source updates merge without
 duplicating answer text. Missing evidence fails only that lookup; a later user
 request can still invoke tools. Source entries remain capped at six.
+
+Subscription tool requests use Codex Responses WebSocket `response.create` in the
+same on-demand HTTPS worker and existing TLS/WSS stack. Authorization and call
+setup still use HTTPS. The WebSocket transport directly feeds the existing
+bounded event reducer; it does not re-encode events as SSE or run another VM.
+The connection/upgrade budget is 45 seconds, followed by a five-minute body
+inactivity limit that renews on data, including with USB diagnostics Off. There
+is no total stream deadline, automatic replay or switch to API credentials.
+Close/cancellation releases the socket before acknowledging worker idle. Failed
+upgrades retain their HTTP status; premature closes retain only the numeric
+WebSocket code. The protocol follows the
+[official Codex Responses client](https://github.com/openai/codex/blob/81b995a6c9a4c978f399775cfa5ce50702368749/codex-rs/codex-api/src/endpoint/responses_websocket.rs).

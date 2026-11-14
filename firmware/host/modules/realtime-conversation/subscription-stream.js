@@ -19,7 +19,8 @@ export function subscriptionErrorMetadata(text) {
   }
 }
 
-// Subscription Responses SSE is reduced in the existing HTTP worker before IPC.
+// Reduce Responses events in the existing worker before IPC.
+// SSE and WebSocket frames share answer, completion and source validation.
 export function createSubscriptionStream(decode, encode, observe = false) {
   let pending = '',
     carry = new Uint8Array(),
@@ -116,7 +117,9 @@ export function createSubscriptionStream(decode, encode, observe = false) {
       .map((line) => line.slice(5).trimStart())
       .join('\n')
     if (!data || data === '[DONE]') return
-    const value = JSON.parse(data)
+    accept(JSON.parse(data))
+  }
+  function accept(value) {
     if (observe) {
       const type = typeof value.type === 'string' ? value.type : ''
       sseEvents++
@@ -175,6 +178,9 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     }
   }
   return {
+    event(value) {
+      if (!terminal) accept(value)
+    },
     get observation() {
       return observe
         ? { sseEvents, sseEvent, sseItem, streamPending: pending.length, streamAnswerBytes: answerBytes }

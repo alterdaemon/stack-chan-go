@@ -17,7 +17,7 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 - **ChatGPT support:** Choose an OpenAI API key or a ChatGPT subscription in the same Settings form. Share one System prompt across both, while keeping separate voice and reasoning settings. Fix ignored instructions and searches that continued after cancellation.
 - **Stay signed in securely:** Keep your ChatGPT account signed in after restarts with encrypted storage. Read the [permanent-key setup notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup), set up Security, then sign in through Wi-Fi Settings.
-- **Clearer search and troubleshooting:** Fix weather and other tool answers being rejected. Allow longer tool responses while they keep progressing. Finish failed lookups cleanly so the conversation can accept another request. Check the installed firmware version at startup and in Settings; improved USB tools help investigate connection and search problems.
+- **Clearer search and troubleshooting:** Fix weather and other tool answers being rejected, and tool requests getting stuck partway through. Allow longer tool responses while they keep progressing. Finish failed lookups cleanly so the conversation can accept another request. Check the installed firmware version at startup and in Settings; improved USB tools help investigate connection and search problems.
 
 ### 2.1.0-R4
 
