@@ -152,9 +152,8 @@ Integrate the GPT-Live MOD into CoreS3 firmware and its drawer. Read AI token, c
 
 `main` contains current fork work. `v2.1.0-mod` follows the current series;
 `v2.0.1-mod` preserves the historical R15 line. Only the latest release tag per
-series is kept locally: `v2.0.1-r15` and `v2.1.0-R4`. Earlier tag references are
-archived privately; their commits remain in history. Documentation commits do
-not move release tags.
+series is kept locally. Earlier tag references are archived privately; their
+commits remain in history. Documentation commits do not move release tags.
 
 | Upstream base | Fork branch | Comparison |
 | --- | --- | --- |

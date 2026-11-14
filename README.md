@@ -12,8 +12,8 @@ originally created by Shinya Ishikawa and the Stack-chan community.
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
 
-Current source firmware: **2.1.0-R5**, for **M5StackChan CoreS3**.
-The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
+Firmware: **2.1.0-R5**, for **M5StackChan CoreS3**.
+Release downloads: **[2.1.0-R5](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5)**.
 Preconfigured application-only and full BINs are available in that release.
 
 </td>
@@ -42,8 +42,8 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 | Version at a glance | Check the full firmware version at startup and beside the Wi-Fi address in Settings. |
 | USB troubleshooting | Connection logs and temporary voice tests help investigate problems without reinstalling firmware for every test. |
 
-See the [R5 changes](CHANGELOG-MOD.md#210-r5) for the local candidate and the
-[published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
+See the [R5 changelog](CHANGELOG-MOD.md#210-r5) and
+[R5 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5) for details and comparison links.
 
 Connect the robot to Wi-Fi, then choose **OpenAI (API key)** or
 **ChatGPT subscription** in Settings. Enter your API key or follow the

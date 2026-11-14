@@ -3,8 +3,8 @@
 [Repository](https://github.com/alterdaemon/stack-chan-go) ·
 [Changelog](../../CHANGELOG-MOD.md)
 
-Current source firmware: **2.1.0-R5**. Standard hardware: M5StackChan CoreS3.
-The published stable release is **[2.1.0-R4](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4)**.
+Firmware: **2.1.0-R5**. Standard hardware: M5StackChan CoreS3.
+Release downloads: **[2.1.0-R5](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
 optimize performance, and keep the fork up to date and in sync with upstream.
@@ -26,8 +26,8 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 | Version at a glance | Check the full firmware version at startup and beside the Wi-Fi address in Settings. |
 | USB troubleshooting | Connection logs and temporary voice tests help investigate problems without reinstalling firmware for every test. |
 
-See the [R5 changes](../../CHANGELOG-MOD.md#210-r5) for the local candidate and the
-[published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
+See the [R5 changelog](../../CHANGELOG-MOD.md#210-r5) and
+[R5 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5) for details and comparison links.
 
 Upstream is
 [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan).
@@ -35,20 +35,20 @@ Upstream is
 
 ## Install or update
 
-Download the preconfigured BINs from the published [R4 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4).
-R5 is a local source candidate. Use a USB data cable and install [esptool](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
+Download the preconfigured BINs from the [R5 release](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5).
+Use a USB data cable and install [esptool](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/installation.html).
 
 **Application update:** preserves settings, MODs and storage on the
 [supported 16 MiB layout](../../firmware/host/app/gpt-live-layout.json). Back up your data before flashing.
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R4-app.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x10000 StackChan-Community-v2.1.0-R5-app.bin
 ```
 
 **Full installation:** resets settings, MODs and storage.
 
 ```sh
-esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R4.bin
+esptool --chip esp32s3 --no-stub -p /dev/ttyACM0 -b 115200 write_flash -z 0x0 StackChan-Community-v2.1.0-R5.bin
 ```
 
 Replace the port with Linux `/dev/ttyACM0` or `/dev/ttyUSB0`, Windows `COM3`, or
@@ -201,9 +201,29 @@ transcripts and raw audio. Lost records make the affected sequence inconclusive.
 Temporary trials stay in RAM and preserve saved settings; Off, disconnect, lease
 expiry or reboot discards them. The tool does not flash or reset the robot.
 
-For temporary controls, add `--interactive` and use that same capture process.
-See the [capture tool](../../firmware/scripts/mod/capture-debug.py) and
-[qualification tool](../../firmware/scripts/mod/qualify-live.py) `--help` for advanced use.
+For a temporary speaker-volume trial, start an interactive capture:
+
+```sh
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --interactive --duration 1800 --output internal/work/debug-trial.jsonl
+```
+
+Enter these commands one at a time in that process:
+
+```text
+diag status
+diag set speaker 0.5
+diag reset
+diag off
+```
+
+Speaker trim accepts 0–1 and multiplies the saved volume. After `diag set` or
+`diag reset`, wait for the matching `set` record with `phase: applied` before
+continuing; `pending` is not completion. If it reports `failed`, stop the trial.
+Reset restores the normal defaults; Off discards trials and ends capture.
+Use the same process throughout, without opening a second serial connection.
+
+See the [qualification tool](../../firmware/scripts/mod/qualify-live.py) `--help`
+for automated connection and audio checks.
 
 ## Branches and tags
 
