@@ -15,16 +15,16 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 
 | Area | What you get |
 | --- | --- |
-| ChatGPT subscription | Choose ChatGPT or OpenAI API-key voice chat in the same Settings selector. Sign in through the robot's Wi-Fi page, with shared System prompt and OpenAI controls, independent subscription voices and reasoning settings, and no automatic fallback. |
-| Protected authentication storage | Encrypted, device-bound ChatGPT sign-in survives restarts. Separate Security settings provide confirmed one-time BLOCK_KEY5 setup, or reuse an existing protected key. See the [key-slot notice](#secure-storage-key-setup). Existing API-key storage is unchanged. |
-| USB diagnostics and testing | Reusable USB tools identify the running firmware, trace connection/search failures and run temporary voice tests without repeated installations. Diagnostics start Off; test settings stay in RAM and preserve saved preferences. |
-| Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
-| Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
-| Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
-| Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
-| Personal settings | Password-protected Wi-Fi Settings and Bluetooth, with conversation instructions, model and thinking effort, voice, pitch, speaking style and interruption controls. |
-| Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
-| Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
+| ChatGPT support | Chat with an OpenAI API key or a ChatGPT subscription. Choose your connection in Settings and start with LIVE. |
+| Stay signed in securely | Keep your ChatGPT account signed in after restarts, with encrypted storage and built-in setup under Security. |
+| Voice and personality | Set its personality with the System prompt, choose a voice, and adjust pitch and speaking style. Wi-Fi and Bluetooth settings are available. |
+| Web search and tools | Ask for current information, including weather, sports and finance. Cancel an unfinished lookup and ask a new question. |
+| Interruption and resume | Choose whether speaking interrupts replies. Resume a Live conversation after an idle pause, with recent context. |
+| Lights and movement | Lights show when the robot is listening, working or speaking. Small head movements accompany longer replies. |
+| Easy installation and updates | Prepared BIN downloads support a fresh installation or an app update that keeps settings, MODs and stored data on a supported installation. |
+| Everyday fixes | Fixes cover interrupted chat, screen and touch handling during conversation, and reopening the camera for another photo. |
+| Version at a glance | Check the full firmware version at startup and beside the Wi-Fi address in Settings. |
+| USB troubleshooting | Connection logs and temporary voice tests help investigate problems without reinstalling firmware for every test. |
 
 See the [R5 changes](../../CHANGELOG-MOD.md#210-r5) for the local candidate and the
 [published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.

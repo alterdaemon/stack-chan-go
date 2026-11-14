@@ -15,11 +15,23 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 ### 2.1.0-R5
 
+- **ChatGPT support:** Choose an OpenAI API key or a ChatGPT subscription in the same Settings form. Share one System prompt across both, while keeping separate voice and reasoning settings. Fix ignored instructions and searches that continued after cancellation.
+- **Stay signed in securely:** Keep your ChatGPT account signed in after restarts, with encrypted storage on the robot. Set it up in the separate Security section, then sign in from the robot's Wi-Fi Settings.
+- **Clearer search and troubleshooting:** Fix weather and other tool answers being rejected. Report a failed lookup without claiming that all tools are unavailable. Check the installed firmware version at startup and in Settings; improved USB tools help investigate connection and search problems.
+
+#### Technical details
+
 Release impact: minor.
 
-- **ChatGPT subscription voice:** Choose ChatGPT alongside OpenAI API-key mode and sign in through the robot's Wi-Fi Settings. Use the shared System prompt and OpenAI controls, with independent subscription voices, reasoning model and thinking effort. Fix subscription prompt priority and cancellation of pending search/tools; neither connection automatically falls back to the other.
-- **Protected sign-in storage:** Retain ChatGPT authentication across restarts in an encrypted record tied to a protected hardware key. A separate Security section provides confirmed one-time BLOCK_KEY5 setup or reuses an existing compatible key; ChatGPT only checks readiness. The permanent slot-use notice appears before confirmation. Installation and ordinary Save never program keys; existing API-key storage is unchanged. See the [key-slot setup notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup).
-- **Clearer identity and USB troubleshooting:** Show GO and the full firmware version on startup and the version beside the Settings Wi-Fi address. Extend reusable USB tools with connection/search diagnostics, temporary voice tests and running-build identification. Diagnostics start Off, preserve saved settings and honor configured volume instead of imposing a low-volume test cap.
+First-time secure-storage setup requires confirmation before permanently using
+**BLOCK_KEY5**, or reuses an existing compatible protected key. Installation and
+ordinary Save do not program hardware keys. Existing API-key storage remains
+unchanged and unencrypted. Read the [key-slot notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup)
+before setup.
+
+USB diagnostics start Off. Test adjustments are temporary, preserve saved settings
+and honor the configured volume. API-key and subscription connections retain
+separate credentials and settings; failures never switch to the other connection.
 
 ### 2.1.0-R4
 
