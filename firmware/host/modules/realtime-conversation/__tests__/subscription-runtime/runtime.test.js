@@ -549,7 +549,10 @@ assert(!new SubscriptionAuth(options).status().signedIn, 'logout survives restar
 // Exercise the real core/adapter boundary in XS, with no network or native peer.
 let nativeReceive,
   nativeClosed = 0,
-  sidebands = 0
+  sidebands = 0,
+  holdBackend = false,
+  pendingNative,
+  nativeCancelled = 0
 const nativeSent = [],
   requests = [],
   controlTimers = new Set()
@@ -595,9 +598,9 @@ const conversation = new Conversation(
           sidebands++
           throw new Error('Unexpected active WSS')
         },
-        fetch: async (url) => {
+        fetch: (url) => {
           requests.push(url)
-          return {
+          const response = {
             ok: true,
             status: 201,
             headers: { location: '/v1/live/rtc_native' },
@@ -606,6 +609,12 @@ const conversation = new Conversation(
                 ? 'v=0 answer'
                 : JSON.stringify({ answer: 'Four.', searched: false, sources: [] }),
           }
+          if (holdBackend && !url.includes('/realtime/calls')) {
+            const pending = new Promise((resolve) => (pendingNative = () => resolve(response)))
+            pending.cancel = () => nativeCancelled++
+            return pending
+          }
+          return Promise.resolve(response)
         },
       })
     },
@@ -638,6 +647,27 @@ nativeEvent({
 await new Promise((resolve) => Timer.set(resolve, 10))
 assert(nativeSent.some((event) => event.channel === 'speakable'))
 equal(requests.length, 2)
+holdBackend = true
+nativeEvent({ type: 'input_transcript.added', item: { text: 'Old', start_ms: 0, end_ms: 200 } })
+nativeEvent({ type: 'turn.created', turn: { role: 'user' } })
+const nativeDelegation = (id) =>
+  nativeEvent({
+    type: 'delegation.created',
+    item: { type: 'delegation', target: 'client', id, content: [{ type: 'input_text', text: 'Question?' }] },
+  })
+nativeDelegation('native-cancel')
+await new Promise((resolve) => Timer.set(resolve, 10))
+const sentBeforeCutIn = nativeSent.length
+nativeEvent({ type: 'input_transcript.added', item: { text: 'New', start_ms: 400, end_ms: 600 } })
+nativeEvent({ type: 'turn.created', turn: { role: 'user' } })
+equal(nativeCancelled, 1, 'native user turn cancels the old backend through the real core')
+pendingNative()
+await new Promise((resolve) => Timer.set(resolve, 10))
+equal(nativeSent.length, sentBeforeCutIn, 'a late cancelled answer cannot enter playback')
+holdBackend = false
+nativeDelegation('native-fresh')
+await new Promise((resolve) => Timer.set(resolve, 10))
+assert(nativeSent.length > sentBeforeCutIn, 'a fresh delegated answer works in the same call')
 equal((await conversation.close()).finalized, true)
 equal(nativeClosed, 1)
 equal(controlTimers.size, 0)

@@ -861,6 +861,80 @@ test('subscription uses its own bootstrap and backend, deduplicates jobs, drops 
   f.live.dispose()
   assert.equal(f.closes, 1)
 })
+test('a native Codex user turn cancels obsolete delegation without requiring an audio-clear event', async () => {
+  const f = liveFixture()
+  f.live.control = { send: (event) => f.sent.push(event), close() {} }
+  await f.live.create(
+    'v=0',
+    {},
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  const receive = (message) => f.live.receiveControl(message)
+  const input = (start_ms, end_ms) =>
+    receive({ type: 'input_transcript.added', item: { text: 'Synthetic input', start_ms, end_ms } })
+  const turn = { type: 'turn.created', turn: { role: 'user' } }
+  const delegate = (id) =>
+    receive({
+      type: 'delegation.created',
+      item: { type: 'delegation', target: 'client', id, content: [{ type: 'input_text', text: 'Question?' }] },
+    })
+  input(0, 200)
+  receive(turn)
+  delegate('first')
+  await tick()
+  receive(turn)
+  input(0, 200)
+  receive(turn)
+  input(-1, 400)
+  input(500, 400)
+  input(200, Infinity)
+  receive(turn)
+  assert.equal(f.cancels, 0, 'old boundaries and invalid input cannot cancel current work')
+  input(400, 600)
+  receive({ type: 'turn.created', turn: { role: 'assistant' } })
+  assert.equal(f.cancels, 0, 'transcript fragments and assistant turns are not cut-ins')
+  receive(turn)
+  receive(turn)
+  assert.equal(f.cancels, 1)
+  f.finish({ answer: 'Obsolete answer', searched: false, sources: [] })
+  await tick()
+  assert.equal(f.sent.length, 0, 'the cancelled answer cannot be forwarded')
+  delegate('second')
+  await tick()
+  input(0, 200)
+  receive(turn)
+  assert.equal(f.cancels, 1, 'old input cannot cancel a later request')
+  f.finish({ answer: 'Current answer', searched: false, sources: [] })
+  await tick()
+  assert.ok(f.sent.some((event) => event.channel === 'speakable'))
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 2)
+  f.live.dispose()
+})
+test('a Codex cut-in during renewal prevents the obsolete delegation from starting HTTP', async () => {
+  const f = liveFixture()
+  await f.live.create(
+    'v=0',
+    {},
+    () => {},
+    () => true,
+  )
+  f.live.activate()
+  let grant
+  f.live.auth.credentials = () => new Promise((resolve) => (grant = resolve))
+  f.receive({
+    type: 'delegation.created',
+    item: { type: 'delegation', target: 'client', id: 'renewing', content: [{ type: 'input_text', text: 'Old?' }] },
+  })
+  f.receive({ type: 'input_transcript.added', item: { text: 'New', start_ms: 100, end_ms: 200 } })
+  f.receive({ type: 'turn.created', turn: { role: 'user' } })
+  grant({ accessToken: 'subscription-only', accountId: 'account' })
+  await tick()
+  assert.equal(f.requests.length, 1, 'only bootstrap may have run')
+  assert.equal(f.sent.length, 0)
+  f.live.dispose()
+})
 test('late bootstrap closes the orphan call without accepting SDP', async () => {
   const f = liveFixture()
   await assert.rejects(

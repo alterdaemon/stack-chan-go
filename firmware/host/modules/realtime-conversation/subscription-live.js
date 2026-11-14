@@ -168,6 +168,7 @@ export class SubscriptionLive {
   #onMessage
   #outputId
   #cleared = false
+  #inputEndMs = -1
   #context = []
   #probes
 
@@ -350,6 +351,27 @@ export class SubscriptionLive {
       if (this.#seen.length > 16) this.#seen.shift()
     }
     if (message.type === 'session.started') this.#ready = true
+    if (message.type === 'input_transcript.added') {
+      const item = message.item
+      if (
+        typeof item?.text === 'string' &&
+        item.text.trim() &&
+        Number.isFinite(item.start_ms) &&
+        Number.isFinite(item.end_ms) &&
+        item.start_ms >= 0 &&
+        item.end_ms >= item.start_ms
+      )
+        this.#inputEndMs = Math.max(this.#inputEndMs, item.end_ms)
+    }
+    // Native Codex cut-ins begin a user turn without a Realtime clear event.
+    // Require newer input so a delayed/duplicate boundary cannot cancel a job.
+    if (
+      message.type === 'turn.created' &&
+      message.turn?.role === 'user' &&
+      this.#job &&
+      this.#inputEndMs > this.#job.inputEndMs
+    )
+      this.cancelJob()
     if (message.type === 'turn.done' && typeof message.turn?.transcript === 'string') {
       this.#remember(message.turn.role, message.turn.transcript)
       this.#probes?.output(message.turn)
@@ -414,7 +436,7 @@ export class SubscriptionLive {
 
   async #delegate(delegationId, text, probe = false) {
     const minimal = probe === 'minimal' || probe === 'minimal-isolated'
-    const job = { id: delegationId, diagnostic: Boolean(probe) }
+    const job = { id: delegationId, diagnostic: Boolean(probe), inputEndMs: this.#inputEndMs }
     this.#job = job
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
