@@ -7,7 +7,8 @@ Firmware: **2.1.0-R5**. Standard hardware: M5StackChan CoreS3.
 Release downloads: **[2.1.0-R5](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5)**.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
-optimize performance, and keep the fork up to date and in sync with upstream.
+add practical and useful features, optimize performance, and keep the fork up to
+date and in sync with upstream.
 
 ## What this fork adds
 

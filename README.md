@@ -1,4 +1,4 @@
-# stack-chan-go (community-mod)
+# stack-chan-go (community-fork)
 
 [![Firmware build](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/alterdaemon/stack-chan-go/actions/workflows/bundle.yml?query=branch%3Amain%20event%3Aworkflow_dispatch)
 
@@ -10,11 +10,27 @@ A fork of [stack-chan/stack-chan](https://github.com/stack-chan/stack-chan),
 originally created by Shinya Ishikawa and the Stack-chan community.
 
 The goal is to provide simple, preconfigured firmware images for a quick start,
-optimize performance, and keep the fork up to date and in sync with upstream.
+add practical and useful features, optimize performance, and keep the fork up to
+date and in sync with upstream.
 
 Firmware: **2.1.0-R5**, for **M5StackChan CoreS3**.
 Release downloads: **[2.1.0-R5](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R5)**.
 Preconfigured application-only and full BINs are available in that release.
+
+**Why a fork instead of a MOD?**
+
+Better voice performance, secure sign-in and integrated Settings require
+changes to the firmware itself. A standalone MOD would still need those
+firmware changes. This fork delivers them together in one ready-to-install
+image.
+
+- **Kept in sync with upstream:** we will continue merging upstream updates
+  and fixes.
+- **Standard MODs remain supported:** you can continue installing and
+  running MODs using the regular MOD system.
+- **Quick roadmap:** parity with official firmware, including wake word,
+  Home Assistant, reminders, remote camera and power management, plus
+  integrations with hardware components.
 
 </td>
 <td width="35%" valign="top">
