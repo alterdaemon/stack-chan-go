@@ -103,6 +103,7 @@ export function requestHttps(request, platform, setCancel = () => {}, progress) 
         certificate: request.certificate,
         drainTLS: request.responseFormat === 'subscription-response',
         statistics,
+        onObservation: statistics ? () => progress?.({ phase, status, received, ...statistics }) : undefined,
         onError(error) {
           finish(transportFailure('HTTPS connection failed', error))
         },
@@ -357,7 +358,15 @@ export function drainTLSSocket(Socket, schedule, cancel, onDrain = () => {}) {
             state.statistics.tlsReceived = (state.statistics.tlsReceived ?? 0) + count
             state.statistics.tlsBuffered = count
           }
-          return options.onReadable?.call(this, count)
+          const result = options.onReadable?.call(this, count)
+          // Keep the first decoded HTTP boundary even if a later native
+          // failure prevents the worker's final idle observation. One event,
+          // no sampling timer, and no header/body values cross the boundary.
+          if (!state.observed && state.statistics?.tlsRead > 0) {
+            state.observed = true
+            options.diagnosticObservation?.()
+          }
+          return result
         },
       })
       this.#state = state

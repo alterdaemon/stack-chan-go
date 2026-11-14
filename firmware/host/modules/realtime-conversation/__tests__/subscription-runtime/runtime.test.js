@@ -364,8 +364,14 @@ async function verifyTerminalAndTLS() {
     (timer) => Timer.clear(timer),
   )
   const tlsStatistics = {}
+  let observations = 0
   let drainingTLS = new DrainingTLS({
     diagnosticStatistics: tlsStatistics,
+    diagnosticObservation() {
+      observations++
+      equal(tlsStatistics.tlsRead, 1)
+      equal(tlsStatistics.tlsBuffered, 0)
+    },
     TCP: { io: RawTLS },
     onReadable() {
       equal(this, drainingTLS)
@@ -380,6 +386,9 @@ async function verifyTerminalAndTLS() {
   equal(tlsStatistics.tlsReceived, 1)
   equal(tlsStatistics.tlsRead, 1)
   equal(tlsStatistics.tlsBuffered, 0)
+  equal(observations, 1, 'first decoded boundary is retained without a polling timer')
+  rawTLS.options.onReadable.call(rawTLS, 1)
+  equal(observations, 1, 'later records do not duplicate the first-boundary observation')
   drainingTLS.close()
   tlsReads = tlsDelivered = 0
   drainingTLS = new DrainingTLS({

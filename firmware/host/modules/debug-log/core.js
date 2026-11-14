@@ -68,6 +68,14 @@ const NUMBER_FIELDS = new Set([
   'panicPC',
   'panicCore',
   'panicException',
+  'panicCaller0',
+  'panicCaller1',
+  'panicCaller2',
+  'panicCaller3',
+  'panicCaller4',
+  'panicCaller5',
+  'panicCaller6',
+  'panicCaller7',
   'nativeDropped',
   'speaker',
   'captureDb',
@@ -422,6 +430,12 @@ export class DebugRecorder {
     const values = safeFields(fields ?? this.platform.info())
     if (values.panicPC !== undefined) {
       const { panicPC, panicCore, panicException } = values
+      const callers = {}
+      for (let i = 0; i < 8; i++) {
+        const name = `panicCaller${i}`
+        if (values[name] !== undefined) callers[name] = values[name]
+        delete values[name]
+      }
       this.#enqueue(
         {
           ...this.platform.stamp(),
@@ -433,6 +447,7 @@ export class DebugRecorder {
           panicPC,
           panicCore,
           panicException,
+          ...callers,
         },
         true,
       )

@@ -48,7 +48,17 @@ test('panic diagnostics export only image-bound code addresses and always forwar
       'esp_attr.h': '#define RTC_NOINIT_ATTR\n#define IRAM_ATTR\n',
       'esp_system.h':
         '#include <stdint.h>\n#include <stdbool.h>\n#define ESP_RST_PANIC 4\nstatic int testReset;\nstatic int esp_reset_reason(void) { return testReset; }\n',
-      'esp_private/panic_internal.h': 'typedef struct { int core, exception; void *addr; } panic_info_t;\n',
+      'esp_private/panic_internal.h':
+        'typedef struct { int core, exception; void *addr; const void *frame; } panic_info_t;\n',
+      'xtensa_context.h': 'typedef struct { uint32_t pc, a1, a0; } XtExcFrame;\n',
+      'esp_cpu_utils.h': 'static uint32_t esp_cpu_process_stack_pc(uint32_t pc) { return pc; }\n',
+      'esp_debug_helpers.h': `typedef struct { uint32_t pc, sp, next_pc; const void *exc_frame; } esp_backtrace_frame_t;
+        static bool esp_stack_ptr_is_sane(uint32_t sp) { return sp == 16; }
+        static bool esp_backtrace_get_next_frame(esp_backtrace_frame_t *frame) {
+            frame->pc = frame->next_pc;
+            frame->next_pc = 0;
+            return true;
+        }\n`,
       'soc/soc.h':
         '#define SOC_IROM_LOW 0x42000000u\n#define SOC_IROM_HIGH 0x44000000u\n#define SOC_IRAM_LOW 0x40370000u\n#define SOC_IRAM_HIGH 0x403e0000u\n',
     }

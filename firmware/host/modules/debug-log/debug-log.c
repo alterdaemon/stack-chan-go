@@ -109,10 +109,15 @@ void xs_device_debug_info(xsMachine *the) {
     xsmcSet(xsResult, xsID("dtlsRole"), xsVar(0));
     NUMBER("resetReason", esp_reset_reason());
     if (stackchanDebugPanicInfo) {
-        uint32_t panic[3];
+        uint32_t panic[11];
         stackchanDebugPanicInfo(app->app_elf_sha256, panic);
         if (panic[0]) {
             NUMBER("panicPC", panic[0]); NUMBER("panicCore", panic[1]); NUMBER("panicException", panic[2]);
+            const char *names[] = {"panicCaller0", "panicCaller1", "panicCaller2", "panicCaller3", "panicCaller4", "panicCaller5", "panicCaller6", "panicCaller7"};
+            for (unsigned i = 0; i < 8 && panic[i + 3]; i++) {
+                xsmcSetNumber(xsVar(0), panic[i + 3]);
+                xsmcSet(xsResult, xsID(names[i]), xsVar(0));
+            }
         }
     }
     portENTER_CRITICAL(&debugLock); unsigned lost = dropped; portEXIT_CRITICAL(&debugLock);

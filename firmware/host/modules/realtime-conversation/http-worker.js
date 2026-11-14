@@ -26,7 +26,7 @@ const platform = {
       (text) => ArrayBuffer.fromString(text),
       observe,
     ),
-  createClient: ({ certificate, drainTLS, statistics, ...options }) =>
+  createClient: ({ certificate, drainTLS, statistics, onObservation, ...options }) =>
     createClosingClient(device.network.https.client.io, {
       ...device.network.https.client,
       ...options,
@@ -34,6 +34,7 @@ const platform = {
         ...device.network.https.client.socket,
         io: drainTLS ? DrainingTLS : device.network.https.client.socket.io,
         diagnosticStatistics: statistics,
+        diagnosticObservation: onObservation,
         TCP: {
           ...device.network.https.client.socket.TCP,
           io: statistics ? guardSocketCallbacks(device.network.https.client.socket.TCP.io, statistics) : CheckedTCP,

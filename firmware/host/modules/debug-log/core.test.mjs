@@ -48,6 +48,7 @@ test('status retains bounded image-bound panic metadata without overflowing the 
       panicPC: 0x42012345,
       panicCore: 1,
       panicException: 4,
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`panicCaller${i}`, 0x42012345 + i])),
       trialConnection: 'api-live',
       trialModel: 'gpt-6.1-terra',
       trialEffort: 'medium',
@@ -82,6 +83,8 @@ test('status retains bounded image-bound panic metadata without overflowing the 
   assert.equal(recorder.dropped, 0)
   assert.equal(lines[0].event, 'panic')
   assert.equal(lines[0].panicPC, 0x42012345)
+  assert.equal(lines[0].panicCaller7, 0x42012345 + 7)
+  assert.equal(lines[1].panicCaller0, undefined)
   assert.equal(lines[1].action, 'status')
   assert.equal(lines[1].trialConnection, 'api-live')
 })
