@@ -32,6 +32,7 @@ import {
   type PreferenceKey,
 } from '@/features/preferences/preference-model'
 import { SubscriptionAuth } from '@/features/preferences/subscription-auth'
+import { SecureStorage } from '@/features/preferences/secure-storage'
 import { usePreferences } from '@/features/preferences/use-preferences'
 
 type FieldProps = Omit<ComponentProps<'input'>, 'id' | 'name' | 'value' | 'disabled' | 'onChange'> & {
@@ -44,6 +45,7 @@ export function PreferencesPage() {
   const { t } = useI18n()
   const preferences = usePreferences()
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [storageRevision, setStorageRevision] = useState(0)
   const subscription = preferences.subscriptionAvailable && preferences.values['openailive.auth'] === 'chatgpt'
   const realtime = !subscription && ['realtime', 'realtime-full'].includes(preferences.values['openailive.mode'])
   const isDisabled = (name: PreferenceKey) =>
@@ -278,7 +280,10 @@ export function PreferencesPage() {
                 )}
               {subscription ? (
                 preferences.http ? (
-                  <SubscriptionAuth disabled={!preferences.connected || preferences.busy} />
+                  <SubscriptionAuth
+                    disabled={!preferences.connected || preferences.busy}
+                    storageRevision={storageRevision}
+                  />
                 ) : (
                   <p className="text-sm sm:col-span-2">
                     Open the robot’s Wi-Fi Settings page to sign in to ChatGPT or sign out.
@@ -429,6 +434,15 @@ export function PreferencesPage() {
               </p>
             </>
           )}
+          {preferences.http &&
+            section(
+              'Security',
+              <SecureStorage
+                disabled={!preferences.connected || preferences.busy}
+                passwordRequired={preferences.readOnly.has('ai.context')}
+                onReady={() => setStorageRevision((value) => value + 1)}
+              />
+            )}
           <footer className="sticky bottom-0 z-10 flex justify-end border-t bg-background/95 py-3 backdrop-blur">
             <Button type="submit" disabled={!preferences.connected || preferences.busy}>
               <Save data-icon="inline-start" />

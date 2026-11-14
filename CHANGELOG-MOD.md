@@ -17,12 +17,9 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 Release impact: minor.
 
-- Add an experimental ChatGPT subscription choice and robot-owned Wi-Fi sign-in, sharing the existing System prompt, OpenAI settings and native WebRTC audio/control with no automatic API fallback.
-- Retain ChatGPT sign-in across restarts on robots with a provisioned protected key; show missing storage setup or deletion failures explicitly without changing device security fuses or existing API keys.
-
-- Show GO and the complete fork firmware version on the welcome screen, keeping MODs and Settings in their existing bottom positions.
-- Show the firmware version at the bottom right of the robot's startup Settings menu, beside its Wi-Fi address; keep the version visible while offline.
-- Report the running build's firmware version in USB diagnostics instead of a fixed R3 label.
+- **ChatGPT subscription voice:** Choose ChatGPT alongside OpenAI API-key mode and sign in through the robot's Wi-Fi Settings. Use the shared System prompt and OpenAI controls, with independent subscription voices, reasoning model and thinking effort. Fix subscription prompt priority and cancellation of pending search/tools; neither connection automatically falls back to the other.
+- **Protected sign-in storage:** Retain ChatGPT authentication across restarts in an encrypted record tied to a protected hardware key. A separate Security section provides confirmed one-time BLOCK_KEY5 setup or reuses an existing compatible key; ChatGPT only checks readiness. The permanent slot-use notice appears before confirmation. Installation and ordinary Save never program keys; existing API-key storage is unchanged. See the [key-slot setup notice](docs/stack-chan-go-fork/README.md#secure-storage-key-setup).
+- **Clearer identity and USB troubleshooting:** Show GO and the full firmware version on startup and the version beside the Settings Wi-Fi address. Extend reusable USB tools with connection/search diagnostics, temporary voice tests and running-build identification. Diagnostics start Off, preserve saved settings and honor configured volume instead of imposing a low-volume test cap.
 
 ### 2.1.0-R4
 
@@ -157,7 +154,7 @@ Integrate the GPT-Live MOD into CoreS3 firmware and its drawer. Read AI token, c
 
 `main` contains current fork work. `v2.1.0-mod` follows the current series;
 `v2.0.1-mod` preserves the historical R15 line. Only the latest release tag per
-series is kept locally: `v2.0.1-r15` and `v2.1.0-R3`. Earlier tag references are
+series is kept locally: `v2.0.1-r15` and `v2.1.0-R4`. Earlier tag references are
 archived privately; their commits remain in history. Documentation commits do
 not move release tags.
 

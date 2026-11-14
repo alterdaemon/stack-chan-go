@@ -9,6 +9,7 @@
 #include "nvs.h"
 #include "psa/crypto.h"
 #include "mbedtls/platform_util.h"
+#include "protected-key.h"
 
 #define STORE_LIMIT 4096
 #define HEADER_BYTES 5
@@ -21,14 +22,7 @@ static const uint8_t storeDomain[] = "stackchan-chatgpt-auth-v1";
 
 static int protectedKey(int selected)
 {
-	for (int index = 0; index < 6; index++) {
-		esp_efuse_block_t block = (esp_efuse_block_t)(EFUSE_BLK_KEY0 + index);
-		if ((selected >= 0) && (selected != index)) continue;
-		if ((esp_efuse_get_key_purpose(block) == ESP_EFUSE_KEY_PURPOSE_HMAC_UP) &&
-			esp_efuse_get_key_dis_read(block) && esp_efuse_get_key_dis_write(block) &&
-			esp_efuse_get_keypurpose_dis_write(block)) return index;
-	}
-	return -1;
+	return stackchanProtectedKey(selected);
 }
 
 static psa_status_t importKey(int index, psa_key_id_t *key)

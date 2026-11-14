@@ -4,6 +4,29 @@ import { SubscriptionAuth } from './subscription-auth'
 
 afterEach(() => vi.unstubAllGlobals())
 describe('robot-owned ChatGPT authentication', () => {
+  it('links to separate setup and refreshes readiness without authorizing automatically', async () => {
+    let ready = false
+    const fetch = vi.fn(async (_url: unknown, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({
+        state: ready ? 'signed-out' : 'storage-unavailable',
+        signedIn: false,
+        volatile: false,
+      }),
+    }))
+    vi.stubGlobal('fetch', fetch)
+    const view = render(<SubscriptionAuth storageRevision={0} />)
+    expect(await screen.findByRole('link', { name: 'Security → Secure storage' })).toHaveAttribute(
+      'href',
+      '#secure-storage'
+    )
+    expect(screen.getByRole('button', { name: 'Continue with ChatGPT' })).toBeDisabled()
+    ready = true
+    view.rerender(<SubscriptionAuth storageRevision={1} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue with ChatGPT' })).toBeEnabled())
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.mock.calls.every(([, init]) => !init?.method)).toBe(true)
+  })
   it.each([
     ['signed-out', 'Continue with ChatGPT', 'start'],
     ['expired', 'Continue with ChatGPT', 'start'],

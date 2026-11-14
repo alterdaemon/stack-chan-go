@@ -409,3 +409,17 @@ test('terminal acknowledgements release their command lane before accepting the 
     assert.ok(!f.lines.some((row) => row.action === 'command_pending'))
   }
 })
+
+test('tool source diagnostics retain counts without API labels, queries or answers', () => {
+  assert.deepEqual(
+    safeFields({
+      sourceUrls: 1,
+      sourceApis: 2,
+      name: 'private-feed',
+      query: 'private-query',
+      answer: 'private-answer',
+      sources: ['private'],
+    }),
+    { sourceUrls: 1, sourceApis: 2 },
+  )
+})

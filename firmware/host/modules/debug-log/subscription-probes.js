@@ -130,6 +130,8 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
         return
       }
       const prompts = {
+        weather:
+          'Check the current weather in London, United Kingdom, using hosted search and report the result and its source.',
         reasoning: 'Calculate 17 multiplied by 19. Give only the decimal integer.',
         search: 'Search the web for the official OpenAI status page. Report what it says and cite its URL.',
       }
@@ -138,7 +140,7 @@ export function createSubscriptionProbes({ send, delegate, diagnose, statistics 
       if (
         !result ||
         (value === 'reasoning' && !/\b323\b/.test(result.answer)) ||
-        (value === 'search' && result.searched !== true)
+        (['search', 'weather'].includes(value) && result.searched !== true)
       )
         throw Object.assign(new Error('Subscription probe failed'), { code: 'subscription_backend_error' })
     },

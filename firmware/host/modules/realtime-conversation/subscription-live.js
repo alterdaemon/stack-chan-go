@@ -537,6 +537,8 @@ export class SubscriptionLive {
         errorCode: result.error,
         providerCode: result.providerCode,
         param: result.param,
+        sourceUrls: result.sources?.filter((source) => typeof source.url === 'string').length ?? 0,
+        sourceApis: result.sources?.filter((source) => source.type === 'api').length ?? 0,
       }))
       if (result.error || typeof result.answer !== 'string' || result.answer.length > 3000)
         throw Object.assign(new Error('Subscription answer incomplete'), {
@@ -546,7 +548,8 @@ export class SubscriptionLive {
         })
       if (this.#job !== job || this.#closed) return
       const answer =
-        result.answer + (result.searched ? '\nSources: ' + result.sources.map((source) => source.url).join(' ') : '')
+        result.answer +
+        (result.searched ? '\nSources: ' + result.sources.map((source) => source.url ?? source.name).join(' ') : '')
       if (probe) return result
       for (const event of subscriptionAppends(answer, delegationId)) this.#channel.send(event)
     } catch (error) {
@@ -570,7 +573,10 @@ export class SubscriptionLive {
           content: [
             {
               type: 'input_text',
-              text: 'The backend request failed. Do not retry it automatically. Briefly report the failure using the configured assistant language and behavior.',
+              text:
+                error?.errorCode === 'search_missing_sources'
+                  ? 'This lookup returned no verifiable source. Report only that this lookup could not be verified. New user requests can still use the tools. Do not retry it automatically. Use the configured assistant language and behavior.'
+                  : 'The current backend request failed. New user requests can still use the tools. Do not retry it automatically. Briefly report this request failure using the configured assistant language and behavior.',
             },
           ],
         })

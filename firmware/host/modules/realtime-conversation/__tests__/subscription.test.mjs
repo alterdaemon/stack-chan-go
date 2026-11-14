@@ -189,6 +189,51 @@ test('authorization diagnostics identify storage, renewal and cached access with
     assert.ok(!serialized.includes(privateValue))
 })
 
+test('separate hardware setup refreshes missing storage without reboot or starting sign-in', async () => {
+  let ready = false,
+    reads = 0
+  const store = savedStore()
+  const read = store.read
+  store.available = () => ready
+  store.read = () => {
+    reads++
+    return read()
+  }
+  const f = authFixture(store)
+  assert.equal(f.auth.status().state, 'storage-unavailable')
+  assert.equal(reads, 0)
+  ready = true
+  assert.equal(f.auth.status().state, 'signed-out')
+  assert.equal(reads, 1)
+  assert.equal(f.requests.length, 0)
+  assert.deepEqual(store.events, [])
+  f.auth.status()
+  assert.equal(reads, 1, 'ready storage is loaded only once')
+  await f.auth.start()
+  await f.poll()
+  assert.equal(f.auth.status().signedIn, true)
+  const count = reads
+  const events = [...store.events]
+  f.auth.status()
+  assert.equal(reads, count)
+  assert.deepEqual(store.events, events, 'a signed-in owner is not reset by readiness checks')
+})
+
+test('readiness refresh does not bypass a corrupt stored record', () => {
+  let ready = false
+  const f = authFixture({
+    available: () => ready,
+    read() {
+      throw new Error('corrupt')
+    },
+  })
+  assert.equal(f.auth.status().state, 'storage-unavailable')
+  ready = true
+  assert.equal(f.auth.status().state, 'storage-error')
+  assert.equal(f.auth.status().state, 'storage-error')
+  assert.equal(f.requests.length, 0)
+})
+
 test('protected sign-in persists only the refresh credential and bound identity; reboot renews once', async () => {
   const store = savedStore()
   const f = authFixture(store)
@@ -1677,4 +1722,145 @@ test('diagnostic reset preserves real delegation but cancels diagnostic work; co
   await assert.rejects(tuner.set('probe', 'control'), /unavailable/)
   assert.equal(samples, 1)
   f.live.dispose()
+})
+
+function reduceSourceEvents(events) {
+  const stream = createSubscriptionStream(
+    (bytes) => new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+    (text) => new TextEncoder().encode(text).buffer,
+  )
+  const bytes = new TextEncoder().encode(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''))
+  for (let at = 0; at < bytes.length; at += 7) stream.write(bytes.subarray(at, at + 7))
+  return JSON.parse(new TextDecoder().decode(stream.finish()))
+}
+const completedSources = (sources, annotations = []) => ({
+  type: 'response.completed',
+  response: {
+    status: 'completed',
+    output: [
+      { id: 'tool', type: 'web_search_call', status: 'completed', action: { type: 'search', sources } },
+      {
+        id: 'answer',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'Verified result. Żółw 🌍', annotations }],
+      },
+    ],
+  },
+})
+
+test('named provider sources support weather, sports, finance and safe new feeds without fabricated URLs', () => {
+  for (const name of ['oai-weather', 'oai-sports', 'oai-finance', 'provider-new_feed']) {
+    const api = { type: 'api', name }
+    const result = reduceSourceEvents([completedSources([api, api])])
+    assert.equal(result.searched, true)
+    assert.deepEqual(result.sources, [api])
+    assert.ok(!('url' in result.sources[0]))
+    const mixed = reduceSourceEvents([
+      completedSources(
+        [api, { type: 'url', url: 'https://example.test/consulted' }],
+        [{ type: 'url_citation', url: 'https://example.test/cited' }],
+      ),
+    ])
+    assert.deepEqual(mixed.sources, [api, { url: 'https://example.test/cited', title: '' }])
+  }
+  const bounded = reduceSourceEvents([
+    completedSources(Array.from({ length: 20 }, (_, index) => ({ type: 'api', name: `feed-${index}` }))),
+  ])
+  assert.equal(bounded.sources.length, 6)
+})
+
+test('invalid named sources and unverified prose fail rather than invent source evidence', () => {
+  for (const source of [
+    null,
+    { type: 'other', name: 'oai-weather' },
+    ...['', 'x'.repeat(65), 'https://example.test', 'feed\nsecret', 'feed; instructions', '../feed'].map((name) => ({
+      type: 'api',
+      name,
+    })),
+  ]) {
+    assert.equal(reduceSourceEvents([completedSources([source])]).error, 'search_missing_sources')
+  }
+  const missingTool = completedSources([{ type: 'api', name: 'oai-weather' }])
+  missingTool.response.output.shift()
+  assert.equal(reduceSourceEvents([missingTool]).searched, false)
+  const incomplete = completedSources([{ type: 'api', name: 'oai-weather' }])
+  incomplete.response.output[0].status = 'in_progress'
+  assert.throws(() => reduceSourceEvents([incomplete]), /search incomplete/)
+})
+
+test('streamed and enriched final sources merge without repeating text, including page actions', () => {
+  const final = completedSources([{ type: 'api', name: 'oai-weather' }])
+  const [tool, answer] = final.response.output
+  const earlyTool = { ...tool, action: { type: 'search' } }
+  const events = [
+    { type: 'response.output_item.done', output_index: 0, item: earlyTool },
+    { type: 'response.output_item.done', output_index: 1, item: answer },
+    {
+      type: 'response.output_text.annotation.added',
+      annotation: { type: 'url_citation', url: 'https://example.test/cited' },
+    },
+    final,
+  ]
+  const result = reduceSourceEvents(events)
+  assert.equal(result.answer, answer.content[0].text)
+  assert.deepEqual(result.sources, [
+    { url: 'https://example.test/cited', title: '' },
+    { type: 'api', name: 'oai-weather' },
+  ])
+  for (const type of ['open_page', 'find_in_page']) {
+    const value = completedSources([])
+    value.response.output[0].action = { type, url: 'https://example.test/page' }
+    assert.deepEqual(reduceSourceEvents([value]).sources, [{ url: 'https://example.test/page', title: '' }])
+  }
+})
+
+test('named API attribution reaches voice, while source failure leaves a fresh task usable', async () => {
+  const f = liveFixture(),
+    diagnostics = []
+  f.live.diagnose = (event, fields) => diagnostics.push({ event, ...(fields?.() ?? {}) })
+  await f.live.create(
+    'v=0',
+    {},
+    (event) => f.events.push(event),
+    () => true,
+  )
+  f.live.activate()
+  const delegate = (id) =>
+    f.receive({
+      type: 'delegation.created',
+      item: { id, type: 'delegation', target: 'client', content: [{ type: 'input_text', text: 'Current weather?' }] },
+    })
+  delegate('failed_source')
+  await tick()
+  f.finish({ error: 'search_missing_sources' })
+  await tick()
+  assert.match(f.sent.at(-1).content[0].text, /New user requests can still use the tools/)
+  assert.match(f.sent.at(-1).content[0].text, /this lookup could not be verified/)
+  delegate('feed')
+  await tick()
+  f.finish({ answer: 'Weather checked.', searched: true, sources: [{ type: 'api', name: 'oai-weather' }] })
+  await tick()
+  assert.equal(f.sent.at(-1).channel, 'speakable')
+  assert.match(f.sent.at(-1).content[0].text, /Sources: oai-weather/)
+  assert.ok(!f.sent.at(-1).content[0].text.includes('undefined'))
+  assert.ok(
+    diagnostics.some((event) => event.event === 'backend.result' && event.sourceApis === 1 && event.sourceUrls === 0),
+  )
+  assert.equal(f.events.filter((event) => event.type === 'local.subscription.job.finished').length, 2)
+  f.live.dispose()
+})
+
+test('the USB weather probe is fixed and accepts a completed named feed result', async () => {
+  const queries = []
+  const probes = createSubscriptionProbes({
+    delegate: async (text) => {
+      queries.push(text)
+      return { answer: 'Weather checked.', searched: true, sources: [{ type: 'api', name: 'oai-weather' }] }
+    },
+  })
+  await probes.run('probe', 'weather')
+  assert.equal(queries.length, 1)
+  assert.match(queries[0], /London/)
+  await assert.rejects(probes.run('probe', 'weather private query'), RangeError)
 })

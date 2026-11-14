@@ -23,6 +23,12 @@ export class SubscriptionAuth {
   constructor({ fetch, schedule, cancel, decodeClaims, store, now = Date.now, clientId = CLIENT, diagnose }) {
     Object.assign(this, { fetch, schedule, cancel, decodeClaims, now, clientId, diagnose })
     this.#store = store
+    this.#loadStorage()
+  }
+
+  #loadStorage() {
+    const store = this.#store
+    if (this.#storageAvailable || this.#storageError) return
     if (!store) return // Pure-helper fixtures may explicitly exercise volatile authorization.
     try {
       this.#storageAvailable = store.available()
@@ -55,6 +61,7 @@ export class SubscriptionAuth {
   }
 
   status() {
+    this.#loadStorage()
     const attempt = this.#attempt
     return {
       state: this.#storageError
@@ -101,6 +108,7 @@ export class SubscriptionAuth {
   }
 
   async start() {
+    this.#loadStorage()
     if (this.#store && (!this.#storageAvailable || this.#storageError)) return this.status()
     if (this.#record || this.#attempt || this.#renewal) return this.status()
     const attempt = { generation: this.#generation, expiresAt: this.now() + 900000 }

@@ -59,6 +59,9 @@ HTTPS worker. The native subscription store seals one bounded refresh credential
 and identity with AES-256-GCM in existing NVS, using an already protected HMAC_UP
 key and the device identity. It never provisions eFuses or changes flash security
 or layout. Missing key protection blocks sign-in; storage faults are explicit.
+The independent `device-key` binding supports the separate confirmed Security
+setup action; authentication only reads readiness. Its contract is in
+[DEVICE-KEY.md](esp32/DEVICE-KEY.md).
 Only the refresh credential survives reboot; access/identity tokens remain in RAM.
 Renewal commits a tombstone before requesting rotation and saves a complete new
 record before using it. Interrupted rotation requires reauthorization unless the
@@ -68,3 +71,10 @@ The private Codex Live and Responses routes and hardware storage still require
 account/device qualification; this adapter does not establish service entitlement.
 Neither subscription failure nor API-key failure selects the other connection.
 See the [Wi-Fi sign-in guide](../../../../docs/stack-chan-go-fork/README.md#chatgpt-subscription-in-r5).
+
+Subscription tool results require terminal completion, a completed hosted tool,
+a nonempty answer and bounded source evidence. Sources support HTTP(S) URLs and
+named API feeds such as weather, sports and finance; feeds keep their provider
+names without fabricated links. Streamed/final source updates merge without
+duplicating answer text. Missing evidence fails only that lookup; a later user
+request can still invoke tools. Source entries remain capped at six.

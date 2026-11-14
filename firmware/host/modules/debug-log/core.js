@@ -29,6 +29,8 @@ const NUMBER_FIELDS = new Set([
   'sseEvents',
   'streamPending',
   'streamAnswerBytes',
+  'sourceUrls',
+  'sourceApis',
   'tlsDrains',
   'tlsReceived',
   'tlsRead',
@@ -371,6 +373,7 @@ export class DebugRecorder {
             (parameter === 'probe' &&
               [
                 'reasoning',
+                'weather',
                 'search',
                 'english',
                 'polish',

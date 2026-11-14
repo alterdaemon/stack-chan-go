@@ -326,6 +326,45 @@ searchStream.write(
 const searchResult = JSON.parse(decoder.decode(searchStream.finish()))
 equal(searchResult.searched, true)
 equal(searchResult.sources[0].url, 'https://example.test/')
+// Actual XS parser: final source enrichment and named feeds stay separate from text.
+const feedStream = createSubscriptionStream(
+  (bytes) => decoder.decode(bytes),
+  (text) => ArrayBuffer.fromString(text),
+)
+const feedTool = { id: 'feed', type: 'web_search_call', status: 'completed', action: { type: 'search' } }
+const feedAnswer = { id: 'feed-answer', type: 'message', content: [{ type: 'output_text', text: 'Żółw 🌍' }] }
+for (const value of [
+  { type: 'response.output_item.done', output_index: 0, item: feedTool },
+  { type: 'response.output_item.done', output_index: 1, item: feedAnswer },
+  {
+    type: 'response.completed',
+    response: {
+      status: 'completed',
+      output: [
+        {
+          ...feedTool,
+          action: {
+            sources: [
+              { type: 'api', name: 'oai-weather' },
+              { type: 'api', name: 'oai-sports' },
+              { type: 'api', name: 'oai-finance' },
+            ],
+          },
+        },
+        feedAnswer,
+      ],
+    },
+  },
+]) {
+  const bytes = ArrayBuffer.fromString(`data: ${JSON.stringify(value)}\n\n`)
+  for (let index = 0; index < bytes.byteLength; index++) feedStream.write(new Uint8Array(bytes.slice(index, index + 1)))
+}
+const feedResult = JSON.parse(decoder.decode(feedStream.finish()))
+equal(feedResult.answer, 'Żółw 🌍')
+equal(feedResult.searched, true)
+equal(feedResult.sources.length, 3)
+equal(feedResult.sources[0].name, 'oai-weather')
+equal(feedResult.sources[0].url, undefined)
 async function verifyTerminalAndTLS() {
   let terminalCallbacks,
     terminalCloses = 0
@@ -565,6 +604,12 @@ const options = {
   },
 }
 const firstBoot = new SubscriptionAuth(options)
+let hardwareReady = false
+const afterSetup = new SubscriptionAuth({ ...options, store: { ...store, available: () => hardwareReady } })
+equal(afterSetup.status().state, 'storage-unavailable')
+hardwareReady = true
+equal(afterSetup.status().state, 'signed-out', 'separate setup refreshes the same auth owner without reboot')
+equal(exchanges, 0, 'readiness refresh does not start sign-in')
 await firstBoot.start()
 await new Promise((resolve) => Timer.set(resolve, 1100))
 assert(firstBoot.status().signedIn && !firstBoot.status().volatile)

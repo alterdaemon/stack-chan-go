@@ -15,14 +15,16 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 
 | Area | What you get |
 | --- | --- |
+| ChatGPT subscription | Choose ChatGPT or OpenAI API-key voice chat in the same Settings selector. Sign in through the robot's Wi-Fi page, with shared System prompt and OpenAI controls, independent subscription voices and reasoning settings, and no automatic fallback. |
+| Protected authentication storage | Encrypted, device-bound ChatGPT sign-in survives restarts. Separate Security settings provide confirmed one-time BLOCK_KEY5 setup, or reuse an existing protected key. See the [key-slot notice](#secure-storage-key-setup). Existing API-key storage is unchanged. |
+| USB diagnostics and testing | Reusable USB tools identify the running firmware, trace connection/search failures and run temporary voice tests without repeated installations. Diagnostics start Off; test settings stay in RAM and preserve saved preferences. |
 | Easy installation | Ready-to-use full-install and app-update BINs. App updates preserve settings, MODs and storage on the supported layout. |
 | Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
 | Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
-| Personal settings | Password-protected Wi-Fi Settings and Bluetooth. One AI connection selector, shared instructions and voice controls, with ChatGPT sign-in and shared native voice/control in R5. |
+| Personal settings | Password-protected Wi-Fi Settings and Bluetooth, with conversation instructions, model and thinking effort, voice, pitch, speaking style and interruption controls. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
-| USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
 
 See the [R5 changes](../../CHANGELOG-MOD.md#210-r5) for the local candidate and the
 [published R4 release notes](https://github.com/alterdaemon/stack-chan-go/releases/tag/v2.1.0-R4) for comparison links.
@@ -225,7 +227,8 @@ are never logged or persisted. This startup crypto check is outside the
 allocation-free socket observers.
 For an audible request-parameter baseline, run `diag reset` then `diag live standard`; use the quiet workflow below at night.
 This uses the saved subscription grant/current Codex model with Cove, pitch0,
-volume0.1, empty instructions, no history and Interruption Off. Normal manual
+the saved volume or an explicit RAM volume override, empty instructions, no
+history and Interruption Off. Normal manual
 starts keep saved settings. Use `diag set interruption on|off|saved` while stopped
 for a future USB start; reset/Off clears it. `diag set voice <name>|saved` selects a bounded Codex V3 voice candidate for USB starts only, requires stopped LIVE, and clears on reset/Off/reboot. Test documented candidates before exposing subscription voices; preserve independent API voices. `call.session` reports only the
 actual model, voice and instruction/history lengths. Structured rejections
@@ -335,8 +338,9 @@ using the normal microphone control. Mute forwards silence through the existing
 capture pipeline; it does not stop the encoder or network tasks. Manual sessions
 cannot be muted by these commands. The fixed `minimal-isolated` probe changes only
 the minimal request's session/thread IDs to distinguish request binding from media
-concurrency. The fixed `handoff` probe asks the voice agent to delegate an official
-status-page search, exercising the real delegation path. These explicit probes
+concurrency. The fixed `handoff` probe appends an official status-page request as context.
+Count it as delegation evidence only when `delegation.created` and a validated
+backend result are observed; it does not replace actual microphone input. These explicit probes
 do not change the production protocol, saved settings or credentials.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
@@ -357,7 +361,15 @@ These checks do not establish physical acoustics or subjective naturalness.
 Reset/Off clears listening state and cancels diagnostic jobs while preserving
 ordinary delegated work in a manually owned session.
 
-On an active subscription call, `diag set probe reasoning|search` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.
+On an active subscription call, `diag set probe reasoning|search|weather` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.
+
+The fixed weather probe uses a public test location and accepts completed hosted
+results backed by URL or named API sources. `backend.result` reports numeric
+`sourceUrls` and `sourceApis` counts while diagnostics are enabled, without source
+names, queries or answer content. `search_missing_sources` is a local evidence
+validation error, not an authentication diagnosis. HTTPS timeout records and the
+subsequent `worker.idle` observation distinguish the caller's last progress from
+actual final byte/event counts; an HTTP200 alone does not prove tool completion.
 
 USB backend parameter trials use `diag set model gpt-6.1-terra|gpt-6-luna|saved` and `diag set effort none|low|medium|high|xhigh|max|saved` while LIVE is stopped. They affect only subscription backend fields in RAM. `--suite backend` runs one Terra/medium reasoning-and-cited-search baseline with interruption Off/On; explicit filters select targeted alternatives. Do not run the complete model/effort matrix. Native failures, capture loss, account limits and failed baselines stop the run. Verify effective `backend.start` settings and terminal validated results; a sent request is not a pass.
 
@@ -594,6 +606,11 @@ Repository cleanup does not rewrite saved preferences.
 
 On the robot, open Settings and connect a phone or computer to
 `http://<robot-IP>/settings/`. Configure the WWW password before account sign-in.
+Under **Security → Secure storage**, immediately after WWW, check that storage
+shows **Ready**. Otherwise choose **Set up secure storage**, read the permanent
+BLOCK_KEY5 notice and confirm **Set up permanently**. The robot creates and
+verifies the key itself; no terminal command or separate tool is required.
+Once Ready appears, ChatGPT sign-in becomes available without restarting.
 In **AI → AI connection**, choose **ChatGPT subscription**, then **Continue with
 ChatGPT**. Open the displayed OpenAI sign-in link, enter the displayed code and
 approve the account on OpenAI's page. Return to the robot's Settings page to see
@@ -616,13 +633,37 @@ HMAC peripheral. Access and identity tokens remain in RAM. After reboot, the
 robot renews independently before making a subscription request. No grant is
 returned to the browser or embedded in an image; the browser only handles sign-in.
 
+#### Secure storage key setup
+
+**Installing R5, saving ordinary settings or choosing ChatGPT subscription does
+not provision a hardware key.** The separate **Security → Secure storage** card
+performs setup only after explicit confirmation. It is available in the robot's
+Wi-Fi page regardless of the selected AI connection; BLE cannot provision keys.
+
+R5 reuses an existing compatible protected HMAC key in slots 0–5 and shows its
+actual slot. Otherwise the sole setup target is **BLOCK_KEY5**, and only when
+unused and programmable. An occupied/incompatible slot or coding error blocks
+setup; it never silently chooses another slot. Provisioning permanently assigns
+the generic `device-root-key` to HMAC_UP and protects its key and purpose. The
+protected key cannot be erased, replaced or assigned a different hardware
+purpose. The same root can support separately derived keys for other software
+features. Keep the robot powered until verification finishes. See Espressif's
+[eFuse key API](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-reference/system/efuse.html).
+
+**Cancel** before confirmation makes no change. After submission an irreversible
+write cannot be cancelled or rolled back by closing the page. If a response is
+lost, the page checks hardware status without automatically repeating setup.
+An uncertain or partially programmed state is reported as blocked/unknown,
+not repaired automatically. Ordinary firmware rollback does not undo the key.
+
 Secure storage requires an existing HMAC_UP eFuse key with read, write and purpose
 protection. If none is available, Settings shows **Secure sign-in storage needs
 setup** and refuses sign-in; it never writes plaintext subscription credentials.
-The application does not provision keys, burn fuses, activate flash encryption,
-change partitions or migrate existing API keys. Existing API-key preferences
-remain unencrypted. Hardware provisioning requires a separate device-specific
-decision; installing this application does not establish that the robot has a key.
+Only the confirmed Security action provisions the key; ChatGPT authentication
+checks readiness and links there when setup is needed. Setup does not activate
+flash encryption or Secure Boot, change partitions, or migrate existing API
+keys. Existing API-key preferences remain unencrypted. Installing the application
+alone does not establish that the robot has a key.
 This storage protects against reading or editing the credential blob in a flash
 dump; it does not establish Secure Boot or protect against malicious firmware
 running on the robot. See Espressif's [HMAC](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-reference/peripherals/hmac.html)

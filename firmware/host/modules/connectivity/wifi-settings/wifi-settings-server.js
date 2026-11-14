@@ -39,9 +39,12 @@ export class WiFiSettingsServer {
   #setupStarted
   #setupDuration
   #subscription
+  #deviceKey
+  #keyBusy = false
 
-  constructor({ getPreferences, onPreferenceChanged, setupDurationMs = 0, port = 80, subscription }) {
+  constructor({ getPreferences, onPreferenceChanged, setupDurationMs = 0, port = 80, subscription, deviceKey }) {
     this.#subscription = subscription
+    this.#deviceKey = deviceKey
     this.#getPreferences = getPreferences
     this.#onPreferenceChanged = onPreferenceChanged
     this.#setupStarted = Time.ticks
@@ -80,6 +83,7 @@ export class WiFiSettingsServer {
     }
 
     const path = context.req.path
+    if (path === '/api/security/storage') return this.#secureStorage(context, configured)
     if (path === '/api/subscription') return this.#authorize(context, configured)
     if (path === '/api/preferences') {
       if (context.req.method === 'get') {
@@ -124,6 +128,52 @@ export class WiFiSettingsServer {
 
   #subscriptionAvailable() {
     return !!this.#subscription || Modules.has('realtimeConversation/subscription')
+  }
+
+  async #secureStorage(context, configured) {
+    const origin = context.req.header('origin')
+    const host = context.req.header('host')
+    if (
+      !configured ||
+      context.req.header('x-stackchan-settings') !== '1' ||
+      (origin && origin !== `http://${host}` && origin !== `https://${host}`)
+    )
+      return context.text('Forbidden', 403)
+    if (!this.#deviceKey && !Modules.has('device-key')) return context.json({ state: 'unsupported' }, 404)
+    this.#deviceKey ??= Modules.importNow('device-key')
+    if (context.req.method === 'get') {
+      try {
+        return context.json(this.#deviceKey.status())
+      } catch {
+        return context.json({ state: 'unknown', reason: 'status-unavailable' }, 503)
+      }
+    }
+    if (context.req.method !== 'post') return context.text('Method Not Allowed', 405)
+    if (!context.req.header('content-type')?.toLowerCase().startsWith('application/json'))
+      return context.text('Forbidden', 403)
+    let body
+    try {
+      body = await context.req.json()
+    } catch {
+      return context.text('Invalid JSON', 400)
+    }
+    if (
+      !body ||
+      Object.keys(body).sort().join(',') !== 'action,confirmation,slot' ||
+      body.action !== 'setup' ||
+      body.slot !== 5 ||
+      body.confirmation !== 'BLOCK_KEY5_HMAC_UP_PERMANENT'
+    )
+      return context.text('Explicit permanent slot 5 confirmation required', 400)
+    if (this.#keyBusy) return context.text('Setup is busy', 409)
+    this.#keyBusy = true
+    try {
+      return context.json(await this.#deviceKey.setup())
+    } catch {
+      return context.json({ state: 'unknown', reason: 'setup-result-unknown' }, 503)
+    } finally {
+      this.#keyBusy = false
+    }
   }
 
   async #authorize(context, configured) {

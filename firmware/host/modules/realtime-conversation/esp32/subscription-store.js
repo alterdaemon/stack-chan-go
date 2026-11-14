@@ -1,3 +1,4 @@
+import deviceKey from 'device-key'
 import TextDecoder from 'text/decoder'
 
 const available = native('xs_subscription_store_available')
@@ -7,7 +8,9 @@ const clear = native('xs_subscription_store_clear')
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
 export default {
-  available,
+  available() {
+    return deviceKey.status().state === 'ready' && available()
+  },
   read() {
     const bytes = read()
     return bytes === undefined ? undefined : JSON.parse(decoder.decode(bytes))

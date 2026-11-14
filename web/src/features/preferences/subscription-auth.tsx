@@ -11,7 +11,13 @@ type Status = {
   expiresAt?: number
 }
 
-export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
+export function SubscriptionAuth({
+  disabled = false,
+  storageRevision = 0,
+}: {
+  disabled?: boolean
+  storageRevision?: number
+}) {
   const [status, setStatus] = useState<Status>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -44,7 +50,7 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [disabled, revision])
+  }, [disabled, revision, storageRevision])
 
   async function action(action: 'start' | 'cancel' | 'logout') {
     setBusy(true)
@@ -84,7 +90,13 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
                 : 'Sign in to ChatGPT on this robot.'}
       </p>
       {status?.state === 'storage-unavailable' && (
-        <p role="alert">Secure sign-in storage needs setup on this robot before you can sign in.</p>
+        <p role="alert">
+          Secure sign-in storage needs setup on this robot before you can sign in. Open{' '}
+          <a href="#secure-storage" className="underline">
+            Security → Secure storage
+          </a>
+          .
+        </p>
       )}
       {status?.state === 'storage-error' && (
         <p role="alert">Secure sign-in storage failed. Retry sign-out before signing in again.</p>
@@ -101,7 +113,7 @@ export function SubscriptionAuth({ disabled = false }: { disabled?: boolean }) {
       <div>
         <Button
           type="button"
-          disabled={disabled || busy || status?.state === 'storage-unavailable'}
+          disabled={disabled || busy || !status || status?.state === 'storage-unavailable'}
           onClick={() =>
             void action(status?.signedIn || status?.state === 'storage-error' ? 'logout' : pending ? 'cancel' : 'start')
           }

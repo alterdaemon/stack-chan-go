@@ -35,6 +35,17 @@ export function createSubscriptionStream(decode, encode, observe = false) {
   const sources = [],
     items = new Set()
   function addSource(source, citation = false) {
+    // Hosted tools also return named API feeds, without a public URL.
+    if (source?.type === 'api') {
+      if (
+        typeof source.name === 'string' &&
+        /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(source.name) &&
+        sources.length < 6 &&
+        !sources.some((entry) => entry.type === 'api' && entry.name === source.name)
+      )
+        sources.push({ type: 'api', name: source.name })
+      return
+    }
     if (
       typeof source?.url !== 'string' ||
       !/^https?:\/\/[A-Za-z0-9][^\s]*$/.test(source.url) ||
@@ -50,7 +61,7 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     if (url.length > 512) return
     // Prefer the answer's cited URLs over the larger set consulted by search.
     if (citation && !cited) {
-      sources.length = 0
+      for (let index = sources.length - 1; index >= 0; index--) if (sources[index].url) sources.splice(index, 1)
       cited = true
     }
     if (sources.length >= 6 || sources.some((source) => source.url === url)) return
@@ -61,33 +72,40 @@ export function createSubscriptionStream(decode, encode, observe = false) {
     const key = typeof item.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(item.id) ? item.id : index
     if (typeof key !== 'string' && (!Number.isInteger(key) || key < 0 || key >= 128))
       throw new Error('Invalid subscription completion')
-    if (items.has(key)) return
+    if (items.has(key)) {
+      acceptSources(item)
+      return
+    }
     if (items.size >= 32) throw new Error('Subscription event exceeds limit')
     items.add(key)
     acceptItem(item)
   }
-  function acceptItem(item) {
+  function acceptSources(item) {
     if (item.type === 'web_search_call') {
       if (item.status !== 'completed') throw new Error('Subscription search incomplete')
       searched = true
-      if (!cited) for (const source of item.action?.sources ?? []) if (source.type === 'url') addSource(source)
+      for (const source of item.action?.sources ?? [])
+        if (source?.type === 'api' || (!cited && source?.type === 'url')) addSource(source)
+      if (!cited && ['open_page', 'find_in_page'].includes(item.action?.type)) addSource(item.action)
     }
     if (item.type !== 'message' || item.phase === 'commentary') return
     if (item.role !== undefined && item.role !== 'assistant') throw new Error('Invalid subscription completion')
     if (item.status !== undefined && item.status !== 'completed') throw new Error('Invalid subscription completion')
+    for (const part of item.content ?? [])
+      if (part.type === 'output_text')
+        for (const citation of part.annotations ?? []) if (citation?.type === 'url_citation') addSource(citation, true)
+  }
+  function acceptItem(item) {
+    acceptSources(item)
+    if (item.type !== 'message' || item.phase === 'commentary') return
     for (const part of item.content ?? []) {
-      if (part.type !== 'output_text') continue
-      if (typeof part.text === 'string') {
-        for (const character of part.text) {
-          const point = character.codePointAt(0)
-          const size = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
-          if (answerBytes + size > 3000) break
-          answer += character
-          answerBytes += size
-        }
-      }
-      for (const citation of part.annotations ?? []) {
-        if (citation.type === 'url_citation') addSource(citation, true)
+      if (part.type !== 'output_text' || typeof part.text !== 'string') continue
+      for (const character of part.text) {
+        const point = character.codePointAt(0)
+        const size = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
+        if (answerBytes + size > 3000) break
+        answer += character
+        answerBytes += size
       }
     }
   }
@@ -128,6 +146,8 @@ export function createSubscriptionStream(decode, encode, observe = false) {
         error: 'subscription_incomplete',
         ...subscriptionErrorMetadata(JSON.stringify({ error: value.error ?? value.response?.error ?? value })),
       }
+    } else if (value.type === 'response.output_text.annotation.added') {
+      if (value.annotation?.type === 'url_citation') addSource(value.annotation, true)
     } else if (value.type === 'response.output_item.done') {
       acceptOnce(value.item, value.output_index)
     } else if (value.type === 'response.completed') {

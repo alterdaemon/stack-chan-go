@@ -126,6 +126,25 @@ const subscription = {
     authLogouts++
   },
 }
+let keyState = { state: 'setup-required', slot: 5 },
+  keyWrites = 0,
+  holdKey,
+  releaseKey
+const deviceKey = {
+  status: () => keyState,
+  setup: async () => {
+    if (holdKey)
+      await new Promise((resolve) => {
+        releaseKey = resolve
+      })
+    if (keyState.state === 'setup-required') {
+      keyWrites++
+      keyState = { state: 'ready', slot: 5 }
+    }
+    return keyState
+  },
+}
+const setupKeyBody = { action: 'setup', slot: 5, confirmation: 'BLOCK_KEY5_HMAC_UP_PERMANENT' }
 let server
 try {
   server = new WiFiSettingsServer({ port, subscription, getPreferences })
@@ -155,7 +174,9 @@ try {
   assert(oversizedRejected, 'oversized header must close its connection')
   equal((await request('/api/preferences')).status, 503, 'server must remain usable after an oversized header')
   server.close()
-  server = new WiFiSettingsServer({ port, subscription, getPreferences, setupDurationMs: 1000 })
+  server = new WiFiSettingsServer({ port, subscription, deviceKey, getPreferences, setupDurationMs: 1000 })
+  equal((await request('/api/security/storage', { headers: jsonHeaders, body: setupKeyBody })).status, 403)
+  equal(keyWrites, 0, 'password bootstrap cannot provision a key')
   equal(
     (await request('/api/subscription', { headers: jsonHeaders })).status,
     403,
@@ -175,7 +196,7 @@ try {
   Timer.delay(1100)
   equal((await save({ 'www.password': 'too-late' })).status, 503, 'initial setup window expires')
   server.close()
-  server = new WiFiSettingsServer({ port, subscription, getPreferences, setupDurationMs: 300000 })
+  server = new WiFiSettingsServer({ port, subscription, deviceKey, getPreferences, setupDurationMs: 300000 })
   equal((await save({ 'www.password': 'first-secret' }, undefined, {})).status, 403, 'reject form/CSRF writes')
   equal((await save({ 'www.password': 'first-secret' })).status, 200)
   equal((await request('/api/preferences')).status, 401)
@@ -187,6 +208,38 @@ try {
     equal((await request('/api/preferences', { authorization: invalid })).status, 401)
   }
   const authorization = auth('first-secret', 'different-login')
+  const keyRequest = (body, headers = jsonHeaders, authorizationOverride = authorization) =>
+    request('/api/security/storage', {
+      authorization: authorizationOverride,
+      headers,
+      ...(body === undefined ? {} : { body }),
+    })
+  equal((await keyRequest(setupKeyBody, jsonHeaders, auth('wrong'))).status, 401)
+  equal((await keyRequest(setupKeyBody, {})).status, 403)
+  equal((await keyRequest(setupKeyBody, { ...jsonHeaders, Origin: 'http://attacker.test' })).status, 403)
+  equal((await keyRequest(setupKeyBody, { ...jsonHeaders, 'Content-Type': 'text/plain' })).status, 403)
+  for (const body of [
+    { action: 'setup' },
+    { ...setupKeyBody, slot: 4 },
+    { ...setupKeyBody, confirmation: 'yes' },
+    { ...setupKeyBody, key: 'not-accepted' },
+  ])
+    equal((await keyRequest(body)).status, 400)
+  equal(keyWrites, 0, 'all rejected requests must precede native setup')
+  equal(values(await keyRequest()).state, 'setup-required')
+  equal(keyWrites, 0, 'GET never provisions')
+  holdKey = true
+  const pendingKey = keyRequest(setupKeyBody)
+  for (let i = 0; i < 20 && !releaseKey; i++) await new Promise((resolve) => Timer.set(resolve, 10))
+  assert(releaseKey, 'first setup reached fixture')
+  equal((await keyRequest(setupKeyBody)).status, 409, 'concurrent setup is rejected')
+  holdKey = false
+  releaseKey()
+  equal(values(await pendingKey).state, 'ready')
+  equal(keyWrites, 1)
+  equal(values(await keyRequest(setupKeyBody)).slot, 5)
+  equal(keyWrites, 1, 'lost-response duplicate reuses the ready key')
+  equal(Preference.get('ai', 'token'), undefined, 'setup changes no API preference')
   equal((await request('/api/subscription', { headers: jsonHeaders })).status, 401)
   equal((await request('/api/subscription', { authorization })).status, 403)
   equal(
@@ -318,6 +371,11 @@ try {
   })
   equal(lazyStatus.status, 200, 'lazy loading uses the actual XS default-export contract')
   equal(values(lazyStatus).state, 'signed-out')
+  equal(
+    (await request('/api/security/storage', { authorization: auth('new:secret'), headers: jsonHeaders })).status,
+    404,
+    'unsupported native capability is read-only and explicit',
+  )
   trace('@@STACKCHAN_TEST:PASS@@\n')
 } catch (error) {
   trace(`@@STACKCHAN_TEST:FAIL@@ ${error}\n`)

@@ -2,9 +2,11 @@
   "modules": {
     "realtimeConversation/transport": "./transport.js",
     "realtimeConversation/subscription-store": "./subscription-store.js",
+    "device-key": "./device-key.js",
     "*": [
       "./transport.c",
       "./subscription-store.c",
+      "./device-key.c",
       "./media-init.c",
       "./liveAudio.c",
       "./liveCodec.c",
@@ -39,6 +41,9 @@
     {
       "idf": "efuse",
       "includes": ["esp32s3/include"]
+    },
+    {
+      "idf": "esp_wifi"
     },
     {
       "idf": "esp_security"

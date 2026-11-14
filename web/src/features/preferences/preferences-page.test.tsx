@@ -51,6 +51,27 @@ describe('PreferencesPage', () => {
     return { ...rendered, state }
   }
 
+  it('places Security after WWW and before Save in Wi-Fi API-key mode without linking it to Save', async () => {
+    const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ state: 'ready', slot: 5 }) }))
+    vi.stubGlobal('fetch', fetch)
+    const { state } = renderPreferences({ http: true })
+    expect(await screen.findByText('Ready — BLOCK_KEY5 (HMAC_UP)')).toBeVisible()
+    const password = screen.getByLabelText('Wi-Fiアクセスパスワード')
+    const security = screen.getByLabelText('Secure storage')
+    const save = screen.getByRole('button', { name: '設定を保存' })
+    expect(password.compareDocumentPosition(security) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(security.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.submit(save.closest('form')!)
+    expect(state.save).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not expose hardware setup over BLE', () => {
+    renderPreferences({ http: false })
+    expect(screen.queryByLabelText('Secure storage')).toBeNull()
+  })
+
   it('keeps shared prompt and OpenAI controls in subscription mode and hides API overrides', async () => {
     vi.stubGlobal(
       'fetch',
@@ -93,11 +114,11 @@ describe('PreferencesPage', () => {
       },
     })
     await user.click(screen.getByRole('combobox', { name: '声' }))
-    expect(screen.getByRole('option', { name: 'cove' })).toBeVisible()
-    expect(screen.getByRole('option', { name: 'viola' })).toBeVisible()
+    expect(await screen.findByRole('option', { name: 'cove' })).toBeVisible()
+    expect(await screen.findByRole('option', { name: 'viola' })).toBeVisible()
     expect(screen.queryByRole('option', { name: 'marin' })).toBeNull()
     expect(screen.queryByRole('option', { name: 'cedar' })).toBeNull()
-    await user.click(screen.getByRole('option', { name: 'juniper' }))
+    await user.click(await screen.findByRole('option', { name: 'juniper' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.codexVoice', 'juniper')
     expect(state.values['openailive.voice']).toBe('marin')
     expect(state.values['openailive.realtimeVoice']).toBe('cedar')
@@ -119,7 +140,7 @@ describe('PreferencesPage', () => {
     fireEvent.change(model, { target: { value: 'gpt-6-luna' } })
     expect(state.update).toHaveBeenLastCalledWith('openailive.codexModel', 'gpt-6-luna')
     await user.click(screen.getByRole('combobox', { name: '推論の強度' }))
-    await user.click(screen.getByRole('option', { name: 'low' }))
+    await user.click(await screen.findByRole('option', { name: 'low' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.codexEffort', 'low')
     expect(state.values['openailive.backendModel']).toBe('saved-api-model')
     expect(state.values['openailive.reasoningEffort']).toBe('high')
@@ -150,10 +171,10 @@ describe('PreferencesPage', () => {
     const user = userEvent.setup()
     const { state } = renderPreferences()
     await user.click(screen.getByRole('combobox', { name: '会話モード' }))
-    expect(screen.getByRole('option', { name: 'GPT-Live 1' })).toBeVisible()
-    expect(screen.getByRole('option', { name: 'GPT-Realtime 2.1' })).toBeVisible()
-    expect(screen.getByRole('option', { name: 'GPT-Realtime 2.1 Mini' })).toBeVisible()
-    await user.click(screen.getByRole('option', { name: label }))
+    expect(await screen.findByRole('option', { name: 'GPT-Live 1' })).toBeVisible()
+    expect(await screen.findByRole('option', { name: 'GPT-Realtime 2.1' })).toBeVisible()
+    expect(await screen.findByRole('option', { name: 'GPT-Realtime 2.1 Mini' })).toBeVisible()
+    await user.click(await screen.findByRole('option', { name: label }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.mode', mode)
   })
 
@@ -165,7 +186,7 @@ describe('PreferencesPage', () => {
     await user.click(screen.getByRole('combobox', { name: '声' }))
     expect(await screen.findByRole('option', { name: 'cedar' })).toBeVisible()
     expect(screen.queryByRole('option', { name: 'bossa' })).toBeNull()
-    await user.click(screen.getByRole('option', { name: 'cedar' }))
+    await user.click(await screen.findByRole('option', { name: 'cedar' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.realtimeVoice', 'cedar')
   })
 
@@ -185,10 +206,20 @@ describe('PreferencesPage', () => {
     expect(screen.getByRole('spinbutton', { name: '自動切断までの秒数' })).toBeDisabled()
   })
 
-  it.each([false, true])('shares every form field with WWW last over HTTP=%s', (http) => {
+  it.each([false, true])('keeps shared field order and appends Security only over HTTP=%s', (http) => {
     const { container } = renderPreferences({ http })
     const titles = [...container.querySelectorAll('form [data-slot="card-title"]')].map((node) => node.textContent)
-    expect(titles).toEqual(['Wi-Fi', '外観', 'サーボ', '音声合成', 'AI', 'OpenAI', 'MCP Server', 'WWW'])
+    expect(titles).toEqual([
+      'Wi-Fi',
+      '外観',
+      'サーボ',
+      '音声合成',
+      'AI',
+      'OpenAI',
+      'MCP Server',
+      'WWW',
+      ...(http ? ['Security'] : []),
+    ])
     const password = screen.getByLabelText('Wi-Fiアクセスパスワード')
     expect(password).toHaveAttribute('type', 'password')
     expect(password).toHaveAttribute('name', 'www.password')
@@ -227,7 +258,7 @@ describe('PreferencesPage', () => {
     expect(effort).toHaveTextContent('high')
     await user.click(effort)
     expect(screen.getAllByRole('option').map((node) => node.textContent)).toEqual([...OPENAI_REASONING_EFFORTS])
-    await user.click(screen.getByRole('option', { name: 'none' }))
+    await user.click(await screen.findByRole('option', { name: 'none' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.reasoningEffort', 'none')
   })
 
@@ -239,7 +270,7 @@ describe('PreferencesPage', () => {
     })
     expect(field).toHaveTextContent('無効')
     await user.click(field)
-    await user.click(screen.getByRole('option', { name: '有効' }))
+    await user.click(await screen.findByRole('option', { name: '有効' }))
     expect(state.update).toHaveBeenLastCalledWith('openailive.bargeIn', '1')
     unmount()
     renderPreferences({ bargeInAvailable: false })
