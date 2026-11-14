@@ -52,8 +52,8 @@ test('panic diagnostics export only image-bound code addresses and always forwar
         'typedef struct { int core, exception; void *addr; const void *frame; } panic_info_t;\n',
       'xtensa_context.h': 'typedef struct { uint32_t pc, a1, a0; } XtExcFrame;\n',
       'esp_cpu_utils.h': 'static uint32_t esp_cpu_process_stack_pc(uint32_t pc) { return pc; }\n',
+      'esp_memory_utils.h': 'static bool esp_stack_ptr_is_sane(uint32_t sp) { return sp == 16; }\n',
       'esp_debug_helpers.h': `typedef struct { uint32_t pc, sp, next_pc; const void *exc_frame; } esp_backtrace_frame_t;
-        static bool esp_stack_ptr_is_sane(uint32_t sp) { return sp == 16; }
         static bool esp_backtrace_get_next_frame(esp_backtrace_frame_t *frame) {
             frame->pc = frame->next_pc;
             frame->next_pc = 0;

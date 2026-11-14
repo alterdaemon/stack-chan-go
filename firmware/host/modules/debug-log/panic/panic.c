@@ -5,6 +5,7 @@
 #include "soc/soc.h"
 #include "esp_debug_helpers.h"
 #include "esp_cpu_utils.h"
+#include "esp_memory_utils.h"
 #include "xtensa_context.h"
 #include <string.h>
 
