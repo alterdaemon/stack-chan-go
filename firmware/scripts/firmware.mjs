@@ -17,6 +17,7 @@ import { aliases, devices, resolveDevice } from './lib/devices.mjs'
 import { validateFirmwareBundleTarget } from './lib/firmware-bundle.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
 import { installModArchive, resolveModArchivePath } from './lib/mod-flash.mjs'
+import { prepareHostLinker } from './lib/moddable-linker.mjs'
 import {
   prepareCoreS3VersionSdkconfig,
   prepareSdkconfigManifest,
@@ -81,6 +82,17 @@ if (!dryRun && deviceName === 'm5stackchan_cores3' && ['build', 'flash', 'deploy
   try {
     realtime = manifestUsesWebRtc(manifest, deviceName)
     integratedLive = manifestUsesModule(manifest, deviceName, 'openai-live-integrated')
+    if (integratedLive) {
+      const directory = prepareHostLinker({
+        moddableDirectory: process.env.MODDABLE,
+        outputDirectory: buildOutputDirectory,
+      })
+      if (directory)
+        subprocessEnvironment = {
+          ...subprocessEnvironment,
+          PATH: `${directory}${path.delimiter}${subprocessEnvironment.PATH}`,
+        }
+    }
     if (realtime) {
       solutionDirectory = prepareWebRtcSolution()
       subprocessEnvironment = { ...subprocessEnvironment, ESP_WEBRTC_SOLUTION: solutionDirectory }

@@ -49,6 +49,9 @@ test('host build, flash, and deploy commands default to release mode', () => {
 test('default CoreS3 build includes GPT-Live and prepares native dependencies without an environment flag', () => {
   const fixture = createFirmwareWrapperFixture('m5stackchan_cores3', 'release')
   try {
+    const linker = path.join(fixture.fakeModdable, 'xs/tools/xsl.c')
+    mkdirSync(path.dirname(linker), { recursive: true })
+    writeFileSync(linker, '16384, /* initialKeyCount */\n')
     const selected = devices.m5stackchan_cores3.manifest
     const source = path.join(firmwareDirectory, selected)
     const manifest = JSON.parse(readFileSync(source, 'utf8'))

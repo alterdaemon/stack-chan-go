@@ -13,6 +13,7 @@ import {
 } from './lib/build-output.mjs'
 import { prepareBuildProfile } from './lib/build-profile.mjs'
 import { prepareCoreS3IdfDependencies } from './lib/idf-dependencies.mjs'
+import { prepareHostLinker } from './lib/moddable-linker.mjs'
 import { prepareCoreS3VersionSdkconfig, prepareSdkconfigManifest } from './lib/moddable-version.mjs'
 import { manifestUsesModule, manifestUsesWebRtc, prepareWebRtcSolution } from './lib/webrtc-solution.mjs'
 
@@ -36,6 +37,17 @@ let usesWebRtc = false
 let commitBuildProfile
 try {
   usesWebRtc = Boolean(manifest) && isCoreS3 && manifestUsesWebRtc(manifest, platformName)
+  if (manifest && isCoreS3 && manifestUsesModule(manifest, platformName, 'openai-live-integrated')) {
+    const directory = prepareHostLinker({
+      moddableDirectory: process.env.MODDABLE,
+      outputDirectory: buildOutputDirectory,
+    })
+    if (directory)
+      subprocessEnvironment = {
+        ...subprocessEnvironment,
+        PATH: `${directory}${path.delimiter}${subprocessEnvironment.PATH}`,
+      }
+  }
   const solutionDirectory = usesWebRtc ? prepareWebRtcSolution() : undefined
   if (solutionDirectory) subprocessEnvironment = { ...subprocessEnvironment, ESP_WEBRTC_SOLUTION: solutionDirectory }
   if (manifest && isCoreS3) {

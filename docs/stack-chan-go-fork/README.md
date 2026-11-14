@@ -379,6 +379,12 @@ Alternatively, from the repository root:
 STACKCHAN_TOOLCHAINS=/path/to/toolchains bash firmware/scripts/mod/build-firmware.sh --mode=release
 ```
 
+Integrated Linux/macOS builds cache a host-only `xsl` linker with 16,384 keys when the
+SDK linker has the 8,192-key limit. This avoids preload failures in the R5 bundle.
+The generated tool uses a checked SDK source copy; installed SDK files and target
+`creation.keys` remain unchanged. The cache is rebuilt only when SDK inputs change
+or its binary fails hash verification.
+
 The toolchain directory contains `moddable`, `esp-idf`, `idf-tools`,
 `esp-webrtc-solution` and `fontbm`. Machine paths stay outside Git.
 Use repository wrappers; outputs remain under `firmware/dist/`.
