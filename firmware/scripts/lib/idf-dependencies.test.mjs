@@ -247,7 +247,10 @@ int ret = select(max_fd + 1, &read_set, NULL, NULL, &tv);
     const renderOriginal = readFileSync(path.join(solutionDirectory, 'components/av_render/src/av_render.c'), 'utf8')
     assert.equal(
       readFileSync(path.join(components, 'av_render/src/av_render.c'), 'utf8'),
-      renderOriginal.replace('    _WAIT_BITS', '    if (wait_bits) _WAIT_BITS'),
+      renderOriginal.replace(
+        '    _WAIT_BITS(render->event_group, wait_bits);',
+        '    if (wait_bits) {\n        _WAIT_BITS(render->event_group, wait_bits);\n    }',
+      ),
       'only the generated empty-renderer wait is guarded; SDK source and license remain unchanged',
     )
     const udp = readFileSync(path.join(components, 'esp_peer/src/transport/udp.c'), 'utf8')

@@ -126,7 +126,7 @@ function preparePeerImplementation(source, destination, name) {
         ? [
             [
               '    _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts',
-              '    if (wait_bits) _WAIT_BITS(render->event_group, wait_bits);\n    // Resend first frame pts',
+              '    if (wait_bits) {\n        _WAIT_BITS(render->event_group, wait_bits);\n    }\n    // Resend first frame pts',
             ],
           ]
         : [
