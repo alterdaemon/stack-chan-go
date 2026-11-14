@@ -338,6 +338,9 @@ int main(void) {
     diagnosticLevels = true;
     testVolume = 1024;
     run(false, 0, false, false, false);
+    // API Live and subscription share this renderer; configured volume 1
+    // must preserve decoded levels with either interruption policy.
+    run(true, 0, false, false, false);
     testVolume = 0;
     assert(!stackchanAudioDebugSet(DEBUG_TUNE_SPEAKER, 0)); testSpeakerTrim = 0;
     restoreQuietTrim = true;
