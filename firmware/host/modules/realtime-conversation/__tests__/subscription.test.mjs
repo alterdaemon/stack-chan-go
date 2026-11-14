@@ -1071,11 +1071,21 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   const minimal = tuner.set('probe', 'minimal')
   await tick()
   const minimalBody = JSON.parse(f.requests.at(-1).options.body)
+  assert.equal(f.requests.at(-1).options.timeoutMs, 45000)
   assert.deepEqual(Object.keys(minimalBody).sort(), ['input', 'instructions', 'model', 'store', 'stream'])
   assert.equal(minimalBody.input.length, 1)
   assert.equal(minimalBody.input[0].content[0].text, 'Say OK.')
   f.finish({ answer: 'OK', searched: false })
   await minimal
+  let identity = 0
+  f.live.uuid = () => `isolated-${++identity}`
+  const isolated = tuner.set('probe', 'minimal-isolated')
+  await tick()
+  assert.deepEqual(JSON.parse(f.requests.at(-1).options.body), minimalBody)
+  for (const name of ['session-id', 'thread-id'])
+    assert.notEqual(f.requests.at(-1).options.headers[name], f.requests[0].options.headers[name])
+  f.finish({ answer: 'OK', searched: false })
+  await isolated
   const search = tuner.set('probe', 'search')
   await tick()
   f.finish({ answer: 'Status checked.', searched: true, sources: [{ url: 'https://status.openai.com/' }] })
@@ -1086,6 +1096,10 @@ test('USB backend probes require enabled diagnostics and an active subscription 
   assert.equal(f.sent[0].type, 'session.context.append')
   assert.equal(f.sent[0].channel, 'speakable')
   assert.ok(f.sent[0].content[0].text.includes('voice test'))
+  await tuner.set('probe', 'handoff')
+  assert.equal(f.sent[1].type, 'session.context.append')
+  assert.equal(f.sent[1].channel, undefined)
+  assert.ok(f.sent[1].content[0].text.includes('client assistant'))
   const missingSearch = tuner.set('probe', 'search')
   await tick()
   f.finish({ answer: 'I did not search.', searched: false })

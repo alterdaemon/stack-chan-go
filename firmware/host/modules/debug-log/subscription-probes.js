@@ -68,6 +68,20 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
   return {
     async run(name, value) {
       if (name !== 'probe') throw new RangeError('Invalid subscription probe')
+      if (value === 'handoff') {
+        // Codex methods_common.rs maps a text input to an unchanneled
+        // session.context.append. Let the voice agent create the delegation.
+        send({
+          type: 'session.context.append',
+          content: [
+            {
+              type: 'input_text',
+              text: 'Ask your client assistant to search the web for the official OpenAI status page. Report its current status and cite the URL.',
+            },
+          ],
+        })
+        return
+      }
       if (value === 'english' || value === 'polish') {
         speech = value
         send({
@@ -95,8 +109,8 @@ export function createSubscriptionProbes({ send, delegate, diagnose }) {
         }
         throw new Error('Invalid diagnostic token was not rejected')
       }
-      if (value === 'minimal') {
-        const result = await delegate('Say OK.', 'minimal')
+      if (value === 'minimal' || value === 'minimal-isolated') {
+        const result = await delegate('Say OK.', value)
         if (!result || !/\bOK\b/i.test(result.answer)) throw new Error('Minimal subscription probe failed')
         return
       }

@@ -103,7 +103,8 @@ class Capture:
                     stats.update(row)
                     if accepted and first is not None and row.get('outputIdleMs', 0) >= 1000 and stats.get('audibleMs', 0) > baseline:
                         return dict(firstTranscriptMs=first, idleSnapshotMs=row['ms'],
-                                    sourcePeak=stats.get('sourcePeak'), playbackPeak=stats.get('playbackPeak'),
+                                    sourcePeak=stats.get('sourcePeak'), sourceAbsPeak=stats.get('sourceAbsPeak'),
+                                    playbackPeak=stats.get('playbackPeak'),
                                     volumeQ10=stats.get('volumeQ10'), underruns=stats.get('underruns'), overruns=stats.get('overruns'))
             if self.child.poll() is not None:
                 raise RuntimeError('USB capture ended during speech')

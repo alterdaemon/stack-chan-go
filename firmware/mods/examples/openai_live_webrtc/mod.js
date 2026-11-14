@@ -275,6 +275,11 @@ export function onContextCreated(robot) {
       backendProbe?.cancel()
       return session.stop()
     },
+    async mute(muted) {
+      await session.setMuted(muted)
+      if (!session.active?.conversation || session.active.conversation.muted !== muted)
+        throw Object.assign(new Error('Mute did not apply'), { code: 'not_connected' })
+    },
     async backend() {
       if (shuttingDown || session.active || backendProbe)
         throw Object.assign(new Error('LIVE is active'), { code: 'live_active' })

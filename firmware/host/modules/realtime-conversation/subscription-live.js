@@ -388,7 +388,11 @@ export class SubscriptionLive {
     this.#probes ??= this.createProbes?.({
       send: (message) => this.#channel.send(message),
       delegate: (text, variant) =>
-        this.#delegate(this.uuid(), text, variant === 'minimal' ? 'minimal' : variant ? 'rejection' : true),
+        this.#delegate(
+          this.uuid(),
+          text,
+          ['minimal', 'minimal-isolated'].includes(variant) ? variant : variant ? 'rejection' : true,
+        ),
       diagnose: this.diagnose,
     })
     if (!this.#probes) throw new Error('Subscription diagnostics unavailable')
@@ -396,12 +400,13 @@ export class SubscriptionLive {
   }
 
   async #delegate(delegationId, text, probe = false) {
+    const minimal = probe === 'minimal' || probe === 'minimal-isolated'
     const job = { id: delegationId }
     this.#job = job
     this.diagnose?.('backend.start', () => ({
       model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
       effort: this.options.reasoningEffort ?? 'medium',
-      probe: ['rejection', 'minimal'].includes(probe) ? probe : probe ? 'diagnostic' : undefined,
+      probe: ['rejection', 'minimal', 'minimal-isolated'].includes(probe) ? probe : probe ? 'diagnostic' : undefined,
     }))
     this.#onMessage({ type: 'local.subscription.job.started', id: delegationId })
     try {
@@ -412,8 +417,8 @@ export class SubscriptionLive {
         Authorization: `Bearer ${probe === 'rejection' ? 'stackchan-diagnostic-invalid' : credentials.accessToken}`,
         'ChatGPT-Account-ID': credentials.accountId,
         originator: 'stack-chan-go',
-        'session-id': this.headers['session-id'],
-        'thread-id': this.headers['thread-id'],
+        'session-id': probe === 'minimal-isolated' ? this.uuid() : this.headers['session-id'],
+        'thread-id': probe === 'minimal-isolated' ? this.uuid() : this.headers['thread-id'],
         'Content-Type': 'application/json',
         'User-Agent': this.headers['User-Agent'],
         Accept: 'text/event-stream',
@@ -422,16 +427,15 @@ export class SubscriptionLive {
         method: 'POST',
         headers,
         responseFormat: 'subscription-response',
-        timeoutMs: probe === 'rejection' ? 15000 : 300000,
+        timeoutMs: probe === 'rejection' ? 15000 : minimal ? 45000 : 300000,
         body: JSON.stringify({
           model: this.options.backendModel ?? SUBSCRIPTION_BACKEND,
-          ...(probe === 'minimal' ? {} : { reasoning: { effort: this.options.reasoningEffort ?? 'medium' } }),
-          instructions:
-            probe === 'minimal'
-              ? 'Answer briefly.'
-              : `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
+          ...(minimal ? {} : { reasoning: { effort: this.options.reasoningEffort ?? 'medium' } }),
+          instructions: minimal
+            ? 'Answer briefly.'
+            : `${this.options.instructions}\nAnswer the delegated question briefly and naturally in its language. Use web search for current facts and cite sources when used.`,
           input: [
-            ...(probe === 'minimal'
+            ...(minimal
               ? []
               : this.#context.map((item) => ({
                   role: item.role,
@@ -439,7 +443,7 @@ export class SubscriptionLive {
                 }))),
             { role: 'user', content: [{ type: 'input_text', text }] },
           ],
-          ...(probe === 'minimal' ? {} : { tools: [{ type: 'web_search' }], tool_choice: 'auto' }),
+          ...(minimal ? {} : { tools: [{ type: 'web_search' }], tool_choice: 'auto' }),
           store: false,
           stream: true,
         }),

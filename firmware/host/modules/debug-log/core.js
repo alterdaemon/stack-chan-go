@@ -290,7 +290,9 @@ export class DebugRecorder {
       if (!this.#enabled) return this.#control('enable_required')
       const action = line.slice(10)
       if (
-        !['start', 'standard', 'voice', 'prompt', 'pitch', 'stop', 'warmup', 'backend'].includes(action) ||
+        !['start', 'standard', 'voice', 'prompt', 'pitch', 'stop', 'warmup', 'backend', 'mute', 'unmute'].includes(
+          action,
+        ) ||
         !this.platform.live
       )
         return this.#control('invalid_command')
@@ -364,7 +366,16 @@ export class DebugRecorder {
             (parameter === 'model' && ['gpt-6.1-terra', 'gpt-6-luna'].includes(value)) ||
             (parameter === 'effort' && ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(value)) ||
             (parameter === 'probe' &&
-              ['reasoning', 'search', 'english', 'polish', 'rejection', 'minimal'].includes(value)) ||
+              [
+                'reasoning',
+                'search',
+                'english',
+                'polish',
+                'rejection',
+                'minimal',
+                'minimal-isolated',
+                'handoff',
+              ].includes(value)) ||
             (parameter === 'dtls' && ['active', 'actpass'].includes(value))))
       if (!valid || !this.platform.tune) {
         this.#control('invalid_command')

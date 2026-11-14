@@ -14,6 +14,7 @@ type LiveControl = {
   stop(): Promise<unknown>
   warmup?(): Promise<void>
   backend?(): Promise<void>
+  mute?(muted: boolean): Promise<void>
   isActive?(): boolean
   stats?(): Fields | undefined
 }
@@ -57,7 +58,7 @@ export default {
     if (live?.owner === owner) live.controlled = false
   },
   async controlLive(
-    action: 'start' | 'standard' | 'voice' | 'prompt' | 'pitch' | 'stop' | 'warmup' | 'backend',
+    action: 'start' | 'standard' | 'voice' | 'prompt' | 'pitch' | 'stop' | 'warmup' | 'backend' | 'mute' | 'unmute',
   ): Promise<void> {
     if (!recorder?.enabled || !live)
       throw Object.assign(new Error('LIVE control unavailable'), { code: 'live_unavailable' })
@@ -88,6 +89,10 @@ export default {
       } finally {
         if (owner.value.isActive?.() === false) owner.controlled = false
       }
+    } else if (['mute', 'unmute'].includes(action) && owner.value.mute) {
+      if (!owner.controlled || owner.value.isActive?.() !== true)
+        throw Object.assign(new Error('No USB-owned session'), { code: 'not_connected' })
+      await owner.value.mute(action === 'mute')
     } else if (action === 'warmup' && owner.value.warmup) await owner.value.warmup()
     else throw Object.assign(new Error('Invalid LIVE action'), { code: 'invalid_parameter' })
   },

@@ -317,6 +317,15 @@ never header or body values. The first decoded boundary is retained once even
 if a later native failure prevents the final worker observation; no sampling
 timer is added.
 
+`diag live mute` and `diag live unmute` operate only on a USB-owned active call,
+using the normal microphone control. Mute forwards silence through the existing
+capture pipeline; it does not stop the encoder or network tasks. Manual sessions
+cannot be muted by these commands. The fixed `minimal-isolated` probe changes only
+the minimal request's session/thread IDs to distinguish request binding from media
+concurrency. The fixed `handoff` probe asks the voice agent to delegate an official
+status-page search, exercising the real delegation path. These explicit probes
+do not change the production protocol, saved settings or credentials.
+
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 
 On an active subscription call, `diag set probe reasoning|search` runs fixed diagnostic questions through the existing backend worker, requires enabled USB diagnostics and one idle job, and reports validation without exporting answers or credentials. `diag set probe english|polish` appends fixed speech-check context through the reference Codex dialect; queued acknowledgement is not proof of speech. The harness records matching output events separately. Reset/Off/disconnect cancels probes and discards their state. Use `--voices <names...>` and `--interruption off|on|both` for targeted voice retests.

@@ -145,6 +145,31 @@ async function verifyLiveAPI() {
   Debug.unregisterLive({})
   await Debug.controlLive('stop')
   if (stopped !== 2) throw new Error('Explicit Stop failed')
+  let usbActive = true,
+    muted = false
+  Debug.registerLive(owner, {
+    start: async () => true,
+    stop: async () => {
+      usbActive = false
+    },
+    isActive: () => usbActive,
+    mute: async (value) => {
+      muted = value
+    },
+  })
+  try {
+    await Debug.controlLive('mute')
+    throw new Error('A manual session was muted through USB')
+  } catch (error) {
+    if (error.code !== 'not_connected') throw error
+  }
+  await Debug.controlLive('start')
+  await Debug.controlLive('mute')
+  if (!muted) throw new Error('USB microphone mute failed')
+  await Debug.controlLive('unmute')
+  if (muted) throw new Error('USB microphone unmute failed')
+  await Debug.stopControlledLive()
+  if (usbActive) throw new Error('Muted USB session survived cleanup')
   let active = false,
     observed
   Debug.registerLive(owner, {
