@@ -519,6 +519,40 @@ test('socket observations count accepted bytes and expose the current buffered c
   assert.equal(statistics.socketBuffered, 0)
 })
 
+test('diagnostic native queue observation consumes no bytes and distinguishes stale readable counts', () => {
+  class Socket {
+    format = 'buffer'
+    queued = 0
+    consumed = 0
+    read(count) {
+      if (!this.queued) return
+      if (count <= 0) throw new Error('invalid')
+      this.consumed += count
+      this.queued -= count
+      return new ArrayBuffer(count)
+    }
+  }
+  const statistics = { socketReceived: 0, socketWritten: 0 }
+  const Observed = guardSocketCallbacks(Socket, statistics)
+  const socket = new Observed({})
+  assert.equal(statistics.socketPending, 0)
+  socket.queued = 42
+  socket.readable = 0
+  assert.equal(statistics.socketPending, 1)
+  assert.equal(socket.consumed, 0)
+  assert.equal(statistics.socketReceived, 0)
+  assert.equal(socket.queued, 42)
+  assert.equal(httpFailureMetadata(statistics).socketPending, 1)
+  socket.format = 'number'
+  assert.equal(statistics.socketPending, -1)
+  assert.equal(socket.consumed, 0)
+  socket.format = 'buffer'
+  Socket.prototype.read = () => {
+    throw new Error('closed')
+  }
+  assert.equal(statistics.socketPending, -1)
+})
+
 test('fragmented responses preserve every byte up to the response limit', async () => {
   const f = fixture()
   let offset = 0

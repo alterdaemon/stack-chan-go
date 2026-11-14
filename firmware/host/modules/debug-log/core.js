@@ -24,6 +24,7 @@ const NUMBER_FIELDS = new Set([
   'socketReceived',
   'socketWritten',
   'socketBuffered',
+  'socketPending',
   'sseEvents',
   'streamPending',
   'streamAnswerBytes',
