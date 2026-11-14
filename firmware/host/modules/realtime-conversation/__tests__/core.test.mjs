@@ -905,6 +905,9 @@ await test('subscription readiness uses the control channel, keeps identities di
     activate() {
       control({ type: 'session.started', session: { id: 'session_private' } })
     },
+    receiveControl(message) {
+      control?.(message)
+    },
     send(message) {
       sent.push(message)
     },
@@ -914,7 +917,11 @@ await test('subscription readiness uses the control channel, keeps identities di
     },
   }
   const platform = {
-    createSubscription: () => adapter,
+    createSubscription: (options) => {
+      equal(typeof options.control.send, 'function')
+      equal(typeof options.control.close, 'function')
+      return adapter
+    },
     createTransport(callback) {
       native = callback
       return {
@@ -970,7 +977,7 @@ await test('subscription readiness uses the control channel, keeps identities di
   control({ type: 'input_transcript.added', item: { text: 'Cześć' } })
   control({ type: 'session.input_transcript.delta', delta: 'Cześć' })
   equal(transcripts, [])
-  control({ type: 'turn.done', turn: { role: 'user', transcript: 'Cześć' } })
+  native({ type: 'message', data: JSON.stringify({ type: 'turn.done', turn: { role: 'user', transcript: 'Cześć' } }) })
   equal(transcripts, [{ role: 'user', delta: 'Cześć' }])
   await c.setMuted(true)
   equal(muted, true)
@@ -1019,6 +1026,9 @@ await test('private failure and close matrix preserves selected credentials and 
       activate() {
         activated++
         receive({ type: 'session.started' })
+      },
+      receiveControl(message) {
+        receive(message)
       },
       cancelJob() {},
       send() {},

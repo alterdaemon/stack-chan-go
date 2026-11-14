@@ -1,4 +1,5 @@
 import RealtimeConversation from 'realtimeConversation'
+import Conversation from 'realtimeConversation/core'
 import { drainTLSSocket, requestHttps } from 'realtimeConversation/http-core'
 import { createSubscription, openSubscriptionControl } from 'realtimeConversation/subscription'
 import { SubscriptionAuth } from 'realtimeConversation/subscription-auth'
@@ -545,4 +546,100 @@ await nextBoot.credentials()
 equal(exchanges, 2, 'reboot renews independently rather than using an old access token')
 nextBoot.logout()
 assert(!new SubscriptionAuth(options).status().signedIn, 'logout survives restart')
+// Exercise the real core/adapter boundary in XS, with no network or native peer.
+let nativeReceive,
+  nativeClosed = 0,
+  sidebands = 0
+const nativeSent = [],
+  requests = [],
+  controlTimers = new Set()
+const nativeEvent = (message) => nativeReceive({ type: 'message', data: JSON.stringify(message) })
+const deferNative = (message) => Timer.set(() => nativeEvent(message), 0)
+const conversation = new Conversation(
+  { auth: 'chatgpt', instructions: 'Be brief.' },
+  {
+    createTransport(callback) {
+      nativeReceive = callback
+      return {
+        start() {
+          Timer.set(() => callback({ type: 'offer', sdp: 'v=0 offer' }), 0)
+        },
+        acceptAnswer() {
+          deferNative({ type: 'session.started', session: { id: 'native-session' } })
+        },
+        setVolume() {},
+        setMuted() {},
+        quiesce() {},
+        send(text) {
+          const event = JSON.parse(text)
+          nativeSent.push(event)
+          if (event.type === 'session.close') deferNative({ type: 'session.closed', reason: 'client_request' })
+        },
+        async close() {
+          nativeClosed++
+        },
+        get stats() {
+          return { dataMessages: 1 }
+        },
+      }
+    },
+    createSubscription(options) {
+      return new SubscriptionLive({
+        ...options,
+        auth: {
+          credentials: async () => ({ accessToken: 'synthetic', accountId: 'fixture' }),
+          onLogout: () => () => {},
+        },
+        uuid: () => 'synthetic-id',
+        openControl() {
+          sidebands++
+          throw new Error('Unexpected active WSS')
+        },
+        fetch: async (url) => {
+          requests.push(url)
+          return {
+            ok: true,
+            status: 201,
+            headers: { location: '/v1/live/rtc_native' },
+            text: async () =>
+              url.includes('/realtime/calls')
+                ? 'v=0 answer'
+                : JSON.stringify({ answer: 'Four.', searched: false, sources: [] }),
+          }
+        },
+      })
+    },
+    setTimeout(fn, delay) {
+      const id = Timer.set(() => {
+        controlTimers.delete(id)
+        fn()
+      }, delay)
+      controlTimers.add(id)
+      return id
+    },
+    clearTimeout(id) {
+      Timer.clear(id)
+      controlTimers.delete(id)
+    },
+  },
+)
+await conversation.connect()
+equal(conversation.state, 'connected')
+equal(sidebands, 0)
+nativeEvent({
+  type: 'delegation.created',
+  item: {
+    type: 'delegation',
+    target: 'client',
+    id: 'native-job',
+    content: [{ type: 'input_text', text: 'Two plus two?' }],
+  },
+})
+await new Promise((resolve) => Timer.set(resolve, 10))
+assert(nativeSent.some((event) => event.channel === 'speakable'))
+equal(requests.length, 2)
+equal((await conversation.close()).finalized, true)
+equal(nativeClosed, 1)
+equal(controlTimers.size, 0)
+equal(sidebands, 0)
 trace('@@STACKCHAN_TEST:PASS@@\n')

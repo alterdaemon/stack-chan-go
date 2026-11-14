@@ -304,7 +304,12 @@ export function openSubscriptionControl(callId, headers, onMessage, timeoutMs = 
 export function createSubscription(options) {
   if (!auth.status().signedIn)
     throw Object.assign(new Error('Subscription sign-in required'), { code: 'subscription_sign_in_required' })
+  if (typeof options.control?.send !== 'function' || typeof options.control?.close !== 'function')
+    throw Object.assign(new Error('Subscription native control unavailable'), {
+      code: 'subscription_control_unavailable',
+    })
   return new SubscriptionLive({
+    control: options.control,
     debug: Debug,
     createProbes: (hooks) =>
       Modules.importNow('device-debug/subscription-probes', true).createSubscriptionProbes(hooks),

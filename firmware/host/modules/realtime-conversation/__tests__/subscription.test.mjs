@@ -656,6 +656,81 @@ function liveFixture() {
   }
 }
 
+test('native control owns readiness, deduplicated delegation and close without opening a sideband', async () => {
+  const f = liveFixture(),
+    received = [],
+    sent = []
+  let closes = 0
+  f.live.control = { send: (event) => sent.push(event), close: () => closes++ }
+  f.live.openControl = () => {
+    throw new Error('Normal native control must not open WSS')
+  }
+  f.live.receiveControl({ type: 'session.started', session: { id: 'too-early' } })
+  await f.live.create(
+    'v=0 offer',
+    {},
+    (event) => received.push(event),
+    () => true,
+  )
+  f.live.receiveControl({ type: 'session.started', session: { id: 'native-session' } })
+  assert.equal(received.length, 0)
+  f.live.activate()
+  assert.equal(received.length, 1)
+  const delegation = {
+    type: 'delegation.created',
+    event_id: 'native-event',
+    item: {
+      type: 'delegation',
+      target: 'client',
+      id: 'native-job',
+      content: [{ type: 'input_text', text: 'What is two plus two?' }],
+    },
+  }
+  f.live.receiveControl(delegation)
+  f.live.receiveControl(delegation)
+  await new Promise(setImmediate)
+  assert.equal(f.requests.length, 2)
+  f.finish({ answer: 'Four.', searched: false, sources: [] })
+  await new Promise(setImmediate)
+  assert.ok(sent.some((event) => event.channel === 'speakable'))
+  f.live.send({ type: 'session.close' })
+  assert.equal(sent.at(-1).type, 'session.close')
+  f.live.dispose()
+  assert.equal(closes, 1)
+  const count = received.length
+  f.live.receiveControl({ type: 'turn.done', turn: { role: 'assistant', transcript: 'stale' } })
+  assert.equal(received.length, count)
+})
+
+test('a late native create closes only its orphan through the bounded sideband cleanup', async () => {
+  const f = liveFixture(),
+    sent = []
+  f.live.control = {
+    send() {
+      throw new Error('Closed local peer must not receive control')
+    },
+    close() {},
+  }
+  f.live.openControl = async () => ({
+    send(event) {
+      sent.push(event)
+    },
+    close() {},
+  })
+  let checks = 0
+  await assert.rejects(
+    f.live.create(
+      'v=0 offer',
+      {},
+      () => {},
+      () => ++checks === 1,
+    ),
+    /cancelled/,
+  )
+  assert.deepEqual(sent, [{ type: 'session.close' }])
+  f.live.dispose()
+})
+
 test('a transient activation 404 retries the same call within one deadline', async () => {
   const f = liveFixture(),
     joins = [],

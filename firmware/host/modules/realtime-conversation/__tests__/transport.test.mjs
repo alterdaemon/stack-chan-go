@@ -246,3 +246,16 @@ test('failed native startup can close and release ownership before a fresh trans
   await secondClose
   assert.equal(owner, undefined)
 })
+
+test('subscription native control enforces its smaller frame and queue bounds while API bounds remain unchanged', () => {
+  const f = fixture(),
+    transport = new f.Transport(() => {})
+  transport.start({ subscription: true })
+  assert.throws(() => transport.send('x'.repeat(8193)), /limit/)
+  transport.send('x'.repeat(8192))
+  transport.send('x'.repeat(8192))
+  assert.throws(() => transport.send('x'), /limit/)
+  const api = new f.Transport(() => {})
+  api.start({})
+  api.send('x'.repeat(8193))
+})

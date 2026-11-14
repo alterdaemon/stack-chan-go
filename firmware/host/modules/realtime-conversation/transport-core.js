@@ -9,6 +9,7 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
     #closing
     #resolveClose
     #released = false
+    #subscription = false
     #finalStats
     #outgoing = []
     #outgoingBytes = 0
@@ -36,6 +37,7 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
       }
     }
     start(options) {
+      this.#subscription = options?.subscription === true
       binding('xs_live_transport_start').call(
         this,
         options?.captureOnly === true,
@@ -51,7 +53,11 @@ export function createTransport({ Timer, Base, native: binding, ArrayBuffer: Buf
     send(data) {
       if (this.#closing || this.#released) throw new Error('Transport is closed')
       const bytes = BufferClass.fromString(data).byteLength
-      if (bytes > 65536 || this.#outgoing.length >= 32 || this.#outgoingBytes + bytes > 131072)
+      if (
+        bytes > (this.#subscription ? 8192 : 65536) ||
+        this.#outgoing.length >= (this.#subscription ? 24 : 32) ||
+        this.#outgoingBytes + bytes > (this.#subscription ? 16384 : 131072)
+      )
         throw new Error('WebRTC outgoing event limit exceeded')
       this.#outgoing.push({ data, bytes })
       this.#outgoingBytes += bytes

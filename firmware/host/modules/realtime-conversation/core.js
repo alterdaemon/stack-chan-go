@@ -243,6 +243,12 @@ export default class Conversation {
       if (typeof platform.createSubscription !== 'function')
         throw new TypeError('Subscription unavailable on this build')
       this.#subscription = platform.createSubscription({
+        control: {
+          send: (message) => this.#transport.send(JSON.stringify(message)),
+          // Conversation owns the peer through finalization; this view owns no socket.
+          close() {},
+          statistics: () => ({ transport: 'webrtc', dataMessages: this.#transport?.stats?.dataMessages ?? 0 }),
+        },
         onLogout: () =>
           this.#fail(new ConversationError('Subscription sign-in required', 'subscription_signed_out', 'auth')),
       })
@@ -563,13 +569,9 @@ export default class Conversation {
         throw new ConversationError('WebRTC disconnected before session.closed', 'connection_lost', 'transport')
       if (event.type !== 'message') return
       if (this.#subscription && !event.subscription) {
-        // Observe the unused channel without acting twice or exporting content.
-        if (this.#platform.debug?.enabled && typeof event.data === 'string' && event.data.length <= 131072) {
-          try {
-            const ignored = JSON.parse(event.data)
-            this.#diagnose('receive.ignored', { type: DIAGNOSTIC_EVENTS.has(ignored?.type) ? ignored.type : 'other' })
-          } catch {}
-        }
+        if (typeof event.data !== 'string' || event.data.length > 16384)
+          throw new ConversationError('Invalid subscription event size', 'event_limit', 'events')
+        this.#subscription.receiveControl(JSON.parse(event.data))
         return
       }
       if (typeof event.data !== 'string' || event.data.length > 131072)

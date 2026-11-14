@@ -175,6 +175,7 @@ export class SubscriptionLive {
     auth,
     fetch,
     openControl,
+    control,
     uuid,
     onLogout,
     wait = async () => {},
@@ -183,7 +184,7 @@ export class SubscriptionLive {
     debug,
     createProbes,
   }) {
-    Object.assign(this, { auth, fetch, openControl, uuid, wait, now, diagnose, debug, createProbes })
+    Object.assign(this, { auth, fetch, openControl, control, uuid, wait, now, diagnose, debug, createProbes })
     this.#unsubscribe = auth.onLogout(() => {
       this.dispose()
       onLogout?.()
@@ -264,38 +265,42 @@ export class SubscriptionLive {
       }
       this.#request = undefined
       this.diagnose?.('call.answer', () => ({ status: response.status, ...subscriptionSdpMetadata(bootstrap.sdp) }))
-      // ICE activation must progress while the control socket joins the call.
-      // Conversation keeps capture muted until the control session is ready.
+      // Apply the answer before native control becomes ready. Conversation keeps
+      // capture muted until the peer delivers session.started.
       if (!this.#closed && current()) onAnswer?.(bootstrap)
       // Even a late create must acquire a bounded control connection to close the remote call.
       stage = 'control'
-      const deadline = this.now() + 15000
-      const activationDelays = [100, 300, 800]
-      for (let attempt = 0; ; attempt++) {
-        const remaining = deadline - this.now()
-        if (remaining <= 0)
-          throw Object.assign(new Error('Subscription control timed out'), { code: 'subscription_control_timeout' })
-        try {
-          this.diagnose?.('control.join', () => ({ attempt }))
-          this.#channel = await this.openControl(
-            bootstrap.callId,
-            headers,
-            (message) => this.#receive(message),
-            remaining,
-          )
-          break
-        } catch (error) {
-          this.diagnose?.('control.failed', () => ({
-            attempt,
-            status: error?.status,
-            providerCode: error?.providerCode,
-            param: error?.param,
-          }))
-          // A newly created call may briefly be unavailable until ICE activates.
-          // Retry this same call only; never create another call or change auth.
-          if (error?.status !== 404 || attempt >= activationDelays.length || this.#closed || !current()) throw error
-          await this.wait(Math.min(activationDelays[attempt], Math.max(0, deadline - this.now())))
-          if (this.#closed || !current()) throw new Error('Subscription start cancelled')
+      if (!this.#closed && current() && this.control) {
+        this.#channel = this.control
+      } else {
+        const deadline = this.now() + 15000
+        const activationDelays = [100, 300, 800]
+        for (let attempt = 0; ; attempt++) {
+          const remaining = deadline - this.now()
+          if (remaining <= 0)
+            throw Object.assign(new Error('Subscription control timed out'), { code: 'subscription_control_timeout' })
+          try {
+            this.diagnose?.('control.join', () => ({ attempt }))
+            this.#channel = await this.openControl(
+              bootstrap.callId,
+              headers,
+              (message) => this.#receive(message),
+              remaining,
+            )
+            break
+          } catch (error) {
+            this.diagnose?.('control.failed', () => ({
+              attempt,
+              status: error?.status,
+              providerCode: error?.providerCode,
+              param: error?.param,
+            }))
+            // A newly created call may briefly be unavailable until ICE activates.
+            // Retry this same call only; never create another call or change auth.
+            if (error?.status !== 404 || attempt >= activationDelays.length || this.#closed || !current()) throw error
+            await this.wait(Math.min(activationDelays[attempt], Math.max(0, deadline - this.now())))
+            if (this.#closed || !current()) throw new Error('Subscription start cancelled')
+          }
         }
       }
       if (this.#closed || !current()) {
@@ -310,6 +315,10 @@ export class SubscriptionLive {
         code: stage === 'control' ? 'subscription_control_failed' : 'subscription_bootstrap_failed',
       })
     }
+  }
+
+  receiveControl(message) {
+    if (this.control && this.#channel === this.control) this.#receive(message)
   }
 
   activate() {

@@ -25,6 +25,7 @@ const NUMBER_FIELDS = new Set([
   'socketWritten',
   'socketBuffered',
   'socketPending',
+  'dataMessages',
   'sseEvents',
   'streamPending',
   'streamAnswerBytes',
@@ -169,6 +170,7 @@ const STRING_FIELDS = new Set([
   'app_sha256',
   'sdk',
   'network',
+  'transport',
   'application',
   'vad',
   'noiseReduction',
@@ -310,16 +312,15 @@ export class DebugRecorder {
         })
         .then(
           () => {
+            if (action !== 'stop') this.#livePending = false
             if (this.#enabled && this.#capture === capture) this.#control('live', { ...fields, phase: 'applied' })
           },
           (error) => {
+            if (action !== 'stop') this.#livePending = false
             if (this.#enabled && this.#capture === capture)
               this.#control('live', { ...fields, phase: 'failed', errorCode: error?.code ?? 'live_failed' })
           },
         )
-        .finally(() => {
-          if (action !== 'stop') this.#livePending = false
-        })
     } else if (line === 'diag reset' || line?.startsWith('diag set ')) {
       if (!this.#enabled) {
         this.#control('enable_required')
@@ -405,17 +406,17 @@ export class DebugRecorder {
         })
         .then(
           () => {
+            if (inspection) this.#inspectionPending = false
+            else this.#trialPending = false
             if (this.#enabled && this.#capture === capture) this.#control('set', { ...fields, phase: 'applied' })
           },
           (error) => {
+            if (inspection) this.#inspectionPending = false
+            else this.#trialPending = false
             if (this.#enabled && this.#capture === capture)
               this.#control('set', { ...fields, phase: 'failed', errorCode: error?.code ?? 'tune_failed' })
           },
         )
-        .finally(() => {
-          if (inspection) this.#inspectionPending = false
-          else this.#trialPending = false
-        })
     } else this.#control('invalid_command')
   }
   tick(connected = true) {

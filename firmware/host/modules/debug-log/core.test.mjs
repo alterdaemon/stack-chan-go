@@ -37,6 +37,13 @@ function fixture() {
   }
 }
 
+test('native control counters retain only bounded transport metadata', () => {
+  assert.deepEqual(safeFields({ transport: 'webrtc', dataMessages: 12, payload: 'private' }), {
+    transport: 'webrtc',
+    dataMessages: 12,
+  })
+})
+
 test('status retains bounded image-bound panic metadata without overflowing the control line', () => {
   const lines = []
   const recorder = new DebugRecorder({
@@ -376,4 +383,29 @@ test('one read-only control snapshot can inspect a pending probe without unlocki
   f.recorder.command('diag off')
   f.recorder.command('diag set probe control')
   assert.equal(f.lines.at(-1).action, 'enable_required')
+})
+
+test('terminal acknowledgements release their command lane before accepting the next command', async () => {
+  for (const line of ['diag live mute', 'diag set speaker 0', 'diag set probe control']) {
+    const f = fixture(),
+      calls = []
+    f.recorder.platform.live = async (action) => calls.push(action)
+    f.recorder.platform.tune = async (name, value) => calls.push([name, value])
+    const write = f.recorder.platform.write
+    let chained = false
+    f.recorder.platform.write = (text) => {
+      const result = write(text),
+        row = JSON.parse(text.slice(PREFIX.length))
+      if (!chained && row.phase === 'applied') {
+        chained = true
+        f.recorder.command(line)
+      }
+      return result
+    }
+    f.recorder.command('diag on')
+    f.recorder.command(line)
+    await new Promise(setImmediate)
+    assert.equal(calls.length, 2)
+    assert.ok(!f.lines.some((row) => row.action === 'command_pending'))
+  }
 })

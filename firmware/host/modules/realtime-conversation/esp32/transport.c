@@ -234,7 +234,9 @@ static void fail(LiveTransport *t, int code)
 static int enqueue(LiveTransport *t, int type, const void *data, int size)
 {
 	if (atomic_load(&t->stopping)) return 0;
-	if (size < 0 || size > EVENT_BYTES) { fail(t, ESP_ERR_INVALID_SIZE); return -1; }
+	if (size < 0 || size > EVENT_BYTES || (t->subscription && type == kMessage && size > 16384)) {
+		fail(t, ESP_ERR_INVALID_SIZE); return -1;
+	}
 	unsigned previous = atomic_fetch_add(&t->queuedBytes, size);
 	if (previous + size > EVENT_BYTES) {
 		atomic_fetch_sub(&t->queuedBytes, size); fail(t, ESP_ERR_NO_MEM); return -1;
@@ -370,9 +372,8 @@ static void worker(void *ctx)
 	esp_webrtc_cfg_t cfg = {
 		.peer_cfg = {.audio_info = {.codec = ESP_PEER_AUDIO_CODEC_OPUS, .sample_rate = 16000, .channel = 1},
 			.audio_dir = ESP_PEER_MEDIA_DIR_SEND_RECV, .video_dir = ESP_PEER_MEDIA_DIR_NONE,
-			/* Subscription control already has one WebSocket owner. Audio needs
-			 * no SCTP/data channel; retain it for the existing API modes. */
-			.enable_data_channel = !t->subscription, .manual_ch_create = true, .no_auto_reconnect = true,
+			/* All modes reuse the reliable ordered oai-events control channel. */
+			.enable_data_channel = true, .manual_ch_create = true, .no_auto_reconnect = true,
 			.on_custom_data = onData, .ctx = t, .extra_cfg = &peer, .extra_size = sizeof(peer)},
 		.signaling_cfg = {.extra_cfg = &t, .extra_size = sizeof(t)},
 		.peer_impl = &t->observedPeer, .signaling_impl = &signaling

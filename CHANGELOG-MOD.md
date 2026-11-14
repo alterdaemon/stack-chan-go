@@ -17,7 +17,7 @@ Publication extracts the section headed `### <product-version>` for the requeste
 
 Release impact: minor.
 
-- Add an experimental ChatGPT subscription choice and robot-owned Wi-Fi sign-in, sharing the existing System prompt and OpenAI voice controls with no automatic API fallback.
+- Add an experimental ChatGPT subscription choice and robot-owned Wi-Fi sign-in, sharing the existing System prompt, OpenAI settings and native WebRTC audio/control with no automatic API fallback.
 - Retain ChatGPT sign-in across restarts on robots with a provisioned protected key; show missing storage setup or deletion failures explicitly without changing device security fuses or existing API keys.
 
 - Show GO and the complete fork firmware version on the welcome screen, keeping MODs and Settings in their existing bottom positions.

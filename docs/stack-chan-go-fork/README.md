@@ -19,7 +19,7 @@ Main differences in **2.1.0-R5** compared with upstream **2.1.0**:
 | Firmware identity | GO and the full fork version appear on startup; the version also appears beside the address in the robot's startup Settings menu. |
 | Voice chat and search | GPT-Live 1, Realtime Mini and GPT-Realtime 2.1, all with web search. Start or stop with LIVE or the drawer. |
 | Conversation feedback | Dim/bright green shows ready input and incoming speech; purple shows pending work and cyan shows audible replies. Small head movements accompany longer replies on CoreS3 and can resume after a servo error. |
-| Personal settings | Password-protected Wi-Fi Settings and Bluetooth. One AI connection selector, shared instructions and voice controls, with an experimental ChatGPT sign-in flow in R5. |
+| Personal settings | Password-protected Wi-Fi Settings and Bluetooth. One AI connection selector, shared instructions and voice controls, with ChatGPT sign-in and shared native voice/control in R5. |
 | Interruption and resume | Enable spoken interruption, with fixes for repeated or stuck replies. Resume Live after idle standby with recent context. |
 | Everyday fixes | Fixes for screen/touch handling during chat, camera reopening and recoverable chat errors. |
 | USB troubleshooting | Off by default. Enable logs and temporary audio adjustments when needed, without reinstalling firmware or changing saved settings. |
@@ -172,15 +172,16 @@ build provenance. Startup evidence is grouped by component:
 | --- | --- |
 | `auth` | Protected record availability/load/save, cached access, refresh phase and numeric HTTP status. No account labels or tokens. |
 | `https` | Request IDs, worker creation/post/response/cancellation, actual idle acknowledgement and release. |
-| `subscription` | Call status/header presence, offer/answer codec rates, candidate counts and DTLS role; control DNS/TCP/TLS/upgrade/readiness and backend terminal states. |
+| `subscription` | Call status/header presence, offer/answer codec rates, candidate counts and DTLS role; native control readiness and backend terminal states; DNS/TCP/TLS/upgrade only for orphan-call cleanup. |
 | `audio` | Native SDP acceptance result, fine-grained `peer.state`, coarse `peer.event`, audio stop and worker cleanup. |
 | `device` / final audio snapshot | Free/minimum heap, largest internal block, PSRAM, queue occupancy and native worker stack minimum. |
 
 `peer.state` uses the bundled Espressif peer enum; `peer.event` uses the distinct
 WebRTC wrapper enum. The build corrects the SDK wrapper's ignored `peer_impl`
 in generated output so the state observer runs; it does not edit the installed SDK.
-Subscription calls negotiate audio alone and use their existing sideband for control.
-API-key calls retain their data channel. Decode both enums against the matching build's SDK headers. For
+Subscription and API-key calls reuse the existing reliable ordered `oai-events` data channel.
+Normal subscription sessions open no parallel sideband reflecting raw microphone/speaker audio.
+A bounded sideband is used only to close a late remote call whose local peer is already unavailable; it never resumes conversation. Decode both enums against the matching build's SDK headers. For
 `esp_peer` 1.5.5, peer states 3/4/5/6/7/8 mean gathering/pairing/paired/connecting/
 connected/failed. A failure before pairing does not establish a DTLS failure.
 During diagnostic ICE pairing, `ice.datagram` records at most 8 UDP observations
@@ -328,10 +329,11 @@ do not change the production protocol, saved settings or credentials.
 
 `--quiet` uses the configured start profile with both RAM session volume0 and speaker trim0 acknowledged before startup. Session volume stays zero when Off/lease loss restores the trim. Quiet mode rejects audio/volume qualification; it does not establish acoustic quality or guarantee a silent reboot. Do not flash/reboot or keep trying after an unexpected reset during quiet hours. Batch compatible repairs before rebuilding and reuse passing evidence for unchanged paths.
 
-`diag set probe control` reads bounded numeric TCP/TLS counters on a ready
-subscription call, including while its backend job runs. Enable diagnostics
-before starting that call; a call created while Off has no observer counters.
-The snapshot includes byte counts and native queue presence, never headers,
+`diag set probe control` reads bounded control-transport counters on a ready
+subscription call, including while its backend job runs. Normal native control
+reports its transport and received-message count; orphan-cleanup WSS observers
+can report TCP/TLS byte counts and native queue presence. Enable diagnostics
+before opening WSS to allocate its observer. Snapshots contain no headers,
 payloads, addresses or credentials. Use the same interactive capture owner.
 
 `diag set probe listen-english|listen-polish|listen-search|listen-followup`
