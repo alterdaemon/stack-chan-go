@@ -7,13 +7,13 @@
 
 static unsigned blockedWrites;
 
-void xs_r14_block_preference(xsMachine *the)
+void xs_camera_probe_block_preference(xsMachine *the)
 {
 	++blockedWrites;
 	xsUnknownError("diagnostic_preference_write_blocked");
 }
 
-void xs_r14_blocked_preferences(xsMachine *the)
+void xs_camera_probe_blocked_preferences(xsMachine *the)
 {
 	xsmcSetInteger(xsResult, blockedWrites);
 }

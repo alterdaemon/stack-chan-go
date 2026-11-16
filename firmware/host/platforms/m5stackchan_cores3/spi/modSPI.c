@@ -83,24 +83,9 @@ static SemaphoreHandle_t gSPIMutex;
 #define SPI_IDLE BIT0
 #define SPI_CAPACITY BIT1
 static EventGroupHandle_t gSPIProgress;
-#ifdef MODDEF_STACKCHAN_R14_PROBE
-static bool gSPIBlocking = true;
-static void updateSPIProgress(void);
-void stackchanSPISetBlocking(bool enabled) {
-    modSPIFlush();
-    xSemaphoreTake(gSPIMutex, portMAX_DELAY);
-    gSPIBlocking = enabled;
-    updateSPIProgress();
-    xSemaphoreGive(gSPIMutex);
-}
-#else
 #define gSPIBlocking true
-#endif
 static void updateSPIProgress(void)
 {
-#ifdef MODDEF_STACKCHAN_R14_PROBE
-    if (!gSPIBlocking) return; // match the original worker, including notification cost
-#endif
     EventBits_t ready = 0;
     if (!gSPIDataCount || gSPIDataCount < 0) {
         if (!gTransactionsPending) ready |= SPI_IDLE;

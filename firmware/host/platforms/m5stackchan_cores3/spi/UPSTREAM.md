@@ -8,5 +8,5 @@ The CoreS3 realtime manifest excludes the SDK translation unit and compiles
 this repository copy. No shared SDK checkout is modified. Fork changes add
 a task-context event group for idle/capacity notifications; the existing SPI
 ISR, DMA, conversions, arbitration and UI priorities remain in use. Both wait
-conditions are rechecked under the existing SPI mutex. An R14 probe-only switch
-retains the original busy-yield behavior for paired measurements.
+conditions are rechecked under the existing SPI mutex. The normal completion-driven
+wait path is retained without experimental mode switches.

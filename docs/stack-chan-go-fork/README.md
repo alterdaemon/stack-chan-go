@@ -187,10 +187,11 @@ under `internal/release-packages/`. Building does not flash a device. See
 
 Diagnostics are **Off after every boot**. Use Python 3 on Linux/macOS with one USB
 serial owner; close flashers/monitors and do not share the binary USB dock stream.
-From the implementation repository root, choose a new private output file whose
-parent directory already exists:
+From the implementation repository root, create a private host-log directory if
+needed and choose a new output filename:
 
 ```sh
+mkdir -p -m 700 internal/diagnostics
 python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command status
 python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --duration 180 --output internal/diagnostics/debug-session.jsonl
 python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command off

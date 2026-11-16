@@ -430,3 +430,59 @@ print('passed interactive command bursts')
   )
   assert.match(result, /passed interactive command bursts/)
 })
+
+test('legacy console capture rejects retired profile options before opening a port', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      `import subprocess,sys
+for option in ('--r14','--r14-followup','--r14-media-only'):
+    result=subprocess.run([sys.executable,sys.argv[1],'--port','not-a-device',option],capture_output=True,text=True)
+    assert result.returncode==2 and 'unrecognized arguments' in result.stderr
+print('passed retired options')`,
+      fileURLToPath(new URL('../mod/capture-live-probe.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed retired options/)
+})
+
+test('legacy console capture retains default, prompt, search and Realtime validation', () => {
+  const result = execFileSync(
+    'python3',
+    [
+      '-c',
+      String.raw`import json,os,pty,subprocess,sys,termios,time
+cases=[]
+normal=[dict(phase='end',state='standby',history=1,mode=mode,inputReceived=True,resumedFragments=1) for mode in ('initial','verify','final')]
+cases.append(([], '[live-probe] ',normal))
+prompt=[dict(phase='audio_input' if i<4 else 'end',mode='live' if i==0 else 'realtime',requestMatches=True,match=True,status='completed') for i in range(10)]
+cases.append((['--prompt'],'[prompt-probe] ',prompt))
+search=[dict(phase='search',match=True,status='completed',text='fixed result',tools=1,sources=1,media=dict(audibleMs=10))]
+cases.append((['--prompt','--search-only'],'[prompt-probe] ',search))
+realtime=[dict(phase='end',bargeIn=value,observed=dict(speech=1,results=1,delayOverruns=0,cleared=1,localStopMs=2)) for value in (False,True)]
+realtime.append(dict(phase='cancelled',observed=dict(cancelled=1)))
+cases.append((['--realtime'],'[realtime-probe] ',realtime))
+for options,prefix,rows in cases:
+    master,slave=pty.openpty();child=None
+    try:
+        child=subprocess.Popen([sys.executable,sys.argv[1],'--port',os.ttyname(slave),'--seconds','3',*options],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        deadline=time.monotonic()+2
+        while termios.tcgetattr(slave)[3]&termios.ICANON:
+            assert child.poll() is None and time.monotonic()<deadline,'Probe did not open the simulated port'
+            time.sleep(.01)
+        payload=''.join(prefix+json.dumps(row,separators=(',',':'))+'\n' for row in rows+[dict(phase='done')])
+        os.write(master,payload.encode())
+        stdout,stderr=child.communicate(timeout=4)
+        assert child.returncode==0,(options,stdout,stderr)
+    finally:
+        if child is not None and child.poll() is None:child.kill();child.communicate()
+        os.close(master);os.close(slave)
+print('passed 4 non-retired console modes')`,
+      fileURLToPath(new URL('../mod/capture-live-probe.py', import.meta.url)),
+    ],
+    { encoding: 'utf8', timeout: 20000, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } },
+  )
+  assert.match(result, /passed 4 non-retired console modes/)
+})

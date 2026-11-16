@@ -3,7 +3,7 @@
   "modules": {
     "mod": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/launch",
     "live-probe": "../platforms/m5stackchan_cores3/__tests__/camera/probe",
-    "preference": "../../mods/examples/openai_live_webrtc/__tests__/live-performance/r14-complete/preference",
+    "preference": "../platforms/m5stackchan_cores3/__tests__/camera/preference",
     "*": [
       "../platforms/m5stackchan_cores3/__tests__/camera/probe.c",
       "../../mods/examples/openai_live_webrtc/__tests__/live-performance/measure.c"
