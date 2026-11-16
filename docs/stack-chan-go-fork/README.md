@@ -192,7 +192,7 @@ parent directory already exists:
 
 ```sh
 python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command status
-python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --duration 180 --output internal/work/debug-session.jsonl
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --duration 180 --output internal/diagnostics/debug-session.jsonl
 python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --command off
 ```
 
@@ -205,7 +205,7 @@ expiry or reboot discards them. The tool does not flash or reset the robot.
 For a temporary speaker-volume trial, start an interactive capture:
 
 ```sh
-python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --interactive --duration 1800 --output internal/work/debug-trial.jsonl
+python3 firmware/scripts/mod/capture-debug.py --port /dev/ttyACM0 --interactive --duration 1800 --output internal/diagnostics/debug-trial.jsonl
 ```
 
 Enter these commands one at a time in that process:
